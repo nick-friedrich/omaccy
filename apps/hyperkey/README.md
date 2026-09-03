@@ -14,11 +14,11 @@ Omaccy's fork deliberately omits Shift from the Hyper chord. Startup, updates,
 and removal belong to Omaccy's installer rather than to this component.
 
 Application shortcuts are configured by bundle identifier in
-`~/.config/omaccy/hyperkey.toml`. The default maps Hyper+Enter to Terminal:
+`~/.config/omaccy/hyperkey.toml`. The default maps Hyper+T to Ghostty:
 
 ```toml
 [bindings]
-enter = "com.apple.Terminal"
+t = "com.mitchellh.ghostty"
 ```
 
 Build it with `swift build -c release --package-path apps/hyperkey` from the

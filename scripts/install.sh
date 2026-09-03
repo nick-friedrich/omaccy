@@ -10,6 +10,49 @@ LAUNCH_AGENT="$HOME/Library/LaunchAgents/com.omaccy.hyperkey.plist"
 
 mkdir -p "$CONF_DIR" "$BAK_DIR"
 
+ensure_brew() {
+  if command -v brew >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "Homebrew not found — installing..."
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -x /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  else
+    echo "ERROR: Homebrew installation failed." >&2
+    exit 1
+  fi
+}
+
+record_dep() {
+  local marker="$1"
+  local cask="$2"
+  touch "$OMACCY_DIR/$marker"
+  grep -qx "$cask" "$OMACCY_DIR/$marker" || echo "$cask" >> "$OMACCY_DIR/$marker"
+}
+
+ensure_cask() {
+  local cask="$1"
+  ensure_brew
+
+  if brew list --cask "$cask" >/dev/null 2>&1; then
+    if [[ -f "$OMACCY_DIR/installed-deps" ]] && grep -qx "$cask" "$OMACCY_DIR/installed-deps"; then
+      echo "$cask already installed by Omaccy."
+    else
+      record_dep preinstalled-deps "$cask"
+      echo "$cask already installed; Omaccy will leave it installed on uninstall."
+    fi
+    return
+  fi
+
+  echo "Installing $cask..."
+  brew install --cask "$cask"
+  record_dep installed-deps "$cask"
+}
+
 stamp_config() {
   local rel="$1"
   local stamp_file="$OMACCY_DIR/sha256/$rel"
@@ -82,20 +125,29 @@ migrate_legacy_karabiner_config() {
 }
 
 install_hyperkey_app() {
+  local built_binary="$REPO_ROOT/apps/hyperkey/.build/release/omaccy-hyperkey"
+  local installed_binary="$APP_DIR/Contents/MacOS/omaccy-hyperkey"
+  local binary_changed=0
+
   echo "Building Omaccy Hyperkey..."
   swift build -c release --package-path "$REPO_ROOT/apps/hyperkey"
+
+  if [[ ! -f "$installed_binary" ]] || ! cmp -s "$built_binary" "$installed_binary"; then
+    binary_changed=1
+  fi
 
   /bin/launchctl bootout "gui/$(id -u)/com.omaccy.hyperkey" 2>/dev/null || true
   pkill -x omaccy-hyperkey 2>/dev/null || true
 
   mkdir -p "$APP_DIR/Contents/MacOS"
-  cp "$REPO_ROOT/apps/hyperkey/.build/release/omaccy-hyperkey" \
-    "$APP_DIR/Contents/MacOS/omaccy-hyperkey"
+  cp "$built_binary" "$installed_binary"
   cp "$REPO_ROOT/apps/hyperkey/Info.plist" "$APP_DIR/Contents/Info.plist"
   codesign --force --sign - --identifier com.omaccy.hyperkey "$APP_DIR"
-  # Ad-hoc local builds have a new code hash; clear any stale TCC entry so the
-  # system prompt reflects the binary that was just installed.
-  tccutil reset Accessibility com.omaccy.hyperkey 2>/dev/null || true
+  if [[ "$binary_changed" == "1" ]]; then
+    # Ad-hoc local builds have a new code hash; clear stale TCC state only when
+    # the executable actually changed. Config-only updates keep their grant.
+    tccutil reset Accessibility com.omaccy.hyperkey 2>/dev/null || true
+  fi
   echo "Installed → $APP_DIR"
 }
 
@@ -106,6 +158,7 @@ start_hyperkey() {
 
 main() {
   migrate_legacy_karabiner_config
+  ensure_cask ghostty
   install_hyperkey_app
   ensure_symlink "$REPO_ROOT/config/hyperkey/hyperkey.toml" \
     "$HOME/.config/omaccy/hyperkey.toml"
@@ -113,7 +166,7 @@ main() {
     "$LAUNCH_AGENT"
   start_hyperkey
   echo ""
-  echo "Omaccy Hyperkey installed: Caps Lock → Command+Control+Option (no Shift)."
+  echo "Omaccy Hyperkey installed: Caps Lock → Command+Control+Option; Hyper+T → Ghostty."
 }
 
 main

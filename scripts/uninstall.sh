@@ -6,6 +6,33 @@ CONF_DIR="$OMACCY_DIR/config"
 BAK_DIR="$OMACCY_DIR/backups"
 APP_DIR="$HOME/Applications/Omaccy Hyperkey.app"
 
+ask_confirmation() {
+  local prompt="$1"
+  if [[ "${OMACCY_ASSUME_YES:-0}" == "1" ]]; then
+    return 0
+  fi
+  printf '%s [y/N] ' "$prompt"
+  local answer
+  read -r answer
+  answer="$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')"
+  [[ "$answer" == "y" || "$answer" == "yes" ]]
+}
+
+remove_owned_ghostty() {
+  local marker="$OMACCY_DIR/installed-deps"
+  [[ -f "$marker" ]] && grep -qx ghostty "$marker" || return 0
+
+  if ask_confirmation "Remove Ghostty, which Omaccy installed?"; then
+    brew uninstall --cask ghostty || true
+    local updated_marker="$OMACCY_DIR/installed-deps.updated"
+    grep -vx ghostty "$marker" > "$updated_marker" || true
+    mv "$updated_marker" "$marker"
+    echo "Removed Omaccy-installed Ghostty."
+  else
+    echo "Keeping Ghostty installed."
+  fi
+}
+
 restore_target() {
   local target="$1"
   local canonical="$2"
@@ -44,6 +71,7 @@ main() {
     "$OMACCY_DIR/sha256/launchagents/com.omaccy.hyperkey.plist" \
     "$OMACCY_DIR/sha256/hyperkey/hyperkey.toml"
 
+  remove_owned_ghostty
   rmdir "$HOME/.config/omaccy" 2>/dev/null || true
   echo "Omaccy Hyperkey removed; Caps Lock restored."
 }

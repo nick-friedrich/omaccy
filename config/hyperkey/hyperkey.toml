@@ -3,4 +3,4 @@ escape_on_tap = false
 
 # Values are macOS application bundle identifiers.
 [bindings]
-enter = "com.apple.Terminal"
+t = "com.mitchellh.ghostty"

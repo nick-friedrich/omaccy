@@ -34,7 +34,7 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 - Alternatives considered and rejected: KMonad (MIT) rides the same Karabiner DriverKit dext that broke on macOS 26 and needs root daemon + GUI driver approval. Hammerspoon (MIT) works but is a separate runtime just for one key.
 
 ### 2. App launching
-- **Hyper + letter** → launch a bound app directly (e.g. Hyper+T → Terminal, Hyper+F → Finder).
+- **Hyper + letter** → launch a bound app directly (e.g. Hyper+T → Ghostty, Hyper+F → Finder).
 - **Hyper + Space** → open the super menu palette for everything else.
 - Bindings are user-editable in our TOML config.
 
@@ -82,7 +82,7 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 
 - [x] **Hyper key implementation decided**: fork `feedthejim/hyperkey` (MIT) → strip Shift — see §1.
 - [x] **Hyperkey engine vendored:** forked `feedthejim/hyperkey` at `532f2b3`, removed Shift from `Constants.hyperFlags`, added symlinked TOML config and LaunchAgent startup, and retained the Accessibility onboarding prompt.
-- [x] **Global app bindings:** Hyper chords can launch bundle identifiers from `hyperkey.toml`; the default maps Hyper+Enter to Terminal.
+- [x] **Global app bindings:** Hyper chords can launch bundle identifiers from `hyperkey.toml`; the default maps Hyper+T to Ghostty, installed through Homebrew when missing.
 - [ ] How our app toggles **AeroSpace** — `aerospace` CLI (kill/relaunch process).
 - [ ] How our app toggles **SketchyBar** — `brew services start/stop sketchybar` vs. `killall`/relaunch.
 - [ ] How our app registers the **Hyper+Space** global hotkey — `CGEvent.tapCreate` vs. Carbon `RegisterEventHotKey`.
