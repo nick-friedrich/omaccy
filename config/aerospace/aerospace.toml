@@ -57,8 +57,8 @@ cmd-ctrl-alt-6 = 'workspace 6'
 cmd-ctrl-alt-7 = 'workspace 7'
 cmd-ctrl-alt-8 = 'workspace 8'
 cmd-ctrl-alt-9 = 'workspace 9'
-cmd-ctrl-alt-tab = 'workspace --wrap-around next'
-cmd-ctrl-alt-shift-tab = 'workspace --wrap-around prev'
+cmd-ctrl-alt-tab = 'list-workspaces --monitor focused --empty no | workspace --wrap-around --stdin next'
+cmd-ctrl-alt-shift-tab = 'list-workspaces --monitor focused --empty no | workspace --wrap-around --stdin prev'
 
 # Send the focused window to a workspace.
 cmd-ctrl-alt-shift-1 = 'move-node-to-workspace 1'
