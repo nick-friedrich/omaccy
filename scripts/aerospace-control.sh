@@ -7,6 +7,7 @@ usage() {
 }
 
 AEROSPACE_LAST_ERROR=""
+AEROSPACE_DISABLED_MARKER="$HOME/.omaccy/aerospace-disabled"
 
 aerospace_is_running() {
   local output
@@ -64,9 +65,12 @@ start_aerospace() {
   # was already running before Omaccy was installed or updated.
   aerospace reload-config --no-gui
   aerospace enable on
+  rm -f "$AEROSPACE_DISABLED_MARKER"
 }
 
 stop_aerospace() {
+  mkdir -p "$(dirname "$AEROSPACE_DISABLED_MARKER")"
+  touch "$AEROSPACE_DISABLED_MARKER"
   # A stopped app is already equivalent to disabled tiling.
   if ! aerospace_is_running; then
     ipc_is_restricted && warn_restricted_ipc
@@ -82,7 +86,14 @@ case "${1:-}" in
     if ! aerospace_is_running; then
       start_aerospace
     else
-      aerospace enable toggle
+      if aerospace enable toggle; then
+        mkdir -p "$(dirname "$AEROSPACE_DISABLED_MARKER")"
+        if [[ -f "$AEROSPACE_DISABLED_MARKER" ]]; then
+          rm -f "$AEROSPACE_DISABLED_MARKER"
+        else
+          touch "$AEROSPACE_DISABLED_MARKER"
+        fi
+      fi
     fi
     ;;
   *) usage ;;

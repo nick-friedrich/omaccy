@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+
+# Omaccy's intentionally quiet SketchyBar: workspaces and window context on the
+# left, machine state on the right. Each plugin is a small, independently
+# refreshable shell script so the bar stays useful if one command fails.
+
+CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$CONFIG_DIR/plugins"
+
+BAR_BG=0xff000000
+ITEM_BG=0xff242730
+ACCENT=0xff89b4fa
+TEXT=0xffcdd6f4
+
+sketchybar --bar height=34 \
+  position=top \
+  color="$BAR_BG" \
+  border_width=0 \
+  shadow=off \
+  topmost=on \
+  sticky=on \
+  padding_left=8 \
+  padding_right=8 \
+  y_offset=0 \
+  margin=0 \
+  corner_radius=0
+
+sketchybar --default \
+  icon.color="$TEXT" \
+  icon.font="SF Pro:Semibold:13.0" \
+  label.color="$TEXT" \
+  label.font="SF Pro:Medium:13.0" \
+  background.color="$ITEM_BG" \
+  background.corner_radius=7 \
+  background.height=24 \
+  padding_left=5 \
+  padding_right=5 \
+  icon.padding_left=8 \
+  icon.padding_right=5 \
+  label.padding_left=0 \
+  label.padding_right=8
+
+sketchybar --add event aerospace_workspace_change
+
+sketchybar --add item native_menu left \
+  --set native_menu \
+    icon="" \
+    label.drawing=off \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/menu-toggle.sh"
+
+for workspace in {1..9}; do
+  sketchybar --add item "workspace.$workspace" left \
+    --set "workspace.$workspace" \
+      icon="$workspace" \
+      label.drawing=off \
+      background.drawing=off \
+      click_script="'$PLUGIN_DIR/workspace.sh' '$workspace'"
+done
+
+sketchybar --add item workspace_observer left \
+  --set workspace_observer \
+    width=0 \
+    padding_left=0 \
+    padding_right=0 \
+    icon.drawing=off \
+    label.drawing=off \
+    background.drawing=off \
+    update_freq=2 \
+    script="$PLUGIN_DIR/workspace.sh" \
+  --subscribe workspace_observer aerospace_workspace_change front_app_switched system_woke
+
+sketchybar --add item front_app left \
+  --set front_app \
+    icon="◆" \
+    icon.color="$ACCENT" \
+    label.max_chars=34 \
+    background.drawing=off \
+    script="$PLUGIN_DIR/front-app.sh" \
+  --subscribe front_app front_app_switched
+
+sketchybar --add item clock right \
+  --set clock icon="◷" update_freq=10 script="$PLUGIN_DIR/clock.sh"
+
+sketchybar --add item battery right \
+  --set battery icon="▰" update_freq=30 script="$PLUGIN_DIR/battery.sh" \
+  --subscribe battery system_woke power_source_change
+
+sketchybar --add item wifi right \
+  --set wifi icon="⌁" update_freq=30 script="$PLUGIN_DIR/wifi.sh" \
+  --subscribe wifi wifi_change system_woke
+
+sketchybar --add item aerospace right \
+  --set aerospace \
+    icon="▦" \
+    label="Tiling" \
+    update_freq=5 \
+    script="$PLUGIN_DIR/aerospace-state.sh" \
+    click_script="$PLUGIN_DIR/aerospace-state.sh toggle"
+
+sketchybar --trigger aerospace_workspace_change
+sketchybar --update
+
+# Preserve the user's chosen bar across SketchyBar restarts. Hyper+M always
+# remains available through AeroSpace to switch the custom bar back on.
+if [[ -f "$HOME/.omaccy/native-menu-visible" ]]; then
+  sketchybar --bar hidden=on
+fi

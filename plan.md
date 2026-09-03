@@ -87,7 +87,7 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 - [x] **Global app bindings:** Hyper chords can launch bundle identifiers from `hyperkey.toml`; the default maps Hyper+T to Ghostty, installed through Homebrew when missing.
 - [x] **Ghostty config wired:** the active config is deployed through `~/.omaccy/config`, symlinked into Ghostty's Application Support directory, and restored safely on uninstall.
 - [x] **AeroSpace tiling wired:** an initial Hyper-driven i3-style config is deployed through `~/.omaccy/config`, AeroSpace is installed only when missing, its live config uses the backup-safe symlink lifecycle, and `scripts/aerospace-control.sh` provides start/stop/toggle commands.
-- [ ] How our app toggles **SketchyBar** — `brew services start/stop sketchybar` vs. `killall`/relaunch.
+- [x] **Custom menu bar wired:** SketchyBar is managed with `brew services`, its backup-safe config shows AeroSpace workspaces, the front app, tiling availability, Wi-Fi, battery, and time, and workspace changes update immediately.
 - [ ] How our app registers the **Hyper+Space** global hotkey — `CGEvent.tapCreate` vs. Carbon `RegisterEventHotKey`.
 - [ ] Config sync across machines — user-managed dotfiles vs. our own sync mechanism.
 

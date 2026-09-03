@@ -54,6 +54,26 @@ ensure_cask() {
   record_dep installed-deps "$cask"
 }
 
+ensure_formula() {
+  local formula="$1"
+  local install_ref="${2:-$formula}"
+  ensure_brew
+
+  if brew list --formula "$formula" >/dev/null 2>&1; then
+    if [[ -f "$OMACCY_DIR/installed-formulas" ]] && grep -qx "$formula" "$OMACCY_DIR/installed-formulas"; then
+      echo "$formula already installed by Omaccy."
+    else
+      record_dep preinstalled-formulas "$formula"
+      echo "$formula already installed; Omaccy will leave it installed on uninstall."
+    fi
+    return
+  fi
+
+  echo "Installing $formula..."
+  brew install "$install_ref"
+  record_dep installed-formulas "$formula"
+}
+
 stamp_config() {
   local rel="$1"
   local stamp_file="$OMACCY_DIR/sha256/$rel"
@@ -66,6 +86,41 @@ config_is_pristine() {
   local stamp_file="$OMACCY_DIR/sha256/$rel"
   [[ -f "$stamp_file" && -f "$CONF_DIR/$rel" ]] || return 1
   [[ "$(cat "$stamp_file")" == "$(shasum -a 256 "$CONF_DIR/$rel" | awk '{print $1}')" ]]
+}
+
+enable_native_menu_bar_autohide() {
+  local saved_setting="$OMACCY_DIR/native-menubar-autohide.original"
+  local saved_option="$OMACCY_DIR/native-menubar-autohide-option.original"
+  local current_value
+  local had_legacy_saved_setting=0
+  [[ -f "$saved_setting" ]] && had_legacy_saved_setting=1
+
+  if [[ ! -f "$saved_setting" ]]; then
+    if current_value="$(defaults read NSGlobalDomain _HIHideMenuBar 2>/dev/null)"; then
+      printf 'value=%s\n' "$current_value" > "$saved_setting"
+    else
+      printf 'unset\n' > "$saved_setting"
+    fi
+  fi
+
+  if [[ ! -f "$saved_option" ]]; then
+    if [[ "$had_legacy_saved_setting" == "1" ]]; then
+      # Migrate installations made by the first SketchyBar installer revision,
+      # which wrote only the legacy key. Tahoe's corresponding prior UI value
+      # was "In Full Screen Only".
+      printf 'value=2\n' > "$saved_option"
+    elif current_value="$(defaults read com.apple.controlcenter AutoHideMenuBarOption 2>/dev/null)"; then
+      printf 'value=%s\n' "$current_value" > "$saved_option"
+    else
+      printf 'unset\n' > "$saved_option"
+    fi
+  fi
+
+  defaults write com.apple.controlcenter AutoHideMenuBarOption -int 0
+  defaults write NSGlobalDomain _HIHideMenuBar -bool true
+  killall ControlCenter 2>/dev/null || true
+  killall SystemUIServer 2>/dev/null || true
+  echo "Enabled native menu-bar auto-hide for the SketchyBar replacement."
 }
 
 # Copy a repository default into ~/.omaccy/config and link the path consumed by
@@ -180,11 +235,25 @@ main() {
   migrate_legacy_karabiner_config
   ensure_cask ghostty
   ensure_cask aerospace nikitabobko/tap/aerospace
+  ensure_formula sketchybar FelixKratz/formulae/sketchybar
+  if grep -qx sketchybar "$OMACCY_DIR/preinstalled-formulas" 2>/dev/null && \
+      brew services list 2>/dev/null | grep -q '^sketchybar[[:space:]].*started'; then
+    touch "$OMACCY_DIR/sketchybar-service-was-running"
+  fi
   ensure_symlink "$REPO_ROOT/config/ghostty/config.ghostty" \
     "$HOME/Library/Application Support/com.mitchellh.ghostty/config.ghostty"
   ensure_absent_with_backup "$HOME/.aerospace.toml"
   ensure_symlink "$REPO_ROOT/config/aerospace/aerospace.toml" \
     "$HOME/.config/aerospace/aerospace.toml"
+  ensure_symlink "$REPO_ROOT/config/sketchybar/sketchybarrc" \
+    "$HOME/.config/sketchybar/sketchybarrc"
+  local sketchybar_plugin
+  for sketchybar_plugin in "$REPO_ROOT"/config/sketchybar/plugins/*.sh; do
+    ensure_symlink "$sketchybar_plugin" \
+      "$HOME/.config/sketchybar/plugins/$(basename "$sketchybar_plugin")"
+    chmod +x "$CONF_DIR/sketchybar/plugins/$(basename "$sketchybar_plugin")"
+  done
+  chmod +x "$CONF_DIR/sketchybar/sketchybarrc"
   install_hyperkey_app
   ensure_symlink "$REPO_ROOT/config/hyperkey/hyperkey.toml" \
     "$HOME/.config/omaccy/hyperkey.toml"
@@ -192,8 +261,10 @@ main() {
     "$LAUNCH_AGENT"
   start_hyperkey
   "$REPO_ROOT/scripts/aerospace-control.sh" start
+  brew services restart sketchybar
+  enable_native_menu_bar_autohide
   echo ""
-  echo "Omaccy installed: Caps Lock → Command+Control+Option; Hyper+T → Ghostty; AeroSpace tiling enabled."
+  echo "Omaccy installed: Caps Lock → Command+Control+Option; Hyper+T → Ghostty; AeroSpace tiling and SketchyBar enabled."
 }
 
 main

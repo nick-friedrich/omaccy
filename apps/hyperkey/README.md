@@ -24,3 +24,9 @@ t = "com.mitchellh.ghostty"
 Build it with `swift build -c release --package-path apps/hyperkey` from the
 repository root. Accessibility access is required when the installed app first
 launches.
+
+The full Omaccy installer also installs the custom SketchyBar configuration.
+Its workspace buttons control AeroSpace, and its right-side status items show
+tiling state, Wi-Fi, battery, and the clock. The canonical editable files live
+under `~/.omaccy/config/sketchybar` and are symlinked into
+`~/.config/sketchybar` with any previous configuration backed up.
