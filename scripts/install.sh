@@ -36,6 +36,7 @@ record_dep() {
 
 ensure_cask() {
   local cask="$1"
+  local install_ref="${2:-$cask}"
   ensure_brew
 
   if brew list --cask "$cask" >/dev/null 2>&1; then
@@ -49,7 +50,7 @@ ensure_cask() {
   fi
 
   echo "Installing $cask..."
-  brew install --cask "$cask"
+  brew install --cask "$install_ref"
   record_dep installed-deps "$cask"
 }
 
@@ -110,6 +111,19 @@ ensure_symlink() {
   echo "Symlinked $target_path → $canonical"
 }
 
+# AeroSpace also reads ~/.aerospace.toml and rejects startup when both config
+# locations exist. Preserve that alternate config while Omaccy's XDG config is
+# active, then let uninstall restore it.
+ensure_absent_with_backup() {
+  local target_path="$1"
+
+  if [[ -e "$target_path" || -L "$target_path" ]]; then
+    local backup="$BAK_DIR/$(basename "$target_path").$(date +%Y%m%d-%H%M%S)"
+    mv "$target_path" "$backup"
+    echo "Backed up conflicting $target_path → $backup"
+  fi
+}
+
 migrate_legacy_karabiner_config() {
   local old_target="$HOME/.config/karabiner/karabiner.json"
   if [[ -L "$old_target" && "$(readlink "$old_target")" == "$CONF_DIR/karabiner/karabiner.json" ]]; then
@@ -127,12 +141,17 @@ migrate_legacy_karabiner_config() {
 install_hyperkey_app() {
   local built_binary="$REPO_ROOT/apps/hyperkey/.build/release/omaccy-hyperkey"
   local installed_binary="$APP_DIR/Contents/MacOS/omaccy-hyperkey"
+  local build_stamp="$OMACCY_DIR/hyperkey-build.sha256"
+  local built_hash
   local binary_changed=0
 
   echo "Building Omaccy Hyperkey..."
   swift build -c release --package-path "$REPO_ROOT/apps/hyperkey"
+  built_hash="$(shasum -a 256 "$built_binary" | awk '{print $1}')"
 
-  if [[ ! -f "$installed_binary" ]] || ! cmp -s "$built_binary" "$installed_binary"; then
+  # codesign changes the installed Mach-O, so comparing it directly with the
+  # unsigned build always reports a false difference. Track the build hash.
+  if [[ ! -f "$installed_binary" || ! -f "$build_stamp" || "$(cat "$build_stamp")" != "$built_hash" ]]; then
     binary_changed=1
   fi
 
@@ -143,6 +162,7 @@ install_hyperkey_app() {
   cp "$built_binary" "$installed_binary"
   cp "$REPO_ROOT/apps/hyperkey/Info.plist" "$APP_DIR/Contents/Info.plist"
   codesign --force --sign - --identifier com.omaccy.hyperkey "$APP_DIR"
+  printf '%s\n' "$built_hash" > "$build_stamp"
   if [[ "$binary_changed" == "1" ]]; then
     # Ad-hoc local builds have a new code hash; clear stale TCC state only when
     # the executable actually changed. Config-only updates keep their grant.
@@ -153,20 +173,27 @@ install_hyperkey_app() {
 
 start_hyperkey() {
   /bin/launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT"
-  echo "Started Omaccy Hyperkey. Approve its Accessibility prompt to finish setup."
+  echo "Started Omaccy Hyperkey. If macOS prompts, approve its Accessibility access."
 }
 
 main() {
   migrate_legacy_karabiner_config
   ensure_cask ghostty
+  ensure_cask aerospace nikitabobko/tap/aerospace
+  ensure_symlink "$REPO_ROOT/config/ghostty/config.ghostty" \
+    "$HOME/Library/Application Support/com.mitchellh.ghostty/config.ghostty"
+  ensure_absent_with_backup "$HOME/.aerospace.toml"
+  ensure_symlink "$REPO_ROOT/config/aerospace/aerospace.toml" \
+    "$HOME/.config/aerospace/aerospace.toml"
   install_hyperkey_app
   ensure_symlink "$REPO_ROOT/config/hyperkey/hyperkey.toml" \
     "$HOME/.config/omaccy/hyperkey.toml"
   ensure_symlink "$REPO_ROOT/config/launchagents/com.omaccy.hyperkey.plist" \
     "$LAUNCH_AGENT"
   start_hyperkey
+  "$REPO_ROOT/scripts/aerospace-control.sh" start
   echo ""
-  echo "Omaccy Hyperkey installed: Caps Lock → Command+Control+Option; Hyper+T → Ghostty."
+  echo "Omaccy installed: Caps Lock → Command+Control+Option; Hyper+T → Ghostty; AeroSpace tiling enabled."
 }
 
 main

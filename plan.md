@@ -13,6 +13,7 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 | Status bar | **SketchyBar** | MIT | Custom menubar-replacement bar, our config/skin |
 | Super menu | **Our SwiftUI app** | ours | Hyper+Space palette: search apps + quick actions |
 | Hotkeys | Our Swift app | — | Hyper+letter launch; Hyper+Space palette |
+| Terminal | **Ghostty** | MIT | Default terminal, launched with Hyper+T |
 | Install | curl \| bash script | ours | One-line setup, Homebrew deps, configs, app |
 | Distribution | Homebrew tap | ours | `brew install omaccy` |
 
@@ -37,6 +38,7 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 - **Hyper + letter** → launch a bound app directly (e.g. Hyper+T → Ghostty, Hyper+F → Finder).
 - **Hyper + Space** → open the super menu palette for everything else.
 - Bindings are user-editable in our TOML config.
+- Ghostty is installed through Homebrew when missing; an existing user installation is preserved on uninstall.
 
 ### 3. Status bar
 - SketchyBar with our custom config/skin.
@@ -63,7 +65,7 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 - **One-line installer**: `curl -fsSL https://.../install.sh | bash`.
 - Steps:
   1. Ensure Homebrew.
-  2. Install deps (AeroSpace, SketchyBar, Hammerspoon/hyperkey daemon as needed).
+  2. Install deps (Ghostty, AeroSpace, SketchyBar) and build/install the bundled hyperkey daemon.
   3. Back up any existing configs (see Config safety).
   4. Our configs live in a canonical location (e.g. `~/.omaccy/config/` shipped/versioned), and are **symlinked** into each tool's expected path (AeroSpace `~/.config/aerospace/aerospace.toml`, SketchyBar config, our hyperkey daemon config, etc.). Users edit the real files in `~/.omaccy/config/`; symlinks point at them.
   5. Install our Swift app (Homebrew tap).
@@ -78,12 +80,13 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
   - On uninstall: remove only **our** symlinks and restore the backups.
 - Our own config (app bindings, settings) must never clobber a user's existing AeroSpace / SketchyBar configs.
 
-## Implementation notes (still to settle)
+## Implementation roadmap
 
 - [x] **Hyper key implementation decided**: fork `feedthejim/hyperkey` (MIT) → strip Shift — see §1.
 - [x] **Hyperkey engine vendored:** forked `feedthejim/hyperkey` at `532f2b3`, removed Shift from `Constants.hyperFlags`, added symlinked TOML config and LaunchAgent startup, and retained the Accessibility onboarding prompt.
 - [x] **Global app bindings:** Hyper chords can launch bundle identifiers from `hyperkey.toml`; the default maps Hyper+T to Ghostty, installed through Homebrew when missing.
-- [ ] How our app toggles **AeroSpace** — `aerospace` CLI (kill/relaunch process).
+- [x] **Ghostty config wired:** the active config is deployed through `~/.omaccy/config`, symlinked into Ghostty's Application Support directory, and restored safely on uninstall.
+- [x] **AeroSpace tiling wired:** an initial Hyper-driven i3-style config is deployed through `~/.omaccy/config`, AeroSpace is installed only when missing, its live config uses the backup-safe symlink lifecycle, and `scripts/aerospace-control.sh` provides start/stop/toggle commands.
 - [ ] How our app toggles **SketchyBar** — `brew services start/stop sketchybar` vs. `killall`/relaunch.
 - [ ] How our app registers the **Hyper+Space** global hotkey — `CGEvent.tapCreate` vs. Carbon `RegisterEventHotKey`.
 - [ ] Config sync across machines — user-managed dotfiles vs. our own sync mechanism.

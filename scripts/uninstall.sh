@@ -18,18 +18,20 @@ ask_confirmation() {
   [[ "$answer" == "y" || "$answer" == "yes" ]]
 }
 
-remove_owned_ghostty() {
+remove_owned_cask() {
+  local cask="$1"
+  local display_name="$2"
   local marker="$OMACCY_DIR/installed-deps"
-  [[ -f "$marker" ]] && grep -qx ghostty "$marker" || return 0
+  [[ -f "$marker" ]] && grep -qx "$cask" "$marker" || return 0
 
-  if ask_confirmation "Remove Ghostty, which Omaccy installed?"; then
-    brew uninstall --cask ghostty || true
+  if ask_confirmation "Remove $display_name, which Omaccy installed?"; then
+    brew uninstall --cask "$cask" || true
     local updated_marker="$OMACCY_DIR/installed-deps.updated"
-    grep -vx ghostty "$marker" > "$updated_marker" || true
+    grep -vx "$cask" "$marker" > "$updated_marker" || true
     mv "$updated_marker" "$marker"
-    echo "Removed Omaccy-installed Ghostty."
+    echo "Removed Omaccy-installed $display_name."
   else
-    echo "Keeping Ghostty installed."
+    echo "Keeping $display_name installed."
   fi
 }
 
@@ -44,7 +46,7 @@ restore_target() {
   fi
 
   rm "$target"
-  backup="$(find "$BAK_DIR" -maxdepth 1 -type f -name "$(basename "$target").*" -print 2>/dev/null | sort | tail -n 1)"
+  backup="$(find "$BAK_DIR" -maxdepth 1 \( -type f -o -type l \) -name "$(basename "$target").*" -print 2>/dev/null | sort | tail -n 1)"
   if [[ -n "$backup" ]]; then
     mv "$backup" "$target"
     echo "Restored original config → $target"
@@ -53,7 +55,26 @@ restore_target() {
   fi
 }
 
+restore_displaced_target() {
+  local target="$1"
+  local backup
+
+  if [[ -e "$target" || -L "$target" ]]; then
+    echo "A new config exists → $target (left as-is)"
+    return
+  fi
+
+  backup="$(find "$BAK_DIR" -maxdepth 1 \( -type f -o -type l \) -name "$(basename "$target").*" -print 2>/dev/null | sort | tail -n 1)"
+  if [[ -n "$backup" ]]; then
+    mv "$backup" "$target"
+    echo "Restored original config → $target"
+  fi
+}
+
 main() {
+  if command -v aerospace >/dev/null 2>&1; then
+    "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/aerospace-control.sh" stop || true
+  fi
   /bin/launchctl bootout "gui/$(id -u)/com.omaccy.hyperkey" 2>/dev/null || true
   pkill -x omaccy-hyperkey 2>/dev/null || true
 
@@ -64,16 +85,31 @@ main() {
     "$CONF_DIR/launchagents/com.omaccy.hyperkey.plist"
   restore_target "$HOME/.config/omaccy/hyperkey.toml" \
     "$CONF_DIR/hyperkey/hyperkey.toml"
+  restore_target "$HOME/Library/Application Support/com.mitchellh.ghostty/config.ghostty" \
+    "$CONF_DIR/ghostty/config.ghostty"
+  restore_target "$HOME/.config/aerospace/aerospace.toml" \
+    "$CONF_DIR/aerospace/aerospace.toml"
+  restore_displaced_target "$HOME/.aerospace.toml"
+  if command -v aerospace >/dev/null 2>&1 && aerospace list-workspaces --all >/dev/null 2>&1; then
+    aerospace reload-config --no-gui || true
+  fi
 
   rm -rf "$APP_DIR"
   rm -f "$CONF_DIR/launchagents/com.omaccy.hyperkey.plist" \
     "$CONF_DIR/hyperkey/hyperkey.toml" \
+    "$CONF_DIR/ghostty/config.ghostty" \
+    "$CONF_DIR/aerospace/aerospace.toml" \
     "$OMACCY_DIR/sha256/launchagents/com.omaccy.hyperkey.plist" \
-    "$OMACCY_DIR/sha256/hyperkey/hyperkey.toml"
+    "$OMACCY_DIR/sha256/hyperkey/hyperkey.toml" \
+    "$OMACCY_DIR/sha256/ghostty/config.ghostty" \
+    "$OMACCY_DIR/sha256/aerospace/aerospace.toml"
 
-  remove_owned_ghostty
+  remove_owned_cask ghostty Ghostty
+  remove_owned_cask aerospace AeroSpace
   rmdir "$HOME/.config/omaccy" 2>/dev/null || true
-  echo "Omaccy Hyperkey removed; Caps Lock restored."
+  rmdir "$HOME/.config/aerospace" 2>/dev/null || true
+  rmdir "$CONF_DIR/aerospace" 2>/dev/null || true
+  echo "Omaccy removed; AeroSpace tiling stopped and Caps Lock restored."
 }
 
 main
