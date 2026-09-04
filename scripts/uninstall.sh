@@ -88,6 +88,19 @@ restore_displaced_target() {
   fi
 }
 
+stop_owned_caffeinate() {
+  local pid_file="$OMACCY_DIR/caffeinate.pid"
+  local pid=""
+
+  if [[ -f "$pid_file" ]]; then
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+    fi
+  fi
+  rm -f "$pid_file" "$OMACCY_DIR/caffeinate.ends-at"
+}
+
 restore_native_menu_bar_autohide() {
   local saved_setting="$OMACCY_DIR/native-menubar-autohide.original"
   local saved_option="$OMACCY_DIR/native-menubar-autohide-option.original"
@@ -118,10 +131,44 @@ restore_native_menu_bar_autohide() {
   echo "Restored the previous native menu-bar auto-hide setting."
 }
 
+restore_mission_control_arrow_shortcuts() {
+  local saved_shortcuts="$OMACCY_DIR/mission-control-arrow-shortcuts.original"
+  local prefs_file
+  local shortcut_id
+  local saved_value
+  [[ -f "$saved_shortcuts" ]] || return 0
+
+  prefs_file="$(mktemp /tmp/omaccy-symbolic-hotkeys.XXXXXX)"
+  if ! defaults export com.apple.symbolichotkeys - > "$prefs_file"; then
+    rm -f "$prefs_file"
+    echo "WARNING: Could not restore the previous macOS Mission Control shortcuts." >&2
+    return 0
+  fi
+
+  while IFS='=' read -r shortcut_id saved_value; do
+    case "$saved_value" in
+      true|false)
+        if /usr/libexec/PlistBuddy -c \
+            "Print :AppleSymbolicHotKeys:$shortcut_id:enabled" "$prefs_file" >/dev/null 2>&1; then
+          /usr/libexec/PlistBuddy -c \
+            "Set :AppleSymbolicHotKeys:$shortcut_id:enabled $saved_value" "$prefs_file"
+        fi
+        ;;
+    esac
+  done < "$saved_shortcuts"
+
+  defaults import com.apple.symbolichotkeys "$prefs_file"
+  rm -f "$prefs_file" "$saved_shortcuts"
+  killall cfprefsd 2>/dev/null || true
+  killall Dock 2>/dev/null || true
+  echo "Restored the previous macOS Mission Control and Spaces shortcuts."
+}
+
 main() {
   if command -v brew >/dev/null 2>&1 && brew services list 2>/dev/null | grep -q '^sketchybar[[:space:]]'; then
     brew services stop sketchybar || true
   fi
+  stop_owned_caffeinate
   if command -v aerospace >/dev/null 2>&1; then
     "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/aerospace-control.sh" stop || true
   fi
@@ -131,12 +178,16 @@ main() {
   # Restore normal Caps Lock even if the application has already disappeared.
   /usr/bin/hidutil property --set '{"UserKeyMapping":[]}' >/dev/null
 
+  restore_mission_control_arrow_shortcuts
+
   restore_target "$HOME/Library/LaunchAgents/com.omaccy.hyperkey.plist" \
     "$CONF_DIR/launchagents/com.omaccy.hyperkey.plist"
   restore_target "$HOME/.config/omaccy/hyperkey.toml" \
     "$CONF_DIR/hyperkey/hyperkey.toml"
   restore_target "$HOME/Library/Application Support/com.mitchellh.ghostty/config.ghostty" \
     "$CONF_DIR/ghostty/config.ghostty"
+  restore_target "$HOME/.config/aerospace/master-stack.sh" \
+    "$CONF_DIR/aerospace/master-stack.sh"
   restore_target "$HOME/.config/aerospace/aerospace.toml" \
     "$CONF_DIR/aerospace/aerospace.toml"
   restore_target "$HOME/.config/sketchybar/sketchybarrc" \
@@ -156,12 +207,14 @@ main() {
   rm -f "$CONF_DIR/launchagents/com.omaccy.hyperkey.plist" \
     "$CONF_DIR/hyperkey/hyperkey.toml" \
     "$CONF_DIR/ghostty/config.ghostty" \
+    "$CONF_DIR/aerospace/master-stack.sh" \
     "$CONF_DIR/aerospace/aerospace.toml" \
     "$CONF_DIR/sketchybar/sketchybarrc" \
     "$CONF_DIR/sketchybar/plugins/"*.sh \
     "$OMACCY_DIR/sha256/launchagents/com.omaccy.hyperkey.plist" \
     "$OMACCY_DIR/sha256/hyperkey/hyperkey.toml" \
     "$OMACCY_DIR/sha256/ghostty/config.ghostty" \
+    "$OMACCY_DIR/sha256/aerospace/master-stack.sh" \
     "$OMACCY_DIR/sha256/aerospace/aerospace.toml" \
     "$OMACCY_DIR/sha256/sketchybar/sketchybarrc" \
     "$OMACCY_DIR/sha256/sketchybar/plugins/"*.sh

@@ -63,6 +63,19 @@ private func eventTapCallback(
 
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
+    // Match a remapped arrow release even if Hyper was released first. In that
+    // case consume it so neither the original Arrow nor an unmatched Vim-key
+    // release leaks into the focused application.
+    if type == .keyUp,
+       let mappedKeyCode = DirectionalKeyRemapping.end(keyCode: UInt16(keyCode)) {
+        guard hyperActive else { return nil }
+        hyperUsedAsModifier = true
+        event.setIntegerValueField(.keyboardEventKeycode, value: Int64(mappedKeyCode))
+        let flags = DirectionalKeyRemapping.vimKeyFlags(from: event.flags)
+        event.flags = CGEventFlags(rawValue: flags.rawValue | Constants.hyperFlags.rawValue)
+        return Unmanaged.passUnretained(event)
+    }
+
     // A bound key may be released after Hyper itself. Consume that key-up too,
     // otherwise applications can receive an unmatched release event.
     if type == .keyUp,
@@ -106,6 +119,11 @@ private func eventTapCallback(
         if type == .keyDown,
            HotkeyBindings.handle(keyCode: UInt16(keyCode), keyDown: true) {
             return nil
+        }
+        if type == .keyDown,
+           let mappedKeyCode = DirectionalKeyRemapping.begin(keyCode: UInt16(keyCode)) {
+            event.setIntegerValueField(.keyboardEventKeycode, value: Int64(mappedKeyCode))
+            event.flags = DirectionalKeyRemapping.vimKeyFlags(from: event.flags)
         }
         event.flags = CGEventFlags(rawValue: event.flags.rawValue | Constants.hyperFlags.rawValue)
         return Unmanaged.passUnretained(event)

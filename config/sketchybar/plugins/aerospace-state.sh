@@ -22,9 +22,9 @@ if [[ "${1:-}" == "toggle" && -n "$aerospace_bin" ]]; then
 fi
 
 if [[ -f "$disabled_marker" ]]; then
-  sketchybar --set "$NAME" label="Tiling off" icon.color=0xff7f849c
+  sketchybar --set "$NAME" label="Tiling off" icon.color=0xffcdd6f4
 elif [[ -n "$aerospace_bin" ]] && "$aerospace_bin" list-workspaces --all >/dev/null 2>&1; then
-  sketchybar --set "$NAME" label="Tiling" icon.color=0xffa6e3a1
+  sketchybar --set "$NAME" label="Tiling" icon.color=0xffcdd6f4
 else
-  sketchybar --set "$NAME" label="Tiling off" icon.color=0xff7f849c
+  sketchybar --set "$NAME" label="Tiling off" icon.color=0xffcdd6f4
 fi

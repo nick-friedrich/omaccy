@@ -4,11 +4,19 @@ status="$(pmset -g batt 2>/dev/null)"
 percentage="$(printf '%s\n' "$status" | sed -nE 's/.*[[:space:]]([0-9]+)%.*/\1/p' | head -n 1)"
 [[ -n "$percentage" ]] || percentage="?"
 
-icon="▰"
-color=0xffcdd6f4
-[[ "$status" == *"AC Power"* ]] && icon="↯"
-if [[ "$percentage" != "?" && "$percentage" -le 20 ]]; then
-  color=0xfff38ba8
+icon="􀛨"
+if [[ "$status" == *"AC Power"* ]]; then
+  icon="􀢋"
+elif [[ "$percentage" != "?" ]]; then
+  if (( percentage <= 10 )); then
+    icon="􀛪"
+  elif (( percentage <= 30 )); then
+    icon="􀛩"
+  elif (( percentage <= 60 )); then
+    icon="􀺶"
+  elif (( percentage <= 85 )); then
+    icon="􀺸"
+  fi
 fi
 
-sketchybar --set "$NAME" icon="$icon" icon.color="$color" label="${percentage}%"
+sketchybar --set "$NAME" icon="$icon" icon.color=0xffcdd6f4 label="${percentage}%"

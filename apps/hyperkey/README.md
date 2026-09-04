@@ -27,6 +27,6 @@ launches.
 
 The full Omaccy installer also installs the custom SketchyBar configuration.
 Its workspace buttons control AeroSpace, and its right-side status items show
-tiling state, Wi-Fi, battery, and the clock. The canonical editable files live
-under `~/.omaccy/config/sketchybar` and are symlinked into
+tiling state, a Caffeinate control, battery, and the clock. The canonical
+editable files live under `~/.omaccy/config/sketchybar` and are symlinked into
 `~/.config/sketchybar` with any previous configuration backed up.

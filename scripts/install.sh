@@ -123,6 +123,49 @@ enable_native_menu_bar_autohide() {
   echo "Enabled native menu-bar auto-hide for the SketchyBar replacement."
 }
 
+disable_mission_control_arrow_shortcuts() {
+  local saved_shortcuts="$OMACCY_DIR/mission-control-arrow-shortcuts.original"
+  local prefs_file
+  local shortcut_id
+  local saved_value
+  prefs_file="$(mktemp /tmp/omaccy-symbolic-hotkeys.XXXXXX)"
+
+  if ! defaults export com.apple.symbolichotkeys - > "$prefs_file"; then
+    rm -f "$prefs_file"
+    echo "WARNING: Could not read macOS Mission Control shortcuts; Hyper+Arrow may conflict." >&2
+    return 0
+  fi
+
+  # Save each original state only once so repeated installs do not replace it
+  # with Omaccy's disabled state. The paired IDs are the normal and internal
+  # Shift/slow variants for Mission Control, App Windows, and Spaces left/right.
+  if [[ ! -f "$saved_shortcuts" ]]; then
+    : > "$saved_shortcuts"
+    for shortcut_id in 32 33 34 35 79 80 81 82; do
+      if saved_value="$(/usr/libexec/PlistBuddy -c \
+          "Print :AppleSymbolicHotKeys:$shortcut_id:enabled" "$prefs_file" 2>/dev/null)"; then
+        printf '%s=%s\n' "$shortcut_id" "$saved_value" >> "$saved_shortcuts"
+      else
+        printf '%s=missing\n' "$shortcut_id" >> "$saved_shortcuts"
+      fi
+    done
+  fi
+
+  for shortcut_id in 32 33 34 35 79 80 81 82; do
+    if /usr/libexec/PlistBuddy -c \
+        "Print :AppleSymbolicHotKeys:$shortcut_id:enabled" "$prefs_file" >/dev/null 2>&1; then
+      /usr/libexec/PlistBuddy -c \
+        "Set :AppleSymbolicHotKeys:$shortcut_id:enabled false" "$prefs_file"
+    fi
+  done
+
+  defaults import com.apple.symbolichotkeys "$prefs_file"
+  rm -f "$prefs_file"
+  killall cfprefsd 2>/dev/null || true
+  killall Dock 2>/dev/null || true
+  echo "Disabled conflicting macOS Mission Control and Spaces arrow shortcuts."
+}
+
 # Copy a repository default into ~/.omaccy/config and link the path consumed by
 # macOS or the app. A customized canonical copy is never overwritten.
 ensure_symlink() {
@@ -245,6 +288,10 @@ main() {
   ensure_absent_with_backup "$HOME/.aerospace.toml"
   ensure_symlink "$REPO_ROOT/config/aerospace/aerospace.toml" \
     "$HOME/.config/aerospace/aerospace.toml"
+  ensure_symlink "$REPO_ROOT/config/aerospace/master-stack.sh" \
+    "$HOME/.config/aerospace/master-stack.sh"
+  chmod +x "$CONF_DIR/aerospace/master-stack.sh"
+  disable_mission_control_arrow_shortcuts
   ensure_symlink "$REPO_ROOT/config/sketchybar/sketchybarrc" \
     "$HOME/.config/sketchybar/sketchybarrc"
   local sketchybar_plugin

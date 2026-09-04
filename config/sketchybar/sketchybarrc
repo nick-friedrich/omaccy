@@ -11,6 +11,7 @@ BAR_BG=0xff000000
 ITEM_BG=0xff242730
 ACCENT=0xff89b4fa
 TEXT=0xffcdd6f4
+STATUS_ICON_FONT="SF Pro:Semibold:15.0"
 
 sketchybar --bar height=34 \
   position=top \
@@ -45,6 +46,7 @@ sketchybar --add event aerospace_workspace_change
 sketchybar --add item native_menu left \
   --set native_menu \
     icon="" \
+    icon.font.size=17 \
     label.drawing=off \
     background.drawing=off \
     click_script="$PLUGIN_DIR/menu-toggle.sh"
@@ -73,6 +75,7 @@ sketchybar --add item workspace_observer left \
 sketchybar --add item front_app left \
   --set front_app \
     icon="◆" \
+    icon.font.size=16 \
     icon.color="$ACCENT" \
     label.max_chars=34 \
     background.drawing=off \
@@ -80,19 +83,72 @@ sketchybar --add item front_app left \
   --subscribe front_app front_app_switched
 
 sketchybar --add item clock right \
-  --set clock icon="◷" update_freq=10 script="$PLUGIN_DIR/clock.sh"
+  --set clock \
+    icon="􀐫" \
+    icon.font="$STATUS_ICON_FONT" \
+    icon.color="$TEXT" \
+    update_freq=10 \
+    script="$PLUGIN_DIR/clock.sh"
 
 sketchybar --add item battery right \
-  --set battery icon="▰" update_freq=30 script="$PLUGIN_DIR/battery.sh" \
+  --set battery \
+    icon="􀛨" \
+    icon.font="$STATUS_ICON_FONT" \
+    icon.color="$TEXT" \
+    update_freq=30 \
+    script="$PLUGIN_DIR/battery.sh" \
   --subscribe battery system_woke power_source_change
 
-sketchybar --add item wifi right \
-  --set wifi icon="⌁" update_freq=30 script="$PLUGIN_DIR/wifi.sh" \
-  --subscribe wifi wifi_change system_woke
+sketchybar --add item caffeinate right \
+  --set caffeinate \
+    icon="􀸙" \
+    icon.font="$STATUS_ICON_FONT" \
+    icon.color="$TEXT" \
+    label.drawing=off \
+    update_freq=15 \
+    script="$PLUGIN_DIR/caffeinate.sh" \
+    click_script="$PLUGIN_DIR/caffeinate.sh click" \
+    popup.align=right \
+    popup.background.color="$ITEM_BG" \
+    popup.background.corner_radius=7 \
+    popup.background.border_width=1 \
+    popup.background.border_color=0xff45475a \
+  --subscribe caffeinate system_woke
+
+sketchybar --add item caffeinate.30m popup.caffeinate \
+  --set caffeinate.30m \
+    icon="◷" \
+    label="30 minutes" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/caffeinate.sh start 1800"
+
+sketchybar --add item caffeinate.1h popup.caffeinate \
+  --set caffeinate.1h \
+    icon="◷" \
+    label="1 hour" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/caffeinate.sh start 3600"
+
+sketchybar --add item caffeinate.2h popup.caffeinate \
+  --set caffeinate.2h \
+    icon="◷" \
+    label="2 hours" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/caffeinate.sh start 7200"
+
+sketchybar --add item caffeinate.off popup.caffeinate \
+  --set caffeinate.off \
+    icon="×" \
+    icon.color=0xfff38ba8 \
+    label="Turn off" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/caffeinate.sh stop"
 
 sketchybar --add item aerospace right \
   --set aerospace \
-    icon="▦" \
+    icon="􀓗" \
+    icon.font="$STATUS_ICON_FONT" \
+    icon.color="$TEXT" \
     label="Tiling" \
     update_freq=5 \
     script="$PLUGIN_DIR/aerospace-state.sh" \

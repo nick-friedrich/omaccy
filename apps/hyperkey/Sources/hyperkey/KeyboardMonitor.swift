@@ -156,6 +156,14 @@ private func hidInputCallback(
 
     // Regular keys: re-inject as CGEvent
     if let keyCode = HIDKeyTable.virtualKeyCode(forUsage: usage) {
+        if !pressed,
+           let mappedKeyCode = DirectionalKeyRemapping.end(keyCode: keyCode) {
+            if hyperActive {
+                hyperUsedAsModifier = true
+                injectKey(keyCode: mappedKeyCode, keyDown: false, addHyperFlags: true)
+            }
+            return
+        }
         if !pressed, HotkeyBindings.handle(keyCode: keyCode, keyDown: false) {
             return
         }
@@ -164,7 +172,10 @@ private func hidInputCallback(
             if pressed, HotkeyBindings.handle(keyCode: keyCode, keyDown: true) {
                 return
             }
-            injectKey(keyCode: keyCode, keyDown: pressed, addHyperFlags: true)
+            let outputKeyCode = pressed
+                ? DirectionalKeyRemapping.begin(keyCode: keyCode) ?? keyCode
+                : keyCode
+            injectKey(keyCode: outputKeyCode, keyDown: pressed, addHyperFlags: true)
         } else {
             injectKey(keyCode: keyCode, keyDown: pressed)
         }
