@@ -1,6 +1,9 @@
 # Send Escape when Caps Lock is tapped without another key.
 escape_on_tap = false
 
-# Values are macOS application bundle identifiers.
+# Values are macOS application bundle identifiers. A binding launches a closed
+# app, focuses its window across workspaces, or hides it when already frontmost.
 [bindings]
+f = "com.apple.finder"
+r = "com.apple.reminders"
 t = "com.mitchellh.ghostty"

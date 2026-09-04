@@ -35,7 +35,8 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 - Alternatives considered and rejected: KMonad (MIT) rides the same Karabiner DriverKit dext that broke on macOS 26 and needs root daemon + GUI driver approval. Hammerspoon (MIT) works but is a separate runtime just for one key.
 
 ### 2. App launching
-- **Hyper + letter** → launch a bound app directly (e.g. Hyper+T → Ghostty, Hyper+F → Finder).
+- **Hyper + letter** → launch, focus across workspaces, or hide a bound app
+  (e.g. Hyper+T → Ghostty, Hyper+F → Finder, Hyper+R → Reminders).
 - **Hyper + Space** → open the super menu palette for everything else.
 - Bindings are user-editable in our TOML config.
 - Ghostty is installed through Homebrew when missing; an existing user installation is preserved on uninstall.
@@ -84,7 +85,9 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 
 - [x] **Hyper key implementation decided**: fork `feedthejim/hyperkey` (MIT) → strip Shift — see §1.
 - [x] **Hyperkey engine vendored:** forked `feedthejim/hyperkey` at `532f2b3`, removed Shift from `Constants.hyperFlags`, added symlinked TOML config and LaunchAgent startup, and retained the Accessibility onboarding prompt.
-- [x] **Global app bindings:** Hyper chords can launch bundle identifiers from `hyperkey.toml`; the default maps Hyper+T to Ghostty, installed through Homebrew when missing.
+- [x] **Global app bindings:** Hyper chords can launch, focus across workspaces,
+  or hide bundle identifiers from `hyperkey.toml`; defaults map Hyper+F to Finder,
+  Hyper+R to Reminders, and Hyper+T to Ghostty.
 - [x] **Ghostty config wired:** the active config is deployed through `~/.omaccy/config`, symlinked into Ghostty's Application Support directory, and restored safely on uninstall.
 - [x] **AeroSpace tiling wired:** an initial Hyper-driven i3-style config is deployed through `~/.omaccy/config`, AeroSpace is installed only when missing, its live config uses the backup-safe symlink lifecycle, and `scripts/aerospace-control.sh` provides start/stop/toggle commands.
 - [x] **Custom menu bar wired:** SketchyBar is managed with `brew services`, its backup-safe config shows AeroSpace workspaces, the front app, tiling availability, Caffeinate state, battery, and time, and workspace changes update immediately.

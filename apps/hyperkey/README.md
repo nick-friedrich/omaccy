@@ -13,11 +13,15 @@ The upstream dual-path design is retained:
 Omaccy's fork deliberately omits Shift from the Hyper chord. Startup, updates,
 and removal belong to Omaccy's installer rather than to this component.
 
-Application shortcuts are configured by bundle identifier in
-`~/.config/omaccy/hyperkey.toml`. The default maps Hyper+T to Ghostty:
+Focus-or-hide application shortcuts are configured by bundle identifier in
+`~/.config/omaccy/hyperkey.toml`. They launch closed apps, follow open windows
+to their AeroSpace workspace, and hide an already-frontmost app when pressed
+again. The defaults are:
 
 ```toml
 [bindings]
+f = "com.apple.finder"
+r = "com.apple.reminders"
 t = "com.mitchellh.ghostty"
 ```
 

@@ -52,7 +52,7 @@ struct Configuration {
         var contents = "# Send Escape when Caps Lock is tapped without another key.\n"
         contents += "escape_on_tap = \(escapeOnTap)\n"
         if !bindings.isEmpty {
-            contents += "\n# Values are macOS application bundle identifiers.\n[bindings]\n"
+            contents += "\n# Focus-or-hide application bundle identifiers.\n[bindings]\n"
             for key in bindings.keys.sorted() {
                 let value = bindings[key] ?? ""
                 contents += "\(key) = \"\(value)\"\n"

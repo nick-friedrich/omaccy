@@ -35,6 +35,9 @@ cmd-ctrl-alt-shift-space = 'layout floating tiling'
 # Temporarily switch between SketchyBar and the native macOS menu bar.
 cmd-ctrl-alt-m = 'exec-and-forget ~/.config/sketchybar/plugins/menu-toggle.sh'
 
+# Toggle automatic Dock hiding.
+cmd-ctrl-alt-d = 'exec-and-forget ~/.config/aerospace/dock-toggle.sh'
+
 # Focus windows like i3/vim.
 cmd-ctrl-alt-h = 'focus left'
 cmd-ctrl-alt-j = 'focus down'

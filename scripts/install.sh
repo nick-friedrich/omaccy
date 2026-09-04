@@ -290,7 +290,10 @@ main() {
     "$HOME/.config/aerospace/aerospace.toml"
   ensure_symlink "$REPO_ROOT/config/aerospace/master-stack.sh" \
     "$HOME/.config/aerospace/master-stack.sh"
+  ensure_symlink "$REPO_ROOT/config/aerospace/dock-toggle.sh" \
+    "$HOME/.config/aerospace/dock-toggle.sh"
   chmod +x "$CONF_DIR/aerospace/master-stack.sh"
+  chmod +x "$CONF_DIR/aerospace/dock-toggle.sh"
   disable_mission_control_arrow_shortcuts
   ensure_symlink "$REPO_ROOT/config/sketchybar/sketchybarrc" \
     "$HOME/.config/sketchybar/sketchybarrc"
