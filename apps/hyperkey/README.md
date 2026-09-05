@@ -41,10 +41,13 @@ The compact Omaccy palette has two sections, **Apps** and **Help**:
 - **Hyper+?** opens searchable shortcut help from your app bindings and AeroSpace
   configuration. Type `?` as usual for your keyboard layout (Shift+/ on US,
   Shift+ß on German).
-- **Hyper+Space** opens installed app search. **Hyper+Shift+Space** still toggles
+- **Hyper+Space** opens the menu with keyboard-selectable Apps and Help collections. **Hyper+Shift+Space** still toggles
   floating windows in AeroSpace.
-- Type to filter, use ↑/↓ to select, and Return (or double-click) to launch/focus
-  an app. Escape, clicking outside, or repeating the opening chord dismisses it.
+- Type anywhere to search all apps and shortcuts. Use ↑/↓ or Tab/Shift+Tab to
+  select, and Return or a single click to browse a collection or launch/focus an
+  app (including app shortcuts in Help). Escape clears
+  search, then goes back to the menu, then closes it. Backspace on an empty search
+  also goes back. Clicking outside or repeating the opening chord dismisses it.
 - The Hyperkey status menu also offers **Omaccy — Apps & Help**.
 
 App discovery runs in the background and refreshes on opening. Apps in

@@ -54,23 +54,23 @@ enum HotkeyBindings {
         let runningApps = NSRunningApplication.runningApplications(
             withBundleIdentifier: bundleIdentifier
         )
-        guard let app = runningApps.first(where: { !$0.isTerminated }) else {
+        let app = runningApps.first(where: { !$0.isTerminated })
+        _ = app?.unhide()
+        let isRunning = app != nil
+        // The main run loop also draws the palette and handles keyboard events.
+        // Never wait for AeroSpace (or spawn a launch process) on that thread.
+        Task.detached(priority: .userInitiated) {
+            if isRunning,
+               let windowID = aeroSpaceWindowID(bundleIdentifier: bundleIdentifier),
+               focusAeroSpaceWindow(windowID: windowID) {
+                return
+            }
+
+            // Reopen running apps without a managed window, including Finder.
             launch(bundleIdentifier: bundleIdentifier)
-            return
         }
-
-        _ = app.unhide()
-        if let windowID = aeroSpaceWindowID(bundleIdentifier: bundleIdentifier),
-           focusAeroSpaceWindow(windowID: windowID) {
-            return
-        }
-
-        // A running app without a managed window needs a reopen event. This is
-        // especially important for Finder, which is always running.
-        launch(bundleIdentifier: bundleIdentifier)
     }
 
-    @MainActor
     private static func launch(bundleIdentifier: String) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -89,7 +89,6 @@ enum HotkeyBindings {
         }
     }
 
-    @MainActor
     private static func aeroSpaceWindowID(bundleIdentifier: String) -> String? {
         guard let executableURL = aeroSpaceExecutableURL() else { return nil }
         guard let listing = run(
@@ -123,9 +122,12 @@ enum HotkeyBindings {
             .map(URL.init(fileURLWithPath:))
     }
 
-    private static func run(
+    /// Called from the background launch task. Bound each AeroSpace request so
+    /// an unresponsive server cannot delay the normal app-opening fallback.
+    static func run(
         _ executableURL: URL,
-        arguments: [String]
+        arguments: [String],
+        timeout: TimeInterval = 0.5
     ) -> (status: Int32, output: String)? {
         let process = Process()
         let outputPipe = Pipe()
@@ -136,6 +138,11 @@ enum HotkeyBindings {
 
         do {
             try process.run()
+            let deadline = DispatchWorkItem {
+                if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeout, execute: deadline)
+            defer { deadline.cancel() }
             let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             return (process.terminationStatus, String(decoding: data, as: UTF8.self))

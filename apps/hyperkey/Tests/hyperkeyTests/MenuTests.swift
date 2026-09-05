@@ -2,6 +2,33 @@ import XCTest
 @testable import hyperkey
 
 final class MenuTests: XCTestCase {
+    func testGlobalSearchFromEveryPage() {
+        let apps = [MenuEntry(title: "Ghostty", detail: "Hyper + T", bundleID: "ghostty")]
+        let help = [MenuEntry(title: "Move window left", detail: "Hyper + Shift + H")]
+        for page in [MenuPage.home, .apps, .help] {
+            XCTAssertEqual(MenuCatalog.results(query: "window shift", page: page, apps: apps, help: help).map(\.title), ["Move window left"])
+            XCTAssertEqual(MenuCatalog.results(query: "ghost", page: page, apps: apps, help: help).map(\.title), ["Ghostty"])
+        }
+    }
+
+    func testGlobalResultsMergeAppAndItsShortcut() {
+        let apps = [MenuEntry(title: "Finder", detail: "Hyper + F", bundleID: "finder")]
+        let help = [MenuEntry(title: "Open Finder", detail: "Hyper + F", bundleID: "finder")]
+        let results = MenuCatalog.results(query: "finder", page: .home, apps: apps, help: help)
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results.first?.detail, "Hyper + F")
+        XCTAssertEqual(MenuCatalog.results(query: "open finder", page: .home, apps: apps, help: help).count, 1)
+    }
+
+    func testCategoryBrowsingAndEmptySearch() {
+        let apps = [MenuEntry(title: "Finder", detail: "Application")]
+        let help = [MenuEntry(title: "Focus left", detail: "Hyper + H")]
+        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .help])
+        XCTAssertEqual(MenuCatalog.results(query: "", page: .apps, apps: apps, help: help).map(\.title), ["Finder"])
+        XCTAssertEqual(MenuCatalog.results(query: "", page: .help, apps: apps, help: help).map(\.title), ["Focus left"])
+        XCTAssertTrue(MenuCatalog.results(query: "missing", page: .home, apps: apps, help: help).isEmpty)
+    }
+
     func testBindingsRespectSectionsAndDeduplicateArrowAliases() {
         let entries = SuperMenuController.parseWindowShortcuts("""
         start-at-login = true

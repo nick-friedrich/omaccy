@@ -58,7 +58,9 @@ cmd-ctrl-alt-shift-down = 'move down'
 cmd-ctrl-alt-shift-up = 'move up'
 cmd-ctrl-alt-shift-right = 'move right'
 
-# Resize the focused window.
+# Resize the focused window. U/I work on both QWERTY and QWERTZ.
+cmd-ctrl-alt-u = 'resize smart -50'
+cmd-ctrl-alt-i = 'resize smart +50'
 cmd-ctrl-alt-minus = 'resize smart -50'
 cmd-ctrl-alt-equal = 'resize smart +50'
 
@@ -75,16 +77,16 @@ cmd-ctrl-alt-9 = 'workspace 9'
 cmd-ctrl-alt-tab = 'list-workspaces --monitor focused --empty no | workspace --wrap-around --stdin next'
 cmd-ctrl-alt-shift-tab = 'list-workspaces --monitor focused --empty no | workspace --wrap-around --stdin prev'
 
-# Send the focused window to a workspace.
-cmd-ctrl-alt-shift-1 = 'move-node-to-workspace 1'
-cmd-ctrl-alt-shift-2 = 'move-node-to-workspace 2'
-cmd-ctrl-alt-shift-3 = 'move-node-to-workspace 3'
-cmd-ctrl-alt-shift-4 = 'move-node-to-workspace 4'
-cmd-ctrl-alt-shift-5 = 'move-node-to-workspace 5'
-cmd-ctrl-alt-shift-6 = 'move-node-to-workspace 6'
-cmd-ctrl-alt-shift-7 = 'move-node-to-workspace 7'
-cmd-ctrl-alt-shift-8 = 'move-node-to-workspace 8'
-cmd-ctrl-alt-shift-9 = 'move-node-to-workspace 9'
+# Move the focused window to a workspace and follow it.
+cmd-ctrl-alt-shift-1 = 'move-node-to-workspace --focus-follows-window 1'
+cmd-ctrl-alt-shift-2 = 'move-node-to-workspace --focus-follows-window 2'
+cmd-ctrl-alt-shift-3 = 'move-node-to-workspace --focus-follows-window 3'
+cmd-ctrl-alt-shift-4 = 'move-node-to-workspace --focus-follows-window 4'
+cmd-ctrl-alt-shift-5 = 'move-node-to-workspace --focus-follows-window 5'
+cmd-ctrl-alt-shift-6 = 'move-node-to-workspace --focus-follows-window 6'
+cmd-ctrl-alt-shift-7 = 'move-node-to-workspace --focus-follows-window 7'
+cmd-ctrl-alt-shift-8 = 'move-node-to-workspace --focus-follows-window 8'
+cmd-ctrl-alt-shift-9 = 'move-node-to-workspace --focus-follows-window 9'
 
 # Recreate Hyprland's master layout: keep the first window large on the left
 # and append every later window to the bottom of the right-hand stack.
