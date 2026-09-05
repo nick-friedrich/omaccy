@@ -14,6 +14,7 @@ let package = Package(
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"])
             ]
-        )
+        ),
+        .testTarget(name: "hyperkeyTests", dependencies: ["hyperkey"])
     ]
 )

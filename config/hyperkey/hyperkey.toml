@@ -2,8 +2,10 @@
 escape_on_tap = false
 
 # Values are macOS application bundle identifiers. A binding launches a closed
-# app, focuses its window across workspaces, or hides it when already frontmost.
+# app or focuses its existing window across workspaces.
 [bindings]
+b = "com.google.Chrome"
+c = "com.openai.codex"
 f = "com.apple.finder"
 r = "com.apple.reminders"
 t = "com.mitchellh.ghostty"

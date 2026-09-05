@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
+import CoreGraphics
 
-/// Consumes configured Hyper chords and toggles their application by bundle ID.
+/// Consumes configured Hyper chords and focuses their application by bundle ID.
 /// Access is confined to the main run loop used by both keyboard input paths.
 enum HotkeyBindings {
     nonisolated(unsafe) private static var targets: [UInt16: String] = [:]
@@ -23,12 +24,23 @@ enum HotkeyBindings {
 
     /// Returns true when the event belongs to a configured chord and must not
     /// continue into the normal event stream.
-    static func handle(keyCode: UInt16, keyDown: Bool) -> Bool {
+    static func handle(keyCode: UInt16, keyDown: Bool, flags: CGEventFlags = []) -> Bool {
         if keyDown {
+            // Repeats stay consumed even if modifiers change while held.
+            if heldKeys.contains(keyCode) { return true }
+            let help = MenuShortcut.isQuestionMark(keyCode: keyCode, flags: flags)
+            let apps = keyCode == 0x31 && !flags.contains(.maskShift)
+            if help || apps {
+                heldKeys.insert(keyCode)
+                DispatchQueue.main.async {
+                    SuperMenuController.shared.toggle(section: help ? .help : .apps)
+                }
+                return true
+            }
             guard let bundleIdentifier = targets[keyCode] else { return false }
             if heldKeys.insert(keyCode).inserted {
                 DispatchQueue.main.async {
-                    toggle(bundleIdentifier: bundleIdentifier)
+                    focusOrLaunch(bundleIdentifier: bundleIdentifier)
                 }
             }
             return true
@@ -38,22 +50,12 @@ enum HotkeyBindings {
     }
 
     @MainActor
-    private static func toggle(bundleIdentifier: String) {
+    static func focusOrLaunch(bundleIdentifier: String) {
         let runningApps = NSRunningApplication.runningApplications(
             withBundleIdentifier: bundleIdentifier
         )
         guard let app = runningApps.first(where: { !$0.isTerminated }) else {
             launch(bundleIdentifier: bundleIdentifier)
-            return
-        }
-
-        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleIdentifier {
-            if bundleIdentifier == "com.apple.finder",
-               aeroSpaceWindowID(bundleIdentifier: bundleIdentifier) == nil {
-                launch(bundleIdentifier: bundleIdentifier)
-            } else {
-                hideAndKeepWorkspace(app, bundleIdentifier: bundleIdentifier)
-            }
             return
         }
 
@@ -110,69 +112,6 @@ enum HotkeyBindings {
             executableURL,
             arguments: ["focus", "--window-id", windowID]
         )?.status == 0
-    }
-
-    @MainActor
-    private static func hideAndKeepWorkspace(
-        _ app: NSRunningApplication,
-        bundleIdentifier: String
-    ) {
-        let executableURL = aeroSpaceExecutableURL()
-        let workspace = executableURL.flatMap {
-            run($0, arguments: ["list-workspaces", "--focused"])?.output
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        let fallbackWindowID = executableURL.flatMap {
-            aeroSpaceFallbackWindowID(
-                executableURL: $0,
-                excludingBundleIdentifier: bundleIdentifier
-            )
-        }
-
-        // If another window exists here, focus it before hiding the target.
-        // The target is then a background app and macOS has no reason to jump
-        // to the previously focused app on a different workspace.
-        if let fallbackWindowID {
-            _ = focusAeroSpaceWindow(windowID: fallbackWindowID)
-        }
-
-        if !app.hide() {
-            fputs("omaccy-hyperkey: could not hide \(bundleIdentifier)\n", stderr)
-            return
-        }
-
-        // On an otherwise empty workspace, hiding the only app makes macOS
-        // asynchronously activate the previously used app. Wait for that
-        // transition to finish before restoring the original workspace.
-        if fallbackWindowID == nil,
-           let executableURL,
-           let workspace,
-           !workspace.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                _ = run(executableURL, arguments: ["workspace", workspace])
-            }
-        }
-    }
-
-    private static func aeroSpaceFallbackWindowID(
-        executableURL: URL,
-        excludingBundleIdentifier: String
-    ) -> String? {
-        guard let listing = run(
-            executableURL,
-            arguments: [
-                "list-windows", "--workspace", "focused",
-                "--format", "%{window-id}\t%{app-bundle-id}",
-            ]
-        ), listing.status == 0 else {
-            return nil
-        }
-
-        return listing.output.split(whereSeparator: \.isNewline).lazy.compactMap { line -> String? in
-            let fields = line.split(separator: "\t", maxSplits: 1).map(String.init)
-            guard fields.count == 2, fields[1] != excludingBundleIdentifier else { return nil }
-            return fields[0]
-        }.first
     }
 
     private static func aeroSpaceExecutableURL() -> URL? {

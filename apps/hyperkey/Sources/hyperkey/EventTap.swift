@@ -117,7 +117,7 @@ private func eventTapCallback(
     if hyperActive && (type == .keyDown || type == .keyUp) {
         hyperUsedAsModifier = true
         if type == .keyDown,
-           HotkeyBindings.handle(keyCode: UInt16(keyCode), keyDown: true) {
+           HotkeyBindings.handle(keyCode: UInt16(keyCode), keyDown: true, flags: event.flags) {
             return nil
         }
         if type == .keyDown,

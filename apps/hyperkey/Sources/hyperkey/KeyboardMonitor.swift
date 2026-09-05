@@ -169,7 +169,7 @@ private func hidInputCallback(
         }
         if hyperActive {
             hyperUsedAsModifier = true
-            if pressed, HotkeyBindings.handle(keyCode: keyCode, keyDown: true) {
+            if pressed, HotkeyBindings.handle(keyCode: keyCode, keyDown: true, flags: CGEventFlags(rawValue: currentModifierFlags)) {
                 return
             }
             let outputKeyCode = pressed

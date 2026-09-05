@@ -13,13 +13,14 @@ The upstream dual-path design is retained:
 Omaccy's fork deliberately omits Shift from the Hyper chord. Startup, updates,
 and removal belong to Omaccy's installer rather than to this component.
 
-Focus-or-hide application shortcuts are configured by bundle identifier in
-`~/.config/omaccy/hyperkey.toml`. They launch closed apps, follow open windows
-to their AeroSpace workspace, and hide an already-frontmost app when pressed
-again. The defaults are:
+Launch-or-focus application shortcuts are configured by bundle identifier in
+`~/.config/omaccy/hyperkey.toml`. They launch closed apps and follow open
+windows to their AeroSpace workspace. The defaults are:
 
 ```toml
 [bindings]
+b = "com.google.Chrome"
+c = "com.openai.codex"
 f = "com.apple.finder"
 r = "com.apple.reminders"
 t = "com.mitchellh.ghostty"
@@ -34,3 +35,26 @@ Its workspace buttons control AeroSpace, and its right-side status items show
 tiling state, a Caffeinate control, battery, and the clock. The canonical
 editable files live under `~/.omaccy/config/sketchybar` and are symlinked into
 `~/.config/sketchybar` with any previous configuration backed up.
+
+The compact Omaccy palette has two sections, **Apps** and **Help**:
+
+- **Hyper+?** opens searchable shortcut help from your app bindings and AeroSpace
+  configuration. Type `?` as usual for your keyboard layout (Shift+/ on US,
+  Shift+ß on German).
+- **Hyper+Space** opens installed app search. **Hyper+Shift+Space** still toggles
+  floating windows in AeroSpace.
+- Type to filter, use ↑/↓ to select, and Return (or double-click) to launch/focus
+  an app. Escape, clicking outside, or repeating the opening chord dismisses it.
+- The Hyperkey status menu also offers **Omaccy — Apps & Help**.
+
+App discovery runs in the background and refreshes on opening. Apps in
+`/Applications`, `~/Applications`, and the standard system Applications folders
+are included. Help reads `~/.aerospace.toml` or
+`~/.config/aerospace/aerospace.toml`; restart Hyperkey after changing app bindings
+so the active shortcuts match the saved config. Hyper+Space is reserved for the
+palette.
+
+For UI development, run `.build/debug/omaccy-hyperkey --preview-menu` from this
+package after building. This previews the palette without capturing keyboards
+or changing Caps Lock mappings. Run `swift test --package-path apps/hyperkey`
+from the repository root to check shortcut catalog coverage.

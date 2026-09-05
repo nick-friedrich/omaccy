@@ -18,6 +18,15 @@ struct HyperKeyApp {
             return
         }
 
+        // UI preview without installing mappings or starting keyboard capture.
+        if CommandLine.arguments.contains("--preview-menu") {
+            let app = NSApplication.shared
+            app.setActivationPolicy(.accessory)
+            SuperMenuController.shared.toggle(section: .help)
+            app.run()
+            return
+        }
+
         // 1. Check for already-running instance
         let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: Constants.bundleID)
         if runningApps.count > 1 {
@@ -118,6 +127,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        let helpItem = NSMenuItem(title: "Omaccy — Apps & Help", action: #selector(showHelp), keyEquivalent: "")
+        helpItem.target = self
+        menu.addItem(helpItem)
+        menu.addItem(NSMenuItem.separator())
+
         // Keyboards submenu
         keyboardsMenuItem = NSMenuItem(title: "Keyboards", action: nil, keyEquivalent: "")
         let keyboardsSubmenu = NSMenu()
@@ -178,6 +192,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: - Actions
+
+    @objc private func showHelp() {
+        SuperMenuController.shared.toggle(section: .help)
+    }
 
     @objc private func toggleEscape(_ sender: NSMenuItem) {
         let newValue = sender.state != .on
