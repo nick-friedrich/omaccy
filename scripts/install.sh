@@ -123,6 +123,40 @@ enable_native_menu_bar_autohide() {
   echo "Enabled native menu-bar auto-hide for the SketchyBar replacement."
 }
 
+enable_mission_control_grouping() {
+  local saved_setting="$OMACCY_DIR/mission-control-group-apps.original"
+  local current_value
+
+  if [[ ! -f "$saved_setting" ]]; then
+    if current_value="$(defaults read com.apple.dock expose-group-apps 2>/dev/null)"; then
+      printf 'value=%s\n' "$current_value" > "$saved_setting"
+    else
+      printf 'unset\n' > "$saved_setting"
+    fi
+  fi
+
+  current_value="$(defaults read com.apple.dock expose-group-apps 2>/dev/null || true)"
+  if [[ "$current_value" != "1" && "$current_value" != "true" ]]; then
+    if ! defaults write com.apple.dock expose-group-apps -bool true; then
+      mission_control_grouping_help
+      return 0
+    fi
+  fi
+
+  current_value="$(defaults read com.apple.dock expose-group-apps 2>/dev/null || true)"
+  if [[ "$current_value" == "1" || "$current_value" == "true" ]]; then
+    echo "Verified Mission Control: Group windows by application is enabled (AeroSpace preview workaround)."
+  else
+    mission_control_grouping_help
+  fi
+}
+
+mission_control_grouping_help() {
+  echo "WARNING: Could not verify Mission Control window grouping." >&2
+  echo "Enable Group windows by application in System Settings → Desktop & Dock → Mission Control." >&2
+  echo "Open Desktop & Dock: open 'x-apple.systempreferences:com.apple.preference.dock'" >&2
+}
+
 disable_mission_control_arrow_shortcuts() {
   local saved_shortcuts="$OMACCY_DIR/mission-control-arrow-shortcuts.original"
   local prefs_file
@@ -162,7 +196,6 @@ disable_mission_control_arrow_shortcuts() {
   defaults import com.apple.symbolichotkeys "$prefs_file"
   rm -f "$prefs_file"
   killall cfprefsd 2>/dev/null || true
-  killall Dock 2>/dev/null || true
   echo "Disabled conflicting macOS Mission Control and Spaces arrow shortcuts."
 }
 
@@ -295,6 +328,8 @@ main() {
   chmod +x "$CONF_DIR/aerospace/master-stack.sh"
   chmod +x "$CONF_DIR/aerospace/dock-toggle.sh"
   disable_mission_control_arrow_shortcuts
+  enable_mission_control_grouping
+  killall Dock 2>/dev/null || true
   ensure_symlink "$REPO_ROOT/config/sketchybar/sketchybarrc" \
     "$HOME/.config/sketchybar/sketchybarrc"
   local sketchybar_plugin

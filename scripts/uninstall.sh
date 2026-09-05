@@ -131,6 +131,33 @@ restore_native_menu_bar_autohide() {
   echo "Restored the previous native menu-bar auto-hide setting."
 }
 
+restore_mission_control_grouping() {
+  local saved_setting="$OMACCY_DIR/mission-control-group-apps.original"
+  local saved_value
+  [[ -f "$saved_setting" ]] || return 0
+
+  saved_value="$(cat "$saved_setting")"
+  case "$saved_value" in
+    value=1|value=true)
+      defaults write com.apple.dock expose-group-apps -bool true || return 0
+      ;;
+    value=0|value=false)
+      defaults write com.apple.dock expose-group-apps -bool false || return 0
+      ;;
+    unset)
+      if defaults read com.apple.dock expose-group-apps >/dev/null 2>&1; then
+        defaults delete com.apple.dock expose-group-apps || return 0
+      fi
+      ;;
+    *)
+      echo "WARNING: Invalid saved Mission Control grouping setting; leaving it unchanged." >&2
+      return 0
+      ;;
+  esac
+  rm -f "$saved_setting"
+  echo "Restored the previous Mission Control window grouping setting."
+}
+
 restore_mission_control_arrow_shortcuts() {
   local saved_shortcuts="$OMACCY_DIR/mission-control-arrow-shortcuts.original"
   local prefs_file
@@ -160,7 +187,6 @@ restore_mission_control_arrow_shortcuts() {
   defaults import com.apple.symbolichotkeys "$prefs_file"
   rm -f "$prefs_file" "$saved_shortcuts"
   killall cfprefsd 2>/dev/null || true
-  killall Dock 2>/dev/null || true
   echo "Restored the previous macOS Mission Control and Spaces shortcuts."
 }
 
@@ -179,6 +205,8 @@ main() {
   /usr/bin/hidutil property --set '{"UserKeyMapping":[]}' >/dev/null
 
   restore_mission_control_arrow_shortcuts
+  restore_mission_control_grouping
+  killall Dock 2>/dev/null || true
 
   restore_target "$HOME/Library/LaunchAgents/com.omaccy.hyperkey.plist" \
     "$CONF_DIR/launchagents/com.omaccy.hyperkey.plist"
