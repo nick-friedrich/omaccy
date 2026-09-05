@@ -1,5 +1,9 @@
 # Omaccy — macOS Omakub-inspired setup
 
+This document includes historical decisions and planned features. For the current
+repository structure and setup behavior, see [.ai/architecture.md](.ai/architecture.md)
+and [.ai/development.md](.ai/development.md).
+
 A zero-drama, Omakub-inspired "rice" for macOS. Keyboard-centric, tiling, with a clean install/uninstall story.
 
 ## Architecture

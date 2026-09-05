@@ -5,15 +5,21 @@ struct MenuEntry: Sendable {
     let detail: String
     var bundleID: String? = nil
     var destination: MenuPage? = nil
+    var systemAction: SystemAction? = nil
 }
 
-enum MenuPage: String, Sendable { case home = "Home", apps = "Apps", help = "Help" }
+enum MenuPage: String, Sendable { case home = "Home", apps = "Apps", help = "Help", system = "System" }
 
 enum MenuCatalog {
     static let categories = [
         MenuEntry(title: "Apps", detail: "Find and open an application", destination: .apps),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
+        MenuEntry(title: "System", detail: "Sleep, restart, or shut down your Mac", destination: .system),
     ]
+
+    static let system = SystemAction.allCases.map {
+        MenuEntry(title: $0.title, detail: $0.detail, systemAction: $0)
+    }
 
     static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry]) -> [MenuEntry] {
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -22,11 +28,12 @@ enum MenuCatalog {
             case .home: return categories
             case .apps: return apps
             case .help: return help
+            case .system: return system
             }
         }
         // Search always spans the whole menu, even while browsing a category.
         var seenApps = Set<String>()
-        return (categories + apps + help).filter { entry in
+        return (categories + apps + help + system).filter { entry in
             words.allSatisfy { (entry.title + " " + entry.detail).localizedCaseInsensitiveContains($0) }
         }.filter { entry in
             guard let id = entry.bundleID else { return true }
@@ -76,7 +83,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private let location = PaletteStyle.label("BROWSE", size: 10, weight: .semibold)
     private let count = PaletteStyle.label("", size: 10)
     private let actionHint = PaletteStyle.label("", size: 11)
-    private let emptyState = PaletteStyle.label("No matches. Try an app name or shortcut.", size: 14)
+    private let emptyState = PaletteStyle.label("No matches. Try an app, shortcut, or system action.", size: 14)
     private var page: MenuPage = .home
     private var openingSection: Section = .apps
     private var keyMonitor: Any?
@@ -156,7 +163,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         search.drawsBackground = false
         search.focusRingType = .none
         search.delegate = self
-        search.setAccessibilityLabel("Search all apps and shortcuts")
+        search.setAccessibilityLabel("Search all apps, shortcuts, and system actions")
         let magnifier = NSImageView(image: NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)!)
         magnifier.contentTintColor = PaletteStyle.muted
         location.textColor = PaletteStyle.muted
@@ -260,7 +267,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard rows.indices.contains(table.selectedRow) else { actionHint.stringValue = ""; return }
         let entry = rows[table.selectedRow]
-        actionHint.stringValue = entry.destination != nil ? "↵  Browse" : entry.bundleID != nil ? "↵  Open app" : "Shortcut reference"
+        actionHint.stringValue = entry.destination != nil ? "↵  Browse" : entry.bundleID != nil ? "↵  Open app" : entry.systemAction != nil ? "↵  " + (entry.systemAction == .sleep ? "Sleep" : "Confirm…") : "Shortcut reference"
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -268,18 +275,18 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let cell = NSView()
         let title = PaletteStyle.label(entry.title, size: 14, weight: .medium)
         let isApp = entry.bundleID != nil
-        let detail = PaletteStyle.label(entry.destination != nil && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
+        let detail = PaletteStyle.label((entry.destination != nil || entry.systemAction != nil) && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let image: NSImage
         if let id = entry.bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
             image = NSWorkspace.shared.icon(forFile: url.path)
         } else {
-            image = NSImage(systemSymbolName: entry.destination == .apps ? "square.grid.2x2" : entry.destination == .help ? "keyboard" : "command", accessibilityDescription: nil)!
+            image = NSImage(systemSymbolName: entry.systemAction?.symbol ?? (entry.destination == .system ? "power" : entry.destination == .apps ? "square.grid.2x2" : entry.destination == .help ? "keyboard" : "command"), accessibilityDescription: nil)!
         }
         let icon = NSImageView(image: image)
         icon.contentTintColor = PaletteStyle.accent
         icon.imageScaling = .scaleProportionallyUpOrDown
-        let keys = PaletteStyle.label(entry.detail.hasPrefix("Hyper") ? entry.detail : entry.destination != nil ? "›" : !isApp ? entry.detail : "", size: 11, weight: .medium)
+        let keys = PaletteStyle.label(entry.detail.hasPrefix("Hyper") ? entry.detail : entry.destination != nil ? "›" : !isApp && entry.systemAction == nil ? entry.detail : "", size: 11, weight: .medium)
         keys.textColor = entry.destination != nil ? PaletteStyle.accent : NSColor(calibratedWhite: 0.72, alpha: 1)
         keys.alignment = .right
         keys.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -327,6 +334,36 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         } else if let bundleID = entry.bundleID {
             panel.orderOut(nil)
             HotkeyBindings.focusOrLaunch(bundleIdentifier: bundleID)
+        } else if let action = entry.systemAction {
+            performSystemAction(action)
+        }
+    }
+
+    private func performSystemAction(_ action: SystemAction) {
+        // Hide the palette so its Return/Escape monitor cannot intercept alerts.
+        panel.orderOut(nil)
+        if action.requiresConfirmation {
+            let alert = NSAlert()
+            alert.messageText = "\(action.title) your Mac?"
+            alert.informativeText = "Your open applications will be asked to quit. Save your work before continuing."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: action.title)
+            guard alert.runModal() == .alertSecondButtonReturn else {
+                panel.makeKeyAndOrderFront(nil)
+                panel.makeFirstResponder(search)
+                return
+            }
+        }
+        do {
+            try action.perform()
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Couldn’t \(action.title.lowercased()) your Mac"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+            panel.makeKeyAndOrderFront(nil)
+            panel.makeFirstResponder(search)
         }
     }
 

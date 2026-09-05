@@ -29,8 +29,26 @@ warn_restricted_ipc() {
   echo "Launch AeroSpace from Applications, or rerun this command from a normal terminal." >&2
 }
 
+# Uninstall disables tiling without quitting the app. That server rejects normal
+# queries, but still accepts enable on. Re-enable before checking readiness.
+aerospace_ready_for_start() {
+  if aerospace_is_running; then
+    return 0
+  fi
+  if [[ "$AEROSPACE_LAST_ERROR" == *"server is disabled"* ]]; then
+    local enable_error
+    if ! enable_error="$(aerospace enable on 2>&1)"; then
+      AEROSPACE_LAST_ERROR="$enable_error"
+      return 1
+    fi
+    aerospace_is_running
+    return $?
+  fi
+  return 1
+}
+
 start_aerospace() {
-  if ! aerospace_is_running; then
+  if ! aerospace_ready_for_start; then
     local launch_error
     if ! launch_error="$(/usr/bin/open /Applications/AeroSpace.app 2>&1)"; then
       if [[ -d /Applications/AeroSpace.app ]]; then
@@ -46,12 +64,12 @@ start_aerospace() {
     # socket rather than guessing how long application startup will take.
     local attempt
     for attempt in {1..50}; do
-      aerospace_is_running && break
+      aerospace_ready_for_start && break
       sleep 0.1
     done
   fi
 
-  if ! aerospace_is_running; then
+  if ! aerospace_ready_for_start; then
     if ipc_is_restricted; then
       warn_restricted_ipc
       return 0

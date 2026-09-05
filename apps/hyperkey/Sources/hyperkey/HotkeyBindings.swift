@@ -113,7 +113,7 @@ enum HotkeyBindings {
         )?.status == 0
     }
 
-    private static func aeroSpaceExecutableURL() -> URL? {
+    static func aeroSpaceExecutableURL() -> URL? {
         let candidates = [
             "/opt/homebrew/bin/aerospace",
             "/usr/local/bin/aerospace",

@@ -50,6 +50,7 @@ private func eventTapCallback(
 
     // Re-enable tap if system disabled it (happens under heavy load)
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        ResizeKeyRepeat.cancel()
         if let port = eventTapPort {
             CGEvent.tapEnable(tap: port, enable: true)
         }
@@ -62,6 +63,12 @@ private func eventTapCallback(
     }
 
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+
+    if (type == .keyDown || type == .keyUp),
+       ResizeKeyRepeat.consumeHeld(keyCode: UInt16(keyCode), keyDown: type == .keyDown) {
+        return nil
+    }
+    if type == .flagsChanged { ResizeKeyRepeat.cancel() }
 
     // Match a remapped arrow release even if Hyper was released first. In that
     // case consume it so neither the original Arrow nor an unmatched Vim-key
@@ -121,6 +128,10 @@ private func eventTapCallback(
             return nil
         }
         if type == .keyDown,
+           ResizeKeyRepeat.begin(keyCode: UInt16(keyCode), flags: event.flags) {
+            return nil
+        }
+        if type == .keyDown,
            let mappedKeyCode = DirectionalKeyRemapping.begin(keyCode: UInt16(keyCode)) {
             event.setIntegerValueField(.keyboardEventKeycode, value: Int64(mappedKeyCode))
             event.flags = DirectionalKeyRemapping.vimKeyFlags(from: event.flags)
@@ -142,6 +153,7 @@ private func eventTapCallback(
 
 /// Shared logic for deactivating hyper mode (used by both F18 and CapsLock paths).
 private func deactivateHyper() -> Unmanaged<CGEvent>? {
+    ResizeKeyRepeat.cancel()
     let wasUsed = hyperUsedAsModifier
     hyperActive = false
     hyperUsedAsModifier = false

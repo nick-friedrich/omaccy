@@ -127,7 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        let helpItem = NSMenuItem(title: "Omaccy — Apps & Help", action: #selector(showHelp), keyEquivalent: "")
+        let helpItem = NSMenuItem(title: "Omaccy — Apps, Help & System", action: #selector(showHelp), keyEquivalent: "")
         helpItem.target = self
         menu.addItem(helpItem)
         menu.addItem(NSMenuItem.separator())

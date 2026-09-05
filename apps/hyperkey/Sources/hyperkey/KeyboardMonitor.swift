@@ -103,6 +103,8 @@ private func deviceRemovedCallback(
     fputs("hyperkey: keyboard disconnected (\(name))\n", stderr)
     KeyboardMonitor.connectedDevices.removeAll { $0.name == name }
 
+    ResizeKeyRepeat.reset()
+
     // Clear state to prevent stuck modifiers
     if hyperActive {
         hyperActive = false
@@ -143,6 +145,7 @@ private func hidInputCallback(
 
     // Modifier keys (0xE0-0xE7)
     if let flag = HIDKeyTable.modifierFlag(forUsage: usage) {
+        ResizeKeyRepeat.cancel()
         if pressed {
             currentModifierFlags |= flag.rawValue
         } else {
@@ -156,6 +159,7 @@ private func hidInputCallback(
 
     // Regular keys: re-inject as CGEvent
     if let keyCode = HIDKeyTable.virtualKeyCode(forUsage: usage) {
+        if ResizeKeyRepeat.consumeHeld(keyCode: keyCode, keyDown: pressed) { return }
         if !pressed,
            let mappedKeyCode = DirectionalKeyRemapping.end(keyCode: keyCode) {
             if hyperActive {
@@ -170,6 +174,9 @@ private func hidInputCallback(
         if hyperActive {
             hyperUsedAsModifier = true
             if pressed, HotkeyBindings.handle(keyCode: keyCode, keyDown: true, flags: CGEventFlags(rawValue: currentModifierFlags)) {
+                return
+            }
+            if pressed, ResizeKeyRepeat.begin(keyCode: keyCode, flags: CGEventFlags(rawValue: currentModifierFlags)) {
                 return
             }
             let outputKeyCode = pressed
@@ -191,6 +198,7 @@ private func handleHyperToggle(pressed: Bool) {
             hyperUsedAsModifier = false
         }
     } else {
+        ResizeKeyRepeat.cancel()
         let wasUsed = hyperUsedAsModifier
         hyperActive = false
         hyperUsedAsModifier = false
