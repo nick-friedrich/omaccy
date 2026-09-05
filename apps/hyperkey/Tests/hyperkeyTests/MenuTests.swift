@@ -23,7 +23,7 @@ final class MenuTests: XCTestCase {
     func testCategoryBrowsingAndEmptySearch() {
         let apps = [MenuEntry(title: "Finder", detail: "Application")]
         let help = [MenuEntry(title: "Focus left", detail: "Hyper + H")]
-        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .help, .system])
+        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .install, .help, .system])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .apps, apps: apps, help: help).map(\.title), ["Finder"])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .help, apps: apps, help: help).map(\.title), ["Focus left"])
         XCTAssertTrue(MenuCatalog.results(query: "missing", page: .home, apps: apps, help: help).isEmpty)

@@ -6,13 +6,16 @@ struct MenuEntry: Sendable {
     var bundleID: String? = nil
     var destination: MenuPage? = nil
     var systemAction: SystemAction? = nil
+    var package: HomebrewPackage? = nil
+    var upgradesAll = false
 }
 
-enum MenuPage: String, Sendable { case home = "Home", apps = "Apps", help = "Help", system = "System" }
+enum MenuPage: String, Sendable { case home = "Home", apps = "Apps", help = "Help", install = "Install", system = "System" }
 
 enum MenuCatalog {
     static let categories = [
         MenuEntry(title: "Apps", detail: "Find and open an application", destination: .apps),
+        MenuEntry(title: "Install", detail: "Search Homebrew apps and command-line tools", destination: .install),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
         MenuEntry(title: "System", detail: "Sleep, restart, or shut down your Mac", destination: .system),
     ]
@@ -22,6 +25,7 @@ enum MenuCatalog {
     }
 
     static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry]) -> [MenuEntry] {
+        if page == .install { return [] }
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         if words.isEmpty {
             switch page {
@@ -29,6 +33,7 @@ enum MenuCatalog {
             case .apps: return apps
             case .help: return help
             case .system: return system
+            case .install: return []
             }
         }
         // Search always spans the whole menu, even while browsing a category.
@@ -92,6 +97,14 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var rows: [MenuEntry] = []
     private var installedApps: [String: MenuEntry] = [:]
     private var indexing = false
+    private var packages: [HomebrewPackage] = []
+    private var installedPackages: [HomebrewPackage] = []
+    private var loadingInventory = false
+    private var inventoryReady = false
+    private var inventoryError = false
+    private var loadingPackages = false
+    private var packageError = false
+    private var catalogLoadedAt: Date?
     private var previousApp: NSRunningApplication?
 
     func toggle(section: Section) {
@@ -267,7 +280,15 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard rows.indices.contains(table.selectedRow) else { actionHint.stringValue = ""; return }
         let entry = rows[table.selectedRow]
-        actionHint.stringValue = entry.destination != nil ? "↵  Browse" : entry.bundleID != nil ? "↵  Open app" : entry.systemAction != nil ? "↵  " + (entry.systemAction == .sleep ? "Sleep" : "Confirm…") : "Shortcut reference"
+        if entry.upgradesAll {
+            actionHint.stringValue = HomebrewUpgrade.availableCount(installedPackages) > 0 ? "↵  Confirm upgrade all…" : "No updates available"
+        } else if let package = entry.package {
+            actionHint.stringValue = !inventoryReady
+                ? (inventoryError ? "Reopen Install to retry" : "Checking installed packages…")
+                : package.actionTitle.map { "↵  " + $0 + "…" } ?? (package.pinned ? "Pinned in Homebrew" : "Installed")
+        } else {
+            actionHint.stringValue = entry.destination != nil ? "↵  Browse" : entry.bundleID != nil ? "↵  Open app" : entry.systemAction != nil ? "↵  " + (entry.systemAction == .sleep ? "Sleep" : "Confirm…") : "Shortcut reference"
+        }
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -275,19 +296,19 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let cell = NSView()
         let title = PaletteStyle.label(entry.title, size: 14, weight: .medium)
         let isApp = entry.bundleID != nil
-        let detail = PaletteStyle.label((entry.destination != nil || entry.systemAction != nil) && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
+        let detail = PaletteStyle.label((entry.upgradesAll || entry.package != nil || entry.destination != nil || entry.systemAction != nil) && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let image: NSImage
         if let id = entry.bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
             image = NSWorkspace.shared.icon(forFile: url.path)
         } else {
-            image = NSImage(systemSymbolName: entry.systemAction?.symbol ?? (entry.destination == .system ? "power" : entry.destination == .apps ? "square.grid.2x2" : entry.destination == .help ? "keyboard" : "command"), accessibilityDescription: nil)!
+            image = NSImage(systemSymbolName: entry.systemAction?.symbol ?? (entry.upgradesAll || entry.package != nil || entry.destination == .install ? "arrow.down.circle" : entry.destination == .system ? "power" : entry.destination == .apps ? "square.grid.2x2" : entry.destination == .help ? "keyboard" : "command"), accessibilityDescription: nil)!
         }
         let icon = NSImageView(image: image)
         icon.contentTintColor = PaletteStyle.accent
         icon.imageScaling = .scaleProportionallyUpOrDown
-        let keys = PaletteStyle.label(entry.detail.hasPrefix("Hyper") ? entry.detail : entry.destination != nil ? "›" : !isApp && entry.systemAction == nil ? entry.detail : "", size: 11, weight: .medium)
-        keys.textColor = entry.destination != nil ? PaletteStyle.accent : NSColor(calibratedWhite: 0.72, alpha: 1)
+        let keys = PaletteStyle.label(entry.package?.status ?? (entry.detail.hasPrefix("Hyper") ? entry.detail : entry.destination != nil ? "›" : !isApp && entry.systemAction == nil && entry.package == nil && !entry.upgradesAll ? entry.detail : ""), size: 11, weight: .medium)
+        keys.textColor = entry.destination != nil || entry.package?.outdated == true ? PaletteStyle.accent : NSColor(calibratedWhite: 0.72, alpha: 1)
         keys.alignment = .right
         keys.setContentCompressionResistancePriority(.required, for: .horizontal)
         for view in [icon, title, detail, keys] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
@@ -328,15 +349,115 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let entry = rows[row]
         if let destination = entry.destination {
             page = destination
+            if destination == .install { loadPackages() }
             search.stringValue = ""
             filter()
             panel.makeFirstResponder(search)
         } else if let bundleID = entry.bundleID {
             panel.orderOut(nil)
             HotkeyBindings.focusOrLaunch(bundleIdentifier: bundleID)
+        } else if entry.upgradesAll {
+            upgradeAll()
+        } else if let package = entry.package {
+            install(package)
         } else if let action = entry.systemAction {
             performSystemAction(action)
         }
+    }
+
+    private func loadPackages() {
+        if !loadingInventory {
+            loadingInventory = true
+            inventoryReady = false
+            inventoryError = false
+            Task { @MainActor in
+                do {
+                    installedPackages = try await Task.detached { try HomebrewInventory.load() }.value
+                    inventoryReady = true
+                } catch { inventoryError = true }
+                loadingInventory = false
+                if page == .install { filter(preservingSelection: true) }
+            }
+        }
+        guard !loadingPackages, catalogLoadedAt.map({ Date().timeIntervalSince($0) > 3600 }) ?? true else { return }
+        loadingPackages = true
+        packageError = false
+        Task { @MainActor in
+            do {
+                packages = try await HomebrewCatalog.load()
+                catalogLoadedAt = Date()
+            } catch { packageError = true }
+            loadingPackages = false
+            if page == .install { filter(preservingSelection: true) }
+        }
+    }
+
+    private func install(_ package: HomebrewPackage) {
+        guard inventoryReady, let command = package.actionCommand, let actionTitle = package.actionTitle else { return }
+        panel.orderOut(nil)
+        let alert = NSAlert()
+        guard let brew = HomebrewInventory.executable else {
+            alert.messageText = "Homebrew is required"
+            alert.informativeText = "Install Homebrew from brew.sh, then try again."
+            alert.runModal()
+            panel.makeKeyAndOrderFront(nil)
+            panel.makeFirstResponder(search)
+            return
+        }
+        alert.messageText = "\(actionTitle) \(package.name)?"
+        alert.informativeText = "Ghostty will run:\n\n\(command)\n\nHomebrew may install dependencies or ask for your password. Packages you install here remain yours when Omaccy is uninstalled."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: actionTitle)
+        guard alert.runModal() == .alertSecondButtonReturn else {
+            panel.makeKeyAndOrderFront(nil)
+            panel.makeFirstResponder(search)
+            return
+        }
+        guard let arguments = package.ghosttyArguments(brew: brew) else { return }
+        launchPackageCommand(arguments: arguments)
+    }
+
+    private func upgradeAll() {
+        let available = HomebrewUpgrade.availableCount(installedPackages)
+        guard inventoryReady, available > 0, let brew = HomebrewInventory.executable,
+              let arguments = HomebrewUpgrade.allArguments(brew: brew) else { return }
+        panel.orderOut(nil)
+        let alert = NSAlert()
+        alert.messageText = "Upgrade all Homebrew packages?"
+        alert.informativeText = "Homebrew currently reports \(available) unpinned package\(available == 1 ? "" : "s") with updates.\n\nGhostty will run: brew upgrade\n\nThis upgrades eligible formulae and apps, including dependencies. Homebrew may refresh its metadata and find additional updates. Pinned packages stay pinned. Progress and any errors will appear in Ghostty."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Upgrade all")
+        guard alert.runModal() == .alertSecondButtonReturn else {
+            panel.makeKeyAndOrderFront(nil)
+            panel.makeFirstResponder(search)
+            return
+        }
+        launchPackageCommand(arguments: arguments)
+    }
+
+    private func launchPackageCommand(arguments: [String]) {
+        guard let ghostty = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") else {
+            showPackageLaunchError("Ghostty could not be found. Install Ghostty, then try again.")
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        configuration.arguments = arguments
+        NSWorkspace.shared.openApplication(at: ghostty, configuration: configuration) { _, error in
+            if let error {
+                let message = error.localizedDescription
+                Task { @MainActor [weak self] in self?.showPackageLaunchError(message) }
+            }
+        }
+    }
+
+    private func showPackageLaunchError(_ message: String) {
+        let failure = NSAlert()
+        failure.messageText = "Couldn’t open the installer in Ghostty"
+        failure.informativeText = message
+        failure.runModal()
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(search)
     }
 
     private func performSystemAction(_ action: SystemAction) {
@@ -369,17 +490,34 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
 
     private func filter(preservingSelection: Bool = false) {
         let selected = preservingSelection && rows.indices.contains(table.selectedRow) ? rows[table.selectedRow] : nil
-        rows = MenuCatalog.results(query: search.stringValue, page: page, apps: apps, help: help)
+        rows = page == .install
+            ? HomebrewCatalog.search(search.stringValue, packages: HomebrewInventory.merge(catalog: packages, installed: installedPackages)).map {
+                MenuEntry(title: $0.name, detail: $0.detail, package: $0)
+            }
+            : MenuCatalog.results(query: search.stringValue, page: page, apps: apps, help: help)
+        let upgradeQuery = search.stringValue.lowercased().split(whereSeparator: \.isWhitespace)
+        if page == .install && inventoryReady && upgradeQuery.allSatisfy({ "upgrade all update packages".contains($0) }) {
+            let available = HomebrewUpgrade.availableCount(installedPackages)
+            rows.insert(MenuEntry(title: "Upgrade all", detail: available > 0
+                ? "\(available) packages with updates · Opens Ghostty"
+                : "No updates available · Pinned packages are excluded", upgradesAll: true), at: 0)
+        }
+        search.placeholderString = page == .install ? "Search Homebrew…" : "Search anything…"
+        search.setAccessibilityLabel(page == .install ? "Search Homebrew packages" : "Search all apps, shortcuts, and system actions")
+        emptyState.stringValue = page == .install
+            ? (loadingInventory ? "Checking installed packages…" : inventoryError ? "Couldn’t read Homebrew. Reopen Install to retry." : loadingPackages ? "Loading Homebrew catalog…" : packageError ? "Couldn’t load Homebrew. Go back and reopen Install to retry."
+                : search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No Homebrew packages installed. Search to install one." : "No Homebrew packages match your search.")
+            : "No matches. Try an app, shortcut, or system action."
         table.reloadData()
         if !rows.isEmpty {
-            let index = selected.flatMap { selected in rows.firstIndex { $0.title == selected.title && $0.detail == selected.detail } } ?? 0
+            let index = selected.flatMap { selected in rows.firstIndex { selected.package != nil ? $0.package?.id == selected.package?.id : $0.title == selected.title && $0.detail == selected.detail } } ?? 0
             table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
             table.scrollRowToVisible(index)
         }
         let searching = !search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        location.stringValue = searching ? "SEARCH RESULTS · ALL" : page == .home ? "BROWSE" : "OMACCY  /  \(page.rawValue.uppercased())"
+        location.stringValue = page == .install ? (inventoryError ? "HOMEBREW · INVENTORY UNAVAILABLE — REOPEN TO RETRY" : loadingInventory ? "HOMEBREW · CHECKING INSTALLED PACKAGES…" : packageError ? "HOMEBREW · CATALOG UNAVAILABLE — INSTALLED ONLY" : searching ? "OMACCY  /  INSTALL · HOMEBREW" : "HOMEBREW · INSTALLED PACKAGES") : searching ? "SEARCH RESULTS · ALL" : page == .home ? "BROWSE" : "OMACCY  /  \(page.rawValue.uppercased())"
         let noun = searching ? "result" : page == .home ? "collection" : "item"
-        count.stringValue = "\(rows.count) \(noun)\(rows.count == 1 ? "" : "s")"
+        count.stringValue = "\(page == .install && searching && rows.count == 100 ? "100+" : String(rows.count)) \(noun)\(rows.count == 1 ? "" : "s")"
         emptyState.isHidden = !rows.isEmpty
         tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
         // Home stays compact; long collections and results get room to breathe.

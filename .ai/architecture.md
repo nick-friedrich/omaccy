@@ -2,7 +2,7 @@
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Help & System palette |
+| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Install, Help & System palette |
 | `config/` | Shipped defaults for Hyperkey, AeroSpace, Ghostty, SketchyBar, and the LaunchAgent |
 | `scripts/install.sh` | Confirmation followed by the installation sequence |
 | `scripts/update.sh` | Delegates to installation with the update explanation and one confirmation |
@@ -62,3 +62,27 @@ Setup prompts display the timestamped config backup directory and explain
 restoration. These backups preserve displaced originals; they are not a history
 of edits to Omaccy's canonical configs. Updates preserve those edits, but uninstall
 removes the canonical configs, as stated in its confirmation prompt.
+
+`HomebrewCatalog.swift` loads the official formula/cask metadata asynchronously and
+ranks package searches for the palette’s Install collection. The controller caches
+the catalog in memory for an hour and confirms each install before handing it to
+a dedicated Ghostty instance through NSWorkspace (no AppleScript automation).
+The command runs in Bash with the Homebrew prefix on PATH; Ghostty keeps output
+visible after exit and quits that instance when its last window closes.
+Launcher-installed packages are user-managed, carry no Omaccy dependency
+ownership markers, and are left installed by uninstall. Searching does not run brew
+or mutate setup state.
+
+`HomebrewInventory` reads installed formulae and casks using a bounded background
+`brew info --json=v2 --installed` request with auto-update and analytics disabled.
+Each entry to Install refreshes inventory independently of the remote catalog;
+merging uses package kind plus full token so custom taps and formula/cask name
+collisions remain distinct. An empty search lists all installed packages. Updates
+use the local metadata’s outdated flag and confirmed `brew upgrade` commands;
+pinned packages have no update action. Inventory failure disables package actions
+until a successful refresh. Existing setup dependency ownership stays unchanged.
+
+Install’s Upgrade all action uses a confirmed, fixed `brew upgrade` command in
+Ghostty. Its count comes from the complete installed inventory, independent of
+search results and their limit. Homebrew determines final eligibility, preserving
+pins and its standard cask update rules. No bulk upgrade runs during validation.
