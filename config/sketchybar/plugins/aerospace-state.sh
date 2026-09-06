@@ -2,13 +2,7 @@
 
 CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$CONFIG_DIR/lib/palette.sh"
-
-find_aerospace() {
-  command -v aerospace 2>/dev/null || {
-    [[ -x /opt/homebrew/bin/aerospace ]] && printf '%s\n' /opt/homebrew/bin/aerospace && return
-    [[ -x /usr/local/bin/aerospace ]] && printf '%s\n' /usr/local/bin/aerospace
-  }
-}
+source "$CONFIG_DIR/lib/aerospace.sh"
 
 aerospace_bin="$(find_aerospace)"
 disabled_marker="$HOME/.omaccy/aerospace-disabled"

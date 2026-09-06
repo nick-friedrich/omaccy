@@ -56,6 +56,8 @@ main() {
     "$CONF_DIR/sketchybar/sketchybarrc"
   restore_target "$HOME/.config/sketchybar/lib/palette.sh" \
     "$CONF_DIR/sketchybar/lib/palette.sh"
+  restore_target "$HOME/.config/sketchybar/lib/aerospace.sh" \
+    "$CONF_DIR/sketchybar/lib/aerospace.sh"
   local sketchybar_plugin
   for sketchybar_plugin in "$CONF_DIR"/sketchybar/plugins/*.sh; do
     [[ -e "$sketchybar_plugin" ]] || continue
@@ -82,6 +84,7 @@ main() {
     "$CONF_DIR/aerospace/aerospace.toml" \
     "$CONF_DIR/sketchybar/sketchybarrc" \
     "$CONF_DIR/sketchybar/lib/palette.sh" \
+    "$CONF_DIR/sketchybar/lib/aerospace.sh" \
     "$CONF_DIR/sketchybar/plugins/"*.sh \
     "$CONF_DIR/sketchybar/themes/"*.sh \
     "$OMACCY_DIR/theme" \
@@ -94,6 +97,7 @@ main() {
     "$OMACCY_DIR/sha256/aerospace/aerospace.toml" \
     "$OMACCY_DIR/sha256/sketchybar/sketchybarrc" \
     "$OMACCY_DIR/sha256/sketchybar/lib/palette.sh" \
+    "$OMACCY_DIR/sha256/sketchybar/lib/aerospace.sh" \
     "$OMACCY_DIR/sha256/sketchybar/plugins/"*.sh \
     "$OMACCY_DIR/sha256/sketchybar/themes/"*.sh
   rm -f "$OMACCY_DIR/aerospace-disabled" \

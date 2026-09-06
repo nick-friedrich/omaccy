@@ -49,6 +49,8 @@ main() {
   chmod +x "$CONF_DIR/sketchybar/sketchybarrc"
   ensure_symlink "$REPO_ROOT/config/sketchybar/lib/palette.sh" \
     "$HOME/.config/sketchybar/lib/palette.sh"
+  ensure_symlink "$REPO_ROOT/config/sketchybar/lib/aerospace.sh" \
+    "$HOME/.config/sketchybar/lib/aerospace.sh"
   local sketchybar_theme
   for sketchybar_theme in "$REPO_ROOT"/config/sketchybar/themes/*.sh; do
     ensure_symlink "$sketchybar_theme" \

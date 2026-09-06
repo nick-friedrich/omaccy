@@ -9,6 +9,7 @@
 CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$CONFIG_DIR/plugins"
 source "$CONFIG_DIR/lib/palette.sh"
+source "$CONFIG_DIR/lib/aerospace.sh"
 
 FONT_FILE="$HOME/.omaccy/font"
 OMACCY_FONT="inter"
@@ -65,14 +66,42 @@ sketchybar --add item native_menu left \
     background.drawing=off \
     click_script="$PLUGIN_DIR/menu-toggle.sh"
 
+# Every reload (a fresh launch or `sketchybar --reload`, which a theme/font
+# change now triggers) re-runs this whole script, so --add recreates these
+# items from scratch and they'd otherwise default to visible. Without this,
+# all 9 flash on screen for a moment before workspace_observer's own event
+# below hides the empty ones. Precomputing focused/occupied here means each
+# item is added already in its final state, so there's nothing to flash.
+_aerospace_bin="$(find_aerospace)"
+RELOAD_FOCUSED_WORKSPACE=""
+RELOAD_OCCUPIED_WORKSPACES=""
+if [[ -n "$_aerospace_bin" ]]; then
+  RELOAD_FOCUSED_WORKSPACE="$("$_aerospace_bin" list-workspaces --focused 2>/dev/null | head -n 1)"
+  RELOAD_OCCUPIED_WORKSPACES="$("$_aerospace_bin" list-windows --all --format '%{workspace}' 2>/dev/null | sort -u)"
+fi
+unset _aerospace_bin
+
 for workspace in {1..9}; do
+  if [[ "$workspace" == "$RELOAD_FOCUSED_WORKSPACE" ]]; then
+    workspace_drawing=on
+    workspace_color="$ACCENT"
+  elif grep -Fxq "$workspace" <<< "$RELOAD_OCCUPIED_WORKSPACES"; then
+    workspace_drawing=on
+    workspace_color="$MUTED"
+  else
+    workspace_drawing=off
+    workspace_color="$MUTED"
+  fi
   sketchybar --add item "workspace.$workspace" left \
     --set "workspace.$workspace" \
       icon="$workspace" \
+      icon.color="$workspace_color" \
+      drawing="$workspace_drawing" \
       label.drawing=off \
       background.drawing=off \
       click_script="'$PLUGIN_DIR/workspace.sh' '$workspace'"
 done
+unset RELOAD_FOCUSED_WORKSPACE RELOAD_OCCUPIED_WORKSPACES workspace_drawing workspace_color
 
 sketchybar --add item workspace_observer left \
   --set workspace_observer \
