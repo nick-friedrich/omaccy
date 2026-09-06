@@ -10,3 +10,6 @@ TEXT=0xffe0def4        # text
 MUTED=0xff6e6a86       # muted
 OK=0xff9ccfd8          # foam
 DANGER=0xffeb6f92      # love
+
+# Ghostty ships this palette as a built-in theme name.
+GHOSTTY_THEME="Rose Pine"

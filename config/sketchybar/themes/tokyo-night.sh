@@ -10,3 +10,6 @@ TEXT=0xffc0caf5        # foreground
 MUTED=0xff565f89       # comment
 OK=0xff9ece6a          # green
 DANGER=0xfff7768e      # red
+
+# Ghostty ships this palette as a built-in theme name.
+GHOSTTY_THEME="TokyoNight Night"

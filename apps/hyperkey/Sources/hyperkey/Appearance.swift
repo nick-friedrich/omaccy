@@ -2,8 +2,10 @@ import AppKit
 
 /// Applies the appearance choices behind the Settings pages. Writing the
 /// theme/font preferences mirrors scripts/theme.sh and scripts/font.sh: the
-/// same ~/.omaccy/theme and ~/.omaccy/font files feed SketchyBar, Ghostty, and
-/// this launcher.
+/// same ~/.omaccy/theme and ~/.omaccy/font files feed SketchyBar and this
+/// launcher. Ghostty's own font stays JetBrains Mono regardless of the font
+/// choice here (Inter and Lora aren't monospace); its theme still follows
+/// the theme choice.
 enum OmaccyAppearance {
     static var stateDirectory: String { NSHomeDirectory() + "/.omaccy" }
 
@@ -33,15 +35,16 @@ enum OmaccyAppearance {
     static func applyTheme(_ name: String) -> Bool {
         guard availableThemes().contains(name) else { return false }
         writePreference(named: "theme", value: name)
+        updateGhosttyTheme(to: name)
+        reloadGhosttyIfRunning()
         reloadSketchybarIfRunning()
         return true
     }
 
     @discardableResult
     static func applyFont(_ key: String) -> Bool {
-        guard let family = OmaccyTheme.fontFamilies[key] else { return false }
+        guard OmaccyTheme.fontFamilies[key] != nil else { return false }
         writePreference(named: "font", value: key)
-        updateGhosttyFontFamily(to: family)
         reloadSketchybarIfRunning()
         return true
     }
@@ -58,22 +61,23 @@ enum OmaccyAppearance {
         try? value.write(toFile: "\(stateDirectory)/\(name)", atomically: true, encoding: .utf8)
     }
 
-    /// Replaces Ghostty's font-family line in the canonical config. A missing
-    /// config means Omaccy is not installed; the preference still applies to
-    /// the bar and launcher.
-    private static func updateGhosttyFontFamily(to family: String) {
+    /// Replaces Ghostty's theme line in the canonical config with the theme's
+    /// GHOSTTY_THEME match. A theme file without a GHOSTTY_THEME assignment
+    /// (e.g. a custom theme) leaves Ghostty's existing theme alone.
+    private static func updateGhosttyTheme(to name: String) {
+        guard let ghosttyTheme = OmaccyTheme.ghosttyThemeName(named: name) else { return }
         let path = stateDirectory + "/config/ghostty/config.ghostty"
         guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { return }
-        var lines = raw.components(separatedBy: .newlines).filter { !isFontFamilyAssignment($0) }
+        var lines = raw.components(separatedBy: .newlines).filter { !isThemeAssignment($0) }
         while let last = lines.last, last.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeLast() }
-        lines.append("font-family = \(family)")
+        lines.append("theme = \(ghosttyTheme)")
         try? lines.joined(separator: "\n").appending("\n").write(toFile: path, atomically: true, encoding: .utf8)
     }
 
-    private static func isFontFamilyAssignment(_ line: String) -> Bool {
+    private static func isThemeAssignment(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        guard trimmed.hasPrefix("font-family") else { return false }
-        guard let next = trimmed.dropFirst("font-family".count).first else { return false }
+        guard trimmed.hasPrefix("theme") else { return false }
+        guard let next = trimmed.dropFirst("theme".count).first else { return false }
         return next == "=" || next == " " || next == "\t"
     }
 
@@ -90,6 +94,26 @@ enum OmaccyAppearance {
                 FileManager.default.isExecutableFile(atPath: $0)
             }), let sketchybarURL = URL(string: "file://" + sketchybar) else { return }
             _ = HotkeyBindings.run(sketchybarURL, arguments: ["--reload"], timeout: 5)
+        }
+    }
+
+    /// Ghostty does not watch its config file for changes on macOS, and its
+    /// only CLI-level reload command (`+new-window`) is GTK-only. Its bundled
+    /// scripting dictionary (Ghostty.sdef) exposes "perform action" as a
+    /// native AppleScript command though, so this needs no Accessibility
+    /// permission (unlike System Events UI scripting) — just the ordinary
+    /// Apple Events automation already implied by launching Ghostty at all.
+    /// Checking for a running instance first matters here: unlike sketchybar's
+    /// CLI, `tell application "Ghostty"` launches it if it isn't running.
+    static func reloadGhosttyIfRunning() {
+        guard !NSRunningApplication.runningApplications(withBundleIdentifier: "com.mitchellh.ghostty").isEmpty else { return }
+        DispatchQueue.global(qos: .utility).async {
+            let script = """
+            tell application "Ghostty" to try
+                perform action "reload_config" on terminal 1 of window 1
+            end try
+            """
+            _ = HotkeyBindings.run(URL(fileURLWithPath: "/usr/bin/osascript"), arguments: ["-e", script], timeout: 5)
         }
     }
 }

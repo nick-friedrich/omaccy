@@ -34,7 +34,7 @@ enum MenuCatalog {
 
     static let settings = [
         MenuEntry(title: "Theme", detail: "Color palettes for SketchyBar and this launcher", destination: .theme),
-        MenuEntry(title: "Font", detail: "UI font for Ghostty, SketchyBar, and this launcher", destination: .font),
+        MenuEntry(title: "Font", detail: "UI font for SketchyBar and this launcher", destination: .font),
     ]
 
     static let system = SystemAction.allCases.map {

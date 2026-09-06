@@ -10,3 +10,6 @@ TEXT=0xffcdd6f4        # text
 MUTED=0xff7f849c       # overlay1
 OK=0xffa6e3a1          # green
 DANGER=0xfff38ba8      # red
+
+# Ghostty ships this palette as a built-in theme name.
+GHOSTTY_THEME="Catppuccin Mocha"

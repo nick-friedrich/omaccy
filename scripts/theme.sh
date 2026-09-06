@@ -11,6 +11,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THEME_PREF="$HOME/.omaccy/theme"
 THEMES_REPO="$REPO_ROOT/config/sketchybar/themes"
 THEMES_INSTALLED="$HOME/.omaccy/config/sketchybar/themes"
+GHOSTTY_CONFIG="$HOME/.omaccy/config/ghostty/config.ghostty"
 DEFAULT_THEME="catppuccin"
 
 current_theme() {
@@ -33,6 +34,46 @@ restart_sketchybar_if_running() {
   fi
 }
 
+theme_file_path() {
+  local name="$1"
+  if [[ -f "$THEMES_INSTALLED/$name.sh" ]]; then
+    printf '%s\n' "$THEMES_INSTALLED/$name.sh"
+  else
+    printf '%s\n' "$THEMES_REPO/$name.sh"
+  fi
+}
+
+# Ghostty ships built-in themes matching Omaccy's palettes; each theme file
+# names its match in GHOSTTY_THEME. Mirrors font.sh's font-family rewrite.
+update_ghostty_theme() {
+  local name="$1"
+  [[ -f "$GHOSTTY_CONFIG" ]] || return 0
+  local theme_file
+  theme_file="$(theme_file_path "$name")"
+  [[ -f "$theme_file" ]] || return 0
+  local ghostty_theme
+  ghostty_theme="$(source "$theme_file" 2>/dev/null; printf '%s' "${GHOSTTY_THEME:-}")"
+  [[ -n "$ghostty_theme" ]] || return 0
+  sed -i '' '/^[[:space:]]*theme[[:space:]]*=/d' "$GHOSTTY_CONFIG"
+  printf 'theme = %s\n' "$ghostty_theme" >> "$GHOSTTY_CONFIG"
+  echo "Ghostty will use the $ghostty_theme theme."
+}
+
+# Ghostty does not watch its config file for changes on macOS, and its only
+# CLI-level reload command (`+new-window`) is GTK-only. Its bundled scripting
+# dictionary (Ghostty.sdef) exposes "perform action" as a native AppleScript
+# command though, so this reload needs no Accessibility permission (unlike
+# System Events UI scripting) -- just the ordinary Apple Events automation
+# already implied by launching Ghostty at all. Guarded by pgrep first because
+# `tell application "Ghostty"` launches it if it is not already running.
+reload_ghostty_if_running() {
+  pgrep -xq ghostty 2>/dev/null || return 0
+  echo "Reloading Ghostty's configuration..."
+  osascript -e 'tell application "Ghostty" to try
+    perform action "reload_config" on terminal 1 of window 1
+  end try' >/dev/null 2>&1 || true
+}
+
 set_theme() {
   local name="$1"
   if [[ ! -f "$THEMES_REPO/$name.sh" && ! -f "$THEMES_INSTALLED/$name.sh" ]]; then
@@ -46,6 +87,8 @@ set_theme() {
   if [[ ! -f "$THEMES_INSTALLED/$name.sh" && -f "$THEMES_REPO/$name.sh" ]]; then
     echo "Note: run scripts/update.sh to install this theme into ~/.omaccy/config first."
   fi
+  update_ghostty_theme "$name"
+  reload_ghostty_if_running
   restart_sketchybar_if_running
   echo "The launcher palette picks up the theme the next time it opens."
 }

@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Switches Omaccy's UI font across Ghostty, SketchyBar, and the launcher
-# palette. The fonts themselves are installed by the setup scripts as the
-# font-inter, font-jetbrains-mono, and font-lora Homebrew casks; the choice is
-# stored in ~/.omaccy/font. SF Symbols keep SF Pro because they only ship
-# there.
+# Switches Omaccy's UI font across SketchyBar and the launcher palette. Ghostty
+# keeps its own JetBrains Mono regardless of this choice: it's a terminal, and
+# the UI options here include proportional/serif faces (Inter, Lora) that make
+# no sense there. The fonts themselves are installed by the setup scripts as
+# the font-inter, font-jetbrains-mono, and font-lora Homebrew casks; the
+# choice is stored in ~/.omaccy/font. SF Symbols keep SF Pro because they only
+# ship there.
 #
 # Usage: bash scripts/font.sh [list | current | set <font>]
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FONT_PREF="$HOME/.omaccy/font"
-GHOSTTY_CONFIG="$HOME/.omaccy/config/ghostty/config.ghostty"
 FONTS="inter jetbrains-mono serif"
 DEFAULT_FONT="inter"
 
@@ -50,14 +51,6 @@ set_font() {
   mkdir -p "$(dirname "$FONT_PREF")"
   printf '%s\n' "$font" > "$FONT_PREF"
   echo "Font set to $font ($family)."
-
-  if [[ -f "$GHOSTTY_CONFIG" ]]; then
-    sed -i '' '/^[[:space:]]*font-family[[:space:]]*=/d' "$GHOSTTY_CONFIG"
-    printf 'font-family = %s\n' "$family" >> "$GHOSTTY_CONFIG"
-    echo "Ghostty will use $family."
-  else
-    echo "No Omaccy Ghostty config found; only the bar and launcher were changed."
-  fi
   restart_sketchybar_if_running
   echo "The launcher palette picks up the font the next time it opens."
 }

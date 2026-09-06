@@ -39,6 +39,34 @@ struct OmaccyTheme {
 
     var identity: String { name + "/" + (fontFamily ?? "system") }
 
+    /// Ghostty's built-in theme name matching an installed Omaccy theme
+    /// (its file's GHOSTTY_THEME assignment), if any.
+    static func ghosttyThemeName(named name: String) -> String? {
+        ghosttyThemeName(fromFile: "\(NSHomeDirectory())/.omaccy/config/sketchybar/themes/\(name).sh")
+    }
+
+    static func ghosttyThemeName(fromFile path: String) -> String? {
+        stringAssignment(named: "GHOSTTY_THEME", from: path)
+    }
+
+    /// Reads a quoted or bare KEY="value" / KEY=value assignment, ignoring
+    /// comments. Nil when the file, the key, or its value is missing.
+    private static func stringAssignment(named key: String, from path: String) -> String? {
+        guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+        for rawLine in raw.components(separatedBy: .newlines) {
+            let withoutComment = rawLine.split(separator: "#", maxSplits: 1,
+                                               omittingEmptySubsequences: false).first.map(String.init) ?? rawLine
+            let parts = withoutComment.split(separator: "=", maxSplits: 1)
+            guard parts.count == 2, parts[0].trimmingCharacters(in: .whitespaces) == key else { continue }
+            var value = parts[1].trimmingCharacters(in: .whitespaces)
+            if value.hasPrefix("\""), value.hasSuffix("\""), value.count >= 2 {
+                value = String(value.dropFirst().dropLast())
+            }
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
     static func load() -> OmaccyTheme {
         let stateDirectory = NSHomeDirectory() + "/.omaccy"
         let name = preference(from: stateDirectory + "/theme") ?? "catppuccin"

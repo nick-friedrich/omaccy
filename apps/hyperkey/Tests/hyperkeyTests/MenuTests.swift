@@ -6,9 +6,8 @@ final class MenuTests: XCTestCase {
         let apps = [MenuEntry(title: "Ghostty", detail: "Hyper + T", bundleID: "ghostty")]
         let help = [MenuEntry(title: "Move window left", detail: "Hyper + Shift + H")]
         for page in [MenuPage.home, .apps, .help, .system] {
-            // "ghost" also matches the Font entry, whose detail mentions Ghostty.
             XCTAssertEqual(MenuCatalog.results(query: "window shift", page: page, apps: apps, help: help).map(\.title), ["Move window left"])
-            XCTAssertEqual(MenuCatalog.results(query: "ghost", page: page, apps: apps, help: help).map(\.title), ["Font", "Ghostty"])
+            XCTAssertEqual(MenuCatalog.results(query: "ghost", page: page, apps: apps, help: help).map(\.title), ["Ghostty"])
         }
     }
 

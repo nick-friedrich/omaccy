@@ -10,3 +10,6 @@ TEXT=0xffeceff4        # nord6
 MUTED=0xff7b88a1       # brightened nord3
 OK=0xffa3be8c          # green
 DANGER=0xffbf616a      # red
+
+# Ghostty ships this palette as a built-in theme name.
+GHOSTTY_THEME="Nord"

@@ -10,3 +10,6 @@ TEXT=0xfff8f8f2        # foreground
 MUTED=0xff6272a4       # comment
 OK=0xff50fa7b          # green
 DANGER=0xffff5555      # red
+
+# Ghostty ships this palette as a built-in theme name.
+GHOSTTY_THEME="Dracula"

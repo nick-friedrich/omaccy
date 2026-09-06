@@ -74,13 +74,26 @@ SketchyBar and the launcher palette share one appearance. Theme files in
 `config/sketchybar/themes/` define an eight-color palette (BAR_BG, ITEM_BG,
 BORDER, ACCENT, TEXT, MUTED, OK, DANGER) that sketchybarrc, its plugins, and
 the Swift palette all consume; `config/sketchybar/lib/palette.sh` resolves the
-active theme with Catppuccin Mocha fallbacks. `scripts/theme.sh` and
-`scripts/font.sh` validate choices, write `~/.omaccy/theme` and `~/.omaccy/font`,
-update Ghostty's font-family line, and restart SketchyBar only when its service
-is running. The launcher's Settings collection mirrors those scripts through
-`OmaccyAppearance` and rebuilds the open palette so changes preview immediately.
-A font choice customizes the canonical Ghostty config, so updates preserve it.
-SF Symbols stay on SF Pro because those glyphs only ship there.
+active theme with Catppuccin Mocha fallbacks. Each theme file also names a
+`GHOSTTY_THEME`, one of Ghostty's own bundled theme names (e.g. "Catppuccin
+Mocha", "TokyoNight Night") chosen to match the palette, since Ghostty's theme
+system is richer than the eight-color set and reimplementing it would drift.
+`scripts/theme.sh` validates the choice, writes `~/.omaccy/theme`, rewrites
+Ghostty's `theme` line to match, and restarts SketchyBar only when its
+service is running; `scripts/font.sh` does the same for `~/.omaccy/font` but
+leaves Ghostty alone — its `font-family` is fixed to JetBrains Mono in the
+canonical config, since the UI font choices include proportional/serif faces
+(Inter, Lora) that make no sense in a terminal. The launcher's Settings
+collection mirrors those scripts through `OmaccyAppearance` and rebuilds the
+open palette so changes preview immediately. Because Ghostty does not watch
+its config file for changes on macOS, both the shell scripts and
+`OmaccyAppearance.applyTheme` trigger a reload through Ghostty's bundled
+scripting dictionary (`perform action "reload_config"`, from Ghostty.sdef) when
+an instance is already running — this needs no Accessibility permission,
+unlike System Events UI scripting. A theme choice customizes the canonical
+Ghostty config, so updates preserve it. A custom theme file without a
+`GHOSTTY_THEME` assignment leaves Ghostty's existing theme alone. SF Symbols
+stay on SF Pro because those glyphs only ship there.
 
 `HomebrewCatalog.swift` loads the official formula/cask metadata asynchronously and
 ranks package searches for the palette’s Install collection. The controller caches

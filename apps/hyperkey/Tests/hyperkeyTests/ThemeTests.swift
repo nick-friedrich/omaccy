@@ -51,6 +51,22 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(OmaccyTheme.fontKeys, ["inter", "jetbrains-mono", "serif"])
     }
 
+    func testGhosttyThemeNameParsesQuotedAssignment() throws {
+        let path = try writeThemeFile("""
+        # Nord.
+        BAR_BG=0xff2e3440
+
+        # Ghostty ships this palette as a built-in theme name.
+        GHOSTTY_THEME="Nord"
+        """)
+        XCTAssertEqual(OmaccyTheme.ghosttyThemeName(fromFile: path), "Nord")
+    }
+
+    func testGhosttyThemeNameMissingWhenAbsent() throws {
+        let path = try writeThemeFile("BAR_BG=0xff2e3440\n")
+        XCTAssertNil(OmaccyTheme.ghosttyThemeName(fromFile: path))
+    }
+
     func testThemeDisplayNames() {
         XCTAssertEqual(OmaccyAppearance.displayName(forTheme: "catppuccin"), "Catppuccin")
         XCTAssertEqual(OmaccyAppearance.displayName(forTheme: "tokyo-night"), "Tokyo Night")

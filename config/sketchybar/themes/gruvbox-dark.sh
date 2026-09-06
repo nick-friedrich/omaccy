@@ -10,3 +10,6 @@ TEXT=0xffebdbb2        # fg
 MUTED=0xff928374       # gray
 OK=0xffb8bb26          # green
 DANGER=0xfffb4934      # red
+
+# Ghostty ships this palette as a built-in theme name.
+GHOSTTY_THEME="Gruvbox Dark"
