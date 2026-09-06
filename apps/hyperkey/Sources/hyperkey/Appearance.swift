@@ -33,7 +33,7 @@ enum OmaccyAppearance {
     static func applyTheme(_ name: String) -> Bool {
         guard availableThemes().contains(name) else { return false }
         writePreference(named: "theme", value: name)
-        restartSketchybarIfRunning()
+        reloadSketchybarIfRunning()
         return true
     }
 
@@ -42,7 +42,7 @@ enum OmaccyAppearance {
         guard let family = OmaccyTheme.fontFamilies[key] else { return false }
         writePreference(named: "font", value: key)
         updateGhosttyFontFamily(to: family)
-        restartSketchybarIfRunning()
+        reloadSketchybarIfRunning()
         return true
     }
 
@@ -77,19 +77,19 @@ enum OmaccyAppearance {
         return next == "=" || next == " " || next == "\t"
     }
 
-    /// SketchyBar reads its palette at startup, so a running service restarts
-    /// off the UI thread. No-op without Homebrew or a stopped service.
-    static func restartSketchybarIfRunning() {
+    /// SketchyBar's own `--reload` re-sources its config (and therefore the
+    /// new theme/font) in place over its existing IPC socket: no launchd
+    /// stop/start, no bar flicker, and it lands in well under a second. That
+    /// replaces the old `brew services restart sketchybar`, which tore the
+    /// whole process down and back up for every single theme/font change.
+    /// If sketchybar isn't running, the reload call fails fast and is
+    /// ignored — no need to check first.
+    static func reloadSketchybarIfRunning() {
         DispatchQueue.global(qos: .utility).async {
-            guard let brew = HomebrewInventory.executable, let brewURL = URL(string: "file://" + brew) else { return }
-            guard let listing = HotkeyBindings.run(brewURL, arguments: ["services", "list"], timeout: 15),
-                  listing.status == 0 else { return }
-            let running = listing.output.split(separator: "\n").contains { line in
-                let columns = line.split(separator: " ", omittingEmptySubsequences: true)
-                return columns.count >= 2 && columns[0] == "sketchybar" && columns[1] == "started"
-            }
-            guard running else { return }
-            _ = HotkeyBindings.run(brewURL, arguments: ["services", "restart", "sketchybar"], timeout: 60)
+            guard let sketchybar = ["/opt/homebrew/bin/sketchybar", "/usr/local/bin/sketchybar"].first(where: {
+                FileManager.default.isExecutableFile(atPath: $0)
+            }), let sketchybarURL = URL(string: "file://" + sketchybar) else { return }
+            _ = HotkeyBindings.run(sketchybarURL, arguments: ["--reload"], timeout: 5)
         }
     }
 }
