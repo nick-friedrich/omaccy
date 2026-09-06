@@ -404,17 +404,23 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             || entry.destination != nil || entry.systemAction != nil || entry.theme != nil || entry.font != nil
         let detail = PaletteStyle.label(describesItself && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
-        let image: NSImage
-        if let id = entry.bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
-            image = NSWorkspace.shared.icon(forFile: url.path)
+        let icon: NSView
+        if let themeName = entry.theme {
+            // Theme rows preview the actual palette (background + accent/text/
+            // muted dots) instead of a generic tinted icon.
+            icon = Self.themeSwatch(for: themeName)
         } else {
-            image = NSImage(systemSymbolName: Self.symbol(for: entry), accessibilityDescription: nil)!
+            let image: NSImage
+            if let id = entry.bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+                image = NSWorkspace.shared.icon(forFile: url.path)
+            } else {
+                image = NSImage(systemSymbolName: Self.symbol(for: entry), accessibilityDescription: nil)!
+            }
+            let imageView = NSImageView(image: image)
+            imageView.contentTintColor = PaletteStyle.accent
+            imageView.imageScaling = .scaleProportionallyUpOrDown
+            icon = imageView
         }
-        let icon = NSImageView(image: image)
-        // Theme rows preview their own accent color; everything else stays on
-        // the active theme's accent.
-        icon.contentTintColor = entry.theme.flatMap { OmaccyTheme.accentColor(named: $0) } ?? PaletteStyle.accent
-        icon.imageScaling = .scaleProportionallyUpOrDown
         let keys = PaletteStyle.label(Self.keyHint(for: entry, isApp: isApp), size: 11, weight: .medium)
         keys.textColor = entry.destination != nil || entry.package?.outdated == true
             || entry.theme != nil || entry.font != nil ? PaletteStyle.accent : PaletteStyle.muted
@@ -436,6 +442,39 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             detail.trailingAnchor.constraint(lessThanOrEqualTo: keys.leadingAnchor, constant: -16),
         ])
         return cell
+    }
+
+    /// A 30x30 preview of a theme's palette: its bar background as a rounded
+    /// swatch, bordered, with small dots for accent/text/muted so a row shows
+    /// what the theme actually looks like rather than a single tint color.
+    private static func themeSwatch(for name: String) -> NSView {
+        let size: CGFloat = 30
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: size, height: size))
+        container.wantsLayer = true
+        let colors = OmaccyTheme.palette(named: name)
+        container.layer?.backgroundColor = (colors["BAR_BG"] ?? PaletteStyle.theme.background).cgColor
+        container.layer?.borderColor = (colors["BORDER"] ?? PaletteStyle.theme.border).cgColor
+        container.layer?.borderWidth = 1
+        container.layer?.cornerRadius = 7
+
+        let dotColors = [
+            colors["ACCENT"] ?? PaletteStyle.theme.accent,
+            colors["TEXT"] ?? PaletteStyle.theme.text,
+            colors["MUTED"] ?? PaletteStyle.theme.muted,
+        ]
+        let dotSize: CGFloat = 6
+        let spacing: CGFloat = 3
+        var x = (size - (dotSize * CGFloat(dotColors.count) + spacing * CGFloat(dotColors.count - 1))) / 2
+        let y = (size - dotSize) / 2
+        for color in dotColors {
+            let dot = CALayer()
+            dot.frame = CGRect(x: x, y: y, width: dotSize, height: dotSize)
+            dot.backgroundColor = color.cgColor
+            dot.cornerRadius = dotSize / 2
+            container.layer?.addSublayer(dot)
+            x += dotSize + spacing
+        }
+        return container
     }
 
     private static func symbol(for entry: MenuEntry) -> String {

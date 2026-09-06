@@ -27,7 +27,14 @@ struct OmaccyTheme {
     /// The theme's accent color for row previews; nil when the theme file or
     /// its ACCENT assignment is missing.
     static func accentColor(named name: String) -> NSColor? {
-        palette(from: "\(NSHomeDirectory())/.omaccy/config/sketchybar/themes/\(name).sh")["ACCENT"]
+        palette(named: name)["ACCENT"]
+    }
+
+    /// Full color palette for an installed theme, keyed like the theme file
+    /// (BAR_BG, BORDER, ACCENT, TEXT, MUTED). Empty when the theme file is
+    /// missing or malformed.
+    static func palette(named name: String) -> [String: NSColor] {
+        palette(from: "\(NSHomeDirectory())/.omaccy/config/sketchybar/themes/\(name).sh")
     }
 
     var identity: String { name + "/" + (fontFamily ?? "system") }
