@@ -54,11 +54,19 @@ main() {
     "$CONF_DIR/aerospace/aerospace.toml"
   restore_target "$HOME/.config/sketchybar/sketchybarrc" \
     "$CONF_DIR/sketchybar/sketchybarrc"
+  restore_target "$HOME/.config/sketchybar/lib/palette.sh" \
+    "$CONF_DIR/sketchybar/lib/palette.sh"
   local sketchybar_plugin
   for sketchybar_plugin in "$CONF_DIR"/sketchybar/plugins/*.sh; do
     [[ -e "$sketchybar_plugin" ]] || continue
     restore_target "$HOME/.config/sketchybar/plugins/$(basename "$sketchybar_plugin")" \
       "$sketchybar_plugin"
+  done
+  local sketchybar_theme
+  for sketchybar_theme in "$CONF_DIR"/sketchybar/themes/*.sh; do
+    [[ -e "$sketchybar_theme" ]] || continue
+    restore_target "$HOME/.config/sketchybar/themes/$(basename "$sketchybar_theme")" \
+      "$sketchybar_theme"
   done
   restore_displaced_target "$HOME/.aerospace.toml"
   if command -v aerospace >/dev/null 2>&1 && aerospace list-workspaces --all >/dev/null 2>&1; then
@@ -73,7 +81,11 @@ main() {
     "$CONF_DIR/aerospace/master-stack.sh" \
     "$CONF_DIR/aerospace/aerospace.toml" \
     "$CONF_DIR/sketchybar/sketchybarrc" \
+    "$CONF_DIR/sketchybar/lib/palette.sh" \
     "$CONF_DIR/sketchybar/plugins/"*.sh \
+    "$CONF_DIR/sketchybar/themes/"*.sh \
+    "$OMACCY_DIR/theme" \
+    "$OMACCY_DIR/font" \
     "$OMACCY_DIR/sha256/launchagents/com.omaccy.hyperkey.plist" \
     "$OMACCY_DIR/sha256/hyperkey/hyperkey.toml" \
     "$OMACCY_DIR/sha256/ghostty/config.ghostty" \
@@ -81,12 +93,17 @@ main() {
     "$OMACCY_DIR/sha256/aerospace/master-stack.sh" \
     "$OMACCY_DIR/sha256/aerospace/aerospace.toml" \
     "$OMACCY_DIR/sha256/sketchybar/sketchybarrc" \
-    "$OMACCY_DIR/sha256/sketchybar/plugins/"*.sh
+    "$OMACCY_DIR/sha256/sketchybar/lib/palette.sh" \
+    "$OMACCY_DIR/sha256/sketchybar/plugins/"*.sh \
+    "$OMACCY_DIR/sha256/sketchybar/themes/"*.sh
   rm -f "$OMACCY_DIR/aerospace-disabled" \
     "$OMACCY_DIR/native-menu-visible"
 
   remove_owned_cask ghostty Ghostty
   remove_owned_cask aerospace AeroSpace
+  remove_owned_cask font-inter "the Inter font"
+  remove_owned_cask font-jetbrains-mono "the JetBrains Mono font"
+  remove_owned_cask font-lora "the Lora font"
   remove_owned_formula sketchybar SketchyBar
   if [[ -f "$OMACCY_DIR/sketchybar-service-was-running" ]] && command -v sketchybar >/dev/null 2>&1; then
     brew services start sketchybar || true
@@ -97,6 +114,10 @@ main() {
   rmdir "$HOME/.config/omaccy" 2>/dev/null || true
   rmdir "$HOME/.config/aerospace" 2>/dev/null || true
   rmdir "$CONF_DIR/aerospace" 2>/dev/null || true
+  rmdir "$HOME/.config/sketchybar/lib" 2>/dev/null || true
+  rmdir "$CONF_DIR/sketchybar/lib" 2>/dev/null || true
+  rmdir "$HOME/.config/sketchybar/themes" 2>/dev/null || true
+  rmdir "$CONF_DIR/sketchybar/themes" 2>/dev/null || true
   rmdir "$HOME/.config/sketchybar/plugins" 2>/dev/null || true
   rmdir "$HOME/.config/sketchybar" 2>/dev/null || true
   rmdir "$CONF_DIR/sketchybar/plugins" 2>/dev/null || true

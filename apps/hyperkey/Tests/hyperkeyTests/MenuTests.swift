@@ -6,8 +6,9 @@ final class MenuTests: XCTestCase {
         let apps = [MenuEntry(title: "Ghostty", detail: "Hyper + T", bundleID: "ghostty")]
         let help = [MenuEntry(title: "Move window left", detail: "Hyper + Shift + H")]
         for page in [MenuPage.home, .apps, .help, .system] {
+            // "ghost" also matches the Font entry, whose detail mentions Ghostty.
             XCTAssertEqual(MenuCatalog.results(query: "window shift", page: page, apps: apps, help: help).map(\.title), ["Move window left"])
-            XCTAssertEqual(MenuCatalog.results(query: "ghost", page: page, apps: apps, help: help).map(\.title), ["Ghostty"])
+            XCTAssertEqual(MenuCatalog.results(query: "ghost", page: page, apps: apps, help: help).map(\.title), ["Font", "Ghostty"])
         }
     }
 
@@ -23,7 +24,7 @@ final class MenuTests: XCTestCase {
     func testCategoryBrowsingAndEmptySearch() {
         let apps = [MenuEntry(title: "Finder", detail: "Application")]
         let help = [MenuEntry(title: "Focus left", detail: "Hyper + H")]
-        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .install, .omaccy, .help, .system])
+        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .install, .omaccy, .help, .system, .settings])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .apps, apps: apps, help: help).map(\.title), ["Finder"])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .help, apps: apps, help: help).map(\.title), ["Focus left"])
         XCTAssertTrue(MenuCatalog.results(query: "missing", page: .home, apps: apps, help: help).isEmpty)
@@ -92,4 +93,37 @@ final class MenuTests: XCTestCase {
         XCTAssertEqual(MenuCatalog.results(query: "update omaccy", page: .home, apps: [], help: []).first?.destination, .omaccy)
     }
 
+    func testSettingsPageListsThemeAndFontCollections() {
+        let entries = MenuCatalog.results(query: "", page: .settings, apps: [], help: [])
+        XCTAssertEqual(entries.map(\.title), ["Theme", "Font"])
+        XCTAssertEqual(entries.compactMap(\.destination), [.theme, .font])
+        XCTAssertEqual(MenuCatalog.results(query: "font", page: .settings, apps: [], help: []).map(\.title), ["Font"])
+        XCTAssertTrue(MenuCatalog.results(query: "nord", page: .settings, apps: [], help: []).isEmpty)
+    }
+
+    func testSettingsReachableFromHomeAndGlobalSearch() {
+        XCTAssertTrue(MenuCatalog.categories.contains { $0.destination == .settings })
+        XCTAssertEqual(MenuCatalog.results(query: "settings", page: .home, apps: [], help: []).compactMap(\.destination), [.settings])
+        XCTAssertTrue(MenuCatalog.results(query: "theme", page: .home, apps: [], help: []).contains { $0.destination == .theme })
+        XCTAssertTrue(MenuCatalog.results(query: "launcher font", page: .home, apps: [], help: []).contains { $0.destination == .font })
+    }
+
+    func testThemeEntriesMarkActiveAndMatchRawNames() {
+        let themes = ["catppuccin", "tokyo-night", "rose-pine"]
+        let entries = MenuCatalog.themeEntries(matching: "", themes: themes, active: "tokyo-night")
+        XCTAssertEqual(entries.map(\.title), ["Catppuccin", "Tokyo Night", "Rose Pine"])
+        XCTAssertEqual(entries.first { $0.theme == "tokyo-night" }?.detail, "Active")
+        XCTAssertEqual(entries.first { $0.theme == "catppuccin" }?.detail, "Theme palette")
+        XCTAssertEqual(MenuCatalog.themeEntries(matching: "tokyo-night", themes: themes, active: "tokyo-night").map(\.theme), ["tokyo-night"])
+        XCTAssertEqual(MenuCatalog.themeEntries(matching: "active", themes: themes, active: "tokyo-night").map(\.theme), ["tokyo-night"])
+        XCTAssertTrue(MenuCatalog.themeEntries(matching: "missing", themes: themes, active: "tokyo-night").isEmpty)
+    }
+
+    func testFontEntriesMarkActiveAndFilter() {
+        let entries = MenuCatalog.fontEntries(matching: "", active: "serif")
+        XCTAssertEqual(entries.map(\.title), ["Inter", "JetBrains Mono", "Lora"])
+        XCTAssertEqual(entries.first { $0.font == "serif" }?.detail, "Active")
+        XCTAssertEqual(MenuCatalog.fontEntries(matching: "jetbrains", active: "serif").map(\.font), ["jetbrains-mono"])
+        XCTAssertEqual(MenuCatalog.fontEntries(matching: "active", active: "serif").map(\.font), ["serif"])
+    }
 }

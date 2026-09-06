@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$CONFIG_DIR/lib/palette.sh"
+
 ssid=""
 connected=0
 for interface in en0 en1; do
@@ -18,9 +21,9 @@ for interface in en0 en1; do
 done
 
 if [[ -n "$ssid" ]]; then
-  sketchybar --set "$NAME" icon="⌁" label="$ssid" icon.color=0xffa6e3a1
+  sketchybar --set "$NAME" icon="⌁" label="$ssid" icon.color="$OK"
 elif [[ "$connected" == "1" ]]; then
-  sketchybar --set "$NAME" icon="⌁" label="Online" icon.color=0xffa6e3a1
+  sketchybar --set "$NAME" icon="⌁" label="Online" icon.color="$OK"
 else
-  sketchybar --set "$NAME" icon="×" label="Offline" icon.color=0xfff38ba8
+  sketchybar --set "$NAME" icon="×" label="Offline" icon.color="$DANGER"
 fi

@@ -15,6 +15,9 @@ main() {
   migrate_legacy_karabiner_config
   ensure_cask ghostty
   ensure_cask aerospace nikitabobko/tap/aerospace
+  ensure_cask font-inter
+  ensure_cask font-jetbrains-mono
+  ensure_cask font-lora
   ensure_formula sketchybar FelixKratz/formulae/sketchybar
   if grep -qx sketchybar "$OMACCY_DIR/preinstalled-formulas" 2>/dev/null && \
       brew services list 2>/dev/null | grep -q '^sketchybar[[:space:]].*started'; then
@@ -43,6 +46,13 @@ main() {
     chmod +x "$CONF_DIR/sketchybar/plugins/$(basename "$sketchybar_plugin")"
   done
   chmod +x "$CONF_DIR/sketchybar/sketchybarrc"
+  ensure_symlink "$REPO_ROOT/config/sketchybar/lib/palette.sh" \
+    "$HOME/.config/sketchybar/lib/palette.sh"
+  local sketchybar_theme
+  for sketchybar_theme in "$REPO_ROOT"/config/sketchybar/themes/*.sh; do
+    ensure_symlink "$sketchybar_theme" \
+      "$HOME/.config/sketchybar/themes/$(basename "$sketchybar_theme")"
+  done
   install_hyperkey_app
   ensure_symlink "$REPO_ROOT/config/hyperkey/hyperkey.toml" \
     "$HOME/.config/omaccy/hyperkey.toml"

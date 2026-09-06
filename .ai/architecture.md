@@ -2,12 +2,14 @@
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Install, Omaccy, Help & System palette |
+| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Install, Omaccy, Help, System & Settings palette |
 | `config/` | Shipped defaults for Hyperkey, AeroSpace, Ghostty, SketchyBar, and the LaunchAgent |
 | `scripts/install.sh` | Confirmation followed by the installation sequence |
 | `scripts/update.sh` | Delegates to installation with the update explanation and one confirmation |
 | `scripts/uninstall.sh` | Confirmation followed by service shutdown, restoration, and cleanup |
 | `scripts/aerospace-control.sh` | Standalone start/stop/toggle command with IPC readiness handling |
+| `scripts/theme.sh` | Standalone theme switcher; stores the choice in `~/.omaccy/theme` |
+| `scripts/font.sh` | Standalone font switcher for Ghostty, SketchyBar, and the launcher |
 | `scripts/lib/paths.sh` | Repository and installed-state paths; no directory creation |
 | `scripts/lib/prompts.sh` | Yes/No handling and descriptions of install, update, and uninstall |
 | `scripts/lib/dependencies.sh` | Homebrew setup, ownership markers, and optional dependency removal |
@@ -20,6 +22,11 @@
 
 - `~/.omaccy/config/` holds canonical editable configs. Tool-specific paths link
   to those files. `~/.omaccy/backups/` holds displaced originals.
+- `~/.omaccy/theme` and `~/.omaccy/font` hold the appearance choices written by
+  the theme and font switchers. SketchyBar resolves both at startup through
+  `config/sketchybar/lib/palette.sh`; the launcher palette rereads them every
+  time it opens. Fonts ship as the font-inter, font-jetbrains-mono, and
+  font-lora Homebrew casks.
 - `~/.omaccy/sha256/` records shipped content so updates can refresh unchanged
   defaults while retaining customized files.
 - Dependency markers distinguish packages installed by Omaccy from packages
@@ -62,6 +69,18 @@ Setup prompts display the timestamped config backup directory and explain
 restoration. These backups preserve displaced originals; they are not a history
 of edits to Omaccy's canonical configs. Updates preserve those edits, but uninstall
 removes the canonical configs, as stated in its confirmation prompt.
+
+SketchyBar and the launcher palette share one appearance. Theme files in
+`config/sketchybar/themes/` define an eight-color palette (BAR_BG, ITEM_BG,
+BORDER, ACCENT, TEXT, MUTED, OK, DANGER) that sketchybarrc, its plugins, and
+the Swift palette all consume; `config/sketchybar/lib/palette.sh` resolves the
+active theme with Catppuccin Mocha fallbacks. `scripts/theme.sh` and
+`scripts/font.sh` validate choices, write `~/.omaccy/theme` and `~/.omaccy/font`,
+update Ghostty's font-family line, and restart SketchyBar only when its service
+is running. The launcher's Settings collection mirrors those scripts through
+`OmaccyAppearance` and rebuilds the open palette so changes preview immediately.
+A font choice customizes the canonical Ghostty config, so updates preserve it.
+SF Symbols stay on SF Pro because those glyphs only ship there.
 
 `HomebrewCatalog.swift` loads the official formula/cask metadata asynchronously and
 ranks package searches for the palette’s Install collection. The controller caches

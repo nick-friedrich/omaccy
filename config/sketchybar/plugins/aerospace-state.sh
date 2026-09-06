@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$CONFIG_DIR/lib/palette.sh"
+
 find_aerospace() {
   command -v aerospace 2>/dev/null || {
     [[ -x /opt/homebrew/bin/aerospace ]] && printf '%s\n' /opt/homebrew/bin/aerospace && return
@@ -22,9 +25,9 @@ if [[ "${1:-}" == "toggle" && -n "$aerospace_bin" ]]; then
 fi
 
 if [[ -f "$disabled_marker" ]]; then
-  sketchybar --set "$NAME" label="Tiling off" icon.color=0xffcdd6f4
+  sketchybar --set "$NAME" label="Tiling off" icon.color="$TEXT"
 elif [[ -n "$aerospace_bin" ]] && "$aerospace_bin" list-workspaces --all >/dev/null 2>&1; then
-  sketchybar --set "$NAME" label="Tiling" icon.color=0xffcdd6f4
+  sketchybar --set "$NAME" label="Tiling" icon.color="$TEXT"
 else
-  sketchybar --set "$NAME" label="Tiling off" icon.color=0xffcdd6f4
+  sketchybar --set "$NAME" label="Tiling off" icon.color="$TEXT"
 fi

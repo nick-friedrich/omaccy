@@ -9,9 +9,15 @@ struct MenuEntry: Sendable {
     var package: HomebrewPackage? = nil
     var upgradesAll = false
     var updatesOmaccy = false
+    var theme: String? = nil
+    var font: String? = nil
 }
 
-enum MenuPage: String, Sendable { case home = "Home", apps = "Apps", help = "Help", install = "Install", omaccy = "Omaccy", system = "System" }
+enum MenuPage: String, Sendable {
+    case home = "Home", apps = "Apps", help = "Help", install = "Install"
+    case omaccy = "Omaccy", system = "System"
+    case settings = "Settings", theme = "Theme", font = "Font"
+}
 
 enum MenuCatalog {
     static let categories = [
@@ -20,6 +26,12 @@ enum MenuCatalog {
         MenuEntry(title: "Omaccy", detail: "Update Omaccy from your local checkout", destination: .omaccy),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
         MenuEntry(title: "System", detail: "Sleep, restart, or shut down your Mac", destination: .system),
+        MenuEntry(title: "Settings", detail: "Pick the theme and font for the bar and launcher", destination: .settings),
+    ]
+
+    static let settings = [
+        MenuEntry(title: "Theme", detail: "Color palettes for SketchyBar and this launcher", destination: .theme),
+        MenuEntry(title: "Font", detail: "UI font for Ghostty, SketchyBar, and this launcher", destination: .font),
     ]
 
     static let system = SystemAction.allCases.map {
@@ -33,6 +45,11 @@ enum MenuCatalog {
             let words = query.split(whereSeparator: \.isWhitespace)
             return words.allSatisfy { (entry.title + " " + entry.detail).localizedCaseInsensitiveContains(String($0)) } ? [entry] : []
         }
+        if page == .settings {
+            return matching(query, in: settings) { "\($0.title) \($0.detail)" }
+        }
+        if page == .theme { return themeEntries(matching: query) }
+        if page == .font { return fontEntries(matching: query) }
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         if words.isEmpty {
             switch page {
@@ -40,27 +57,65 @@ enum MenuCatalog {
             case .apps: return apps
             case .help: return help
             case .system: return system
-            case .install, .omaccy: return []
+            case .install, .omaccy, .settings, .theme, .font: return []
             }
         }
         // Search always spans the whole menu, even while browsing a category.
         var seenApps = Set<String>()
-        return (categories + apps + help + system).filter { entry in
+        return (categories + settings + apps + help + system).filter { entry in
             words.allSatisfy { (entry.title + " " + entry.detail).localizedCaseInsensitiveContains($0) }
         }.filter { entry in
             guard let id = entry.bundleID else { return true }
             return seenApps.insert(id).inserted
         }
     }
+
+    static func themeEntries(matching query: String, themes: [String]? = nil, active: String? = nil) -> [MenuEntry] {
+        let names = themes ?? OmaccyAppearance.availableThemes()
+        let current = active ?? OmaccyAppearance.currentThemeName
+        return matching(query, in: names.map { name in
+            MenuEntry(title: OmaccyAppearance.displayName(forTheme: name),
+                      detail: name == current ? "Active" : "Theme palette", theme: name)
+        }, searchText: { "\($0.title) \($0.theme ?? "") \($0.detail)" })
+    }
+
+    static func fontEntries(matching query: String, active: String? = nil) -> [MenuEntry] {
+        let current = active ?? OmaccyAppearance.currentFontKey
+        return matching(query, in: OmaccyTheme.fontKeys.map { key in
+            MenuEntry(title: OmaccyTheme.fontFamilies[key] ?? key,
+                      detail: key == current ? "Active" : "UI font", font: key)
+        }, searchText: { "\($0.title) \($0.font ?? "") \($0.detail)" })
+    }
+
+    private static func matching(_ query: String, in entries: [MenuEntry], searchText: (MenuEntry) -> String) -> [MenuEntry] {
+        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else { return entries }
+        return entries.filter { entry in
+            words.allSatisfy { searchText(entry).localizedCaseInsensitiveContains($0) }
+        }
+    }
 }
 
+@MainActor
 private enum PaletteStyle {
-    static let accent = NSColor(calibratedRed: 0.65, green: 0.88, blue: 0.76, alpha: 1)
-    static let muted = NSColor(calibratedWhite: 0.57, alpha: 1)
-    @MainActor static func label(_ text: String, size: CGFloat, weight: NSFont.Weight = .regular) -> NSTextField {
+    static var theme = OmaccyTheme.load()
+    static var accent: NSColor { theme.accent }
+    static var muted: NSColor { theme.muted }
+    static var text: NSColor { theme.text }
+
+    static func reload() { theme = OmaccyTheme.load() }
+
+    static func font(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        guard let family = theme.fontFamily, let font = NSFont(name: family, size: size) else {
+            return .systemFont(ofSize: size, weight: weight)
+        }
+        return font
+    }
+
+    static func label(_ text: String, size: CGFloat, weight: NSFont.Weight = .regular) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: size, weight: weight)
-        label.textColor = .white
+        label.font = font(size: size, weight: weight)
+        label.textColor = Self.text
         label.lineBreakMode = .byTruncatingTail
         return label
     }
@@ -99,6 +154,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var page: MenuPage = .home
     private var openingSection: Section = .apps
     private var keyMonitor: Any?
+    private var builtFor: String?
     private var apps: [MenuEntry] = []
     private var help: [MenuEntry] = []
     private var rows: [MenuEntry] = []
@@ -115,6 +171,12 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var previousApp: NSRunningApplication?
 
     func toggle(section: Section) {
+        // Rebuild the palette when the theme or font changed since it was built.
+        PaletteStyle.reload()
+        if panel != nil, builtFor != PaletteStyle.theme.identity, let frame = teardownPanelForRebuild() {
+            build()
+            panel.setFrameOrigin(frame.origin)
+        }
         if panel == nil { build() }
         if panel.isVisible && openingSection == section { dismiss(); return }
         if !panel.isVisible { previousApp = NSWorkspace.shared.frontmostApplication }
@@ -163,10 +225,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         panel.isReleasedWhenClosed = false
         let background = NSView()
         background.wantsLayer = true
-        background.layer?.backgroundColor = NSColor(calibratedRed: 0.095, green: 0.105, blue: 0.115, alpha: 0.98).cgColor
+        background.layer?.backgroundColor = PaletteStyle.theme.background.withAlphaComponent(0.98).cgColor
         background.layer?.cornerRadius = 18
         background.layer?.borderWidth = 1
-        background.layer?.borderColor = NSColor.white.withAlphaComponent(0.13).cgColor
+        background.layer?.borderColor = PaletteStyle.theme.border.cgColor
         panel.contentView = background
 
         let brand = PaletteStyle.label("O M A C C Y", size: 10, weight: .bold)
@@ -175,10 +237,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         subtitle.textColor = PaletteStyle.muted
         search.placeholderAttributedString = NSAttributedString(string: "Search anything…", attributes: [
             .foregroundColor: PaletteStyle.muted,
-            .font: NSFont.systemFont(ofSize: 23, weight: .regular)
+            .font: PaletteStyle.font(size: 23, weight: .regular)
         ])
-        search.font = .systemFont(ofSize: 23)
-        search.textColor = .white
+        search.font = PaletteStyle.font(size: 23)
+        search.textColor = PaletteStyle.text
         search.isBordered = false
         search.drawsBackground = false
         search.focusRingType = .none
@@ -264,6 +326,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             }
             return nil
         }
+        builtFor = PaletteStyle.theme.identity
     }
 
     private func dismiss() {
@@ -271,6 +334,32 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if let previousApp, previousApp.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             previousApp.activate(options: [])
         }
+    }
+
+    private func teardownPanelForRebuild() -> NSRect? {
+        guard let panel else { return nil }
+        let frame = panel.frame
+        if let monitor = keyMonitor { NSEvent.removeMonitor(monitor) }
+        keyMonitor = nil
+        panel.delegate = nil
+        panel.orderOut(nil)
+        self.panel = nil
+        return frame
+    }
+
+    /// Rebuilds the open palette after an appearance change, preserving its
+    /// position, page, and search query so rows re-render with the new look.
+    private func refreshAppearance() {
+        PaletteStyle.reload()
+        guard builtFor != PaletteStyle.theme.identity, let frame = teardownPanelForRebuild() else { return }
+        let query = search.stringValue
+        build()
+        panel.setFrameOrigin(frame.origin)
+        search.stringValue = query
+        filter()
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(search)
     }
 
     private func back() {
@@ -298,7 +387,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 ? (inventoryError ? "Reopen Install to retry" : "Checking installed packages…")
                 : package.actionTitle.map { "↵  " + $0 + "…" } ?? (package.pinned ? "Pinned in Homebrew" : "Installed")
         } else {
-            actionHint.stringValue = entry.destination != nil ? "↵  Browse" : entry.bundleID != nil ? "↵  Open app" : entry.systemAction != nil ? "↵  " + (entry.systemAction == .sleep ? "Sleep" : "Confirm…") : "Shortcut reference"
+            actionHint.stringValue = entry.destination != nil ? "↵  Browse" : entry.bundleID != nil ? "↵  Open app" : entry.theme != nil ? "↵  Apply theme" : entry.font != nil ? "↵  Apply font" : entry.systemAction != nil ? "↵  " + (entry.systemAction == .sleep ? "Sleep" : "Confirm…") : "Shortcut reference"
         }
     }
 
@@ -306,20 +395,29 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let entry = rows[row]
         let cell = NSView()
         let title = PaletteStyle.label(entry.title, size: 14, weight: .medium)
+        if let fontKey = entry.font, let family = OmaccyTheme.fontFamilies[fontKey],
+           let preview = NSFont(name: family, size: 14) {
+            title.font = preview
+        }
         let isApp = entry.bundleID != nil
-        let detail = PaletteStyle.label((entry.updatesOmaccy || entry.upgradesAll || entry.package != nil || entry.destination != nil || entry.systemAction != nil) && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
+        let describesItself = entry.updatesOmaccy || entry.upgradesAll || entry.package != nil
+            || entry.destination != nil || entry.systemAction != nil || entry.theme != nil || entry.font != nil
+        let detail = PaletteStyle.label(describesItself && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let image: NSImage
         if let id = entry.bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
             image = NSWorkspace.shared.icon(forFile: url.path)
         } else {
-            image = NSImage(systemSymbolName: entry.systemAction?.symbol ?? (entry.updatesOmaccy || entry.upgradesAll || entry.package != nil || entry.destination == .install ? "arrow.down.circle" : entry.destination == .system ? "power" : entry.destination == .apps ? "square.grid.2x2" : entry.destination == .help ? "keyboard" : "command"), accessibilityDescription: nil)!
+            image = NSImage(systemSymbolName: Self.symbol(for: entry), accessibilityDescription: nil)!
         }
         let icon = NSImageView(image: image)
-        icon.contentTintColor = PaletteStyle.accent
+        // Theme rows preview their own accent color; everything else stays on
+        // the active theme's accent.
+        icon.contentTintColor = entry.theme.flatMap { OmaccyTheme.accentColor(named: $0) } ?? PaletteStyle.accent
         icon.imageScaling = .scaleProportionallyUpOrDown
-        let keys = PaletteStyle.label(entry.package?.status ?? (entry.detail.hasPrefix("Hyper") ? entry.detail : entry.destination != nil ? "›" : !isApp && entry.systemAction == nil && entry.package == nil && !entry.upgradesAll && !entry.updatesOmaccy ? entry.detail : ""), size: 11, weight: .medium)
-        keys.textColor = entry.destination != nil || entry.package?.outdated == true ? PaletteStyle.accent : NSColor(calibratedWhite: 0.72, alpha: 1)
+        let keys = PaletteStyle.label(Self.keyHint(for: entry, isApp: isApp), size: 11, weight: .medium)
+        keys.textColor = entry.destination != nil || entry.package?.outdated == true
+            || entry.theme != nil || entry.font != nil ? PaletteStyle.accent : PaletteStyle.muted
         keys.alignment = .right
         keys.setContentCompressionResistancePriority(.required, for: .horizontal)
         for view in [icon, title, detail, keys] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
@@ -338,6 +436,32 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             detail.trailingAnchor.constraint(lessThanOrEqualTo: keys.leadingAnchor, constant: -16),
         ])
         return cell
+    }
+
+    private static func symbol(for entry: MenuEntry) -> String {
+        if let action = entry.systemAction { return action.symbol }
+        if entry.theme != nil || entry.destination == .theme { return "paintpalette" }
+        if entry.font != nil || entry.destination == .font { return "textformat" }
+        if entry.destination == .settings { return "gearshape" }
+        if entry.updatesOmaccy || entry.upgradesAll || entry.package != nil || entry.destination == .install {
+            return "arrow.down.circle"
+        }
+        switch entry.destination {
+        case .system: return "power"
+        case .apps: return "square.grid.2x2"
+        case .help: return "keyboard"
+        default: return "command"
+        }
+    }
+
+    private static func keyHint(for entry: MenuEntry, isApp: Bool) -> String {
+        if let status = entry.package?.status { return status }
+        if entry.theme != nil || entry.font != nil { return entry.detail == "Active" ? "✓" : "" }
+        if entry.detail.hasPrefix("Hyper") { return entry.detail }
+        if entry.destination != nil { return "›" }
+        let isShortcut = !isApp && entry.systemAction == nil && entry.package == nil
+            && !entry.upgradesAll && !entry.updatesOmaccy
+        return isShortcut ? entry.detail : ""
     }
 
     private func select(delta: Int) {
@@ -367,6 +491,19 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         } else if let bundleID = entry.bundleID {
             panel.orderOut(nil)
             HotkeyBindings.focusOrLaunch(bundleIdentifier: bundleID)
+        } else if let themeName = entry.theme {
+            applyAppearance {
+                guard OmaccyAppearance.applyTheme(themeName) else { return false }
+                return true
+            } onSettled: {
+                self.restoreSelection { $0.theme == themeName }
+            }
+        } else if let fontKey = entry.font {
+            applyAppearance {
+                OmaccyAppearance.applyFont(fontKey)
+            } onSettled: {
+                self.restoreSelection { $0.font == fontKey }
+            }
         } else if entry.updatesOmaccy {
             updateOmaccy()
         } else if entry.upgradesAll {
@@ -376,6 +513,22 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         } else if let action = entry.systemAction {
             performSystemAction(action)
         }
+    }
+
+    /// Applies a theme/font choice and rebuilds the palette in place so the
+    /// new look and active markers appear without closing the panel. The
+    /// settle hook runs after the rebuild and reselects the applied entry.
+    private func applyAppearance(apply: () -> Bool, onSettled: @escaping () -> Void) {
+        guard apply() else { return }
+        refreshAppearance()
+        onSettled()
+        tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
+    }
+
+    private func restoreSelection(matching predicate: (MenuEntry) -> Bool) {
+        guard let index = rows.firstIndex(where: predicate) else { return }
+        table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        table.scrollRowToVisible(index)
     }
 
     private func loadPackages() {
@@ -532,6 +685,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         emptyState.stringValue = page == .install
             ? (loadingInventory ? "Checking installed packages…" : inventoryError ? "Couldn’t read Homebrew. Reopen Install to retry." : loadingPackages ? "Loading Homebrew catalog…" : packageError ? "Couldn’t load Homebrew. Go back and reopen Install to retry."
                 : search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No Homebrew packages installed. Search to install one." : "No Homebrew packages match your search.")
+            : page == .theme && OmaccyAppearance.availableThemes().isEmpty
+            ? "No themes installed. Run scripts/update.sh to install them."
             : "No matches. Try an app, shortcut, or system action."
         table.reloadData()
         if !rows.isEmpty {

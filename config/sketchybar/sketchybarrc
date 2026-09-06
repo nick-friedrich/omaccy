@@ -2,15 +2,29 @@
 
 # Omaccy's intentionally quiet SketchyBar: workspaces and window context on the
 # left, machine state on the right. Each plugin is a small, independently
-# refreshable shell script so the bar stays useful if one command fails.
+# refreshable shell script so the bar stays useful if one command fails. Colors
+# come from the shared theme palette and text from the font chosen with
+# scripts/font.sh; SF Symbols glyphs keep SF Pro because they only ship there.
 
 CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$CONFIG_DIR/plugins"
+source "$CONFIG_DIR/lib/palette.sh"
 
-BAR_BG=0xff000000
-ITEM_BG=0xff242730
-ACCENT=0xff89b4fa
-TEXT=0xffcdd6f4
+FONT_FILE="$HOME/.omaccy/font"
+OMACCY_FONT="inter"
+if [[ -f "$FONT_FILE" ]]; then
+  _omaccy_font="$(head -n 1 "$FONT_FILE" | tr -d '[:space:]')"
+  case "$_omaccy_font" in
+    inter|jetbrains-mono|serif) OMACCY_FONT="$_omaccy_font" ;;
+  esac
+fi
+unset _omaccy_font
+case "$OMACCY_FONT" in
+  jetbrains-mono) TEXT_FONT="JetBrains Mono" ;;
+  serif) TEXT_FONT="Lora" ;;
+  *) TEXT_FONT="Inter" ;;
+esac
+
 STATUS_ICON_FONT="SF Pro:Semibold:15.0"
 
 sketchybar --bar height=34 \
@@ -28,9 +42,9 @@ sketchybar --bar height=34 \
 
 sketchybar --default \
   icon.color="$TEXT" \
-  icon.font="SF Pro:Semibold:13.0" \
+  icon.font="$TEXT_FONT:Semibold:13.0" \
   label.color="$TEXT" \
-  label.font="SF Pro:Medium:13.0" \
+  label.font="$TEXT_FONT:Medium:13.0" \
   background.color="$ITEM_BG" \
   background.corner_radius=7 \
   background.height=24 \
@@ -112,7 +126,7 @@ sketchybar --add item caffeinate right \
     popup.background.color="$ITEM_BG" \
     popup.background.corner_radius=7 \
     popup.background.border_width=1 \
-    popup.background.border_color=0xff45475a \
+    popup.background.border_color="$BORDER" \
   --subscribe caffeinate system_woke
 
 sketchybar --add item caffeinate.30m popup.caffeinate \
@@ -139,7 +153,7 @@ sketchybar --add item caffeinate.2h popup.caffeinate \
 sketchybar --add item caffeinate.off popup.caffeinate \
   --set caffeinate.off \
     icon="×" \
-    icon.color=0xfff38ba8 \
+    icon.color="$DANGER" \
     label="Turn off" \
     background.drawing=off \
     click_script="$PLUGIN_DIR/caffeinate.sh stop"

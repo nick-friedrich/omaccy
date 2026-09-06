@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -u
 
+CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$CONFIG_DIR/lib/palette.sh"
+
 STATE_DIR="${OMACCY_STATE_DIR:-$HOME/.omaccy}"
 PID_FILE="$STATE_DIR/caffeinate.pid"
 END_FILE="$STATE_DIR/caffeinate.ends-at"
@@ -96,14 +99,14 @@ update_item() {
 
   if is_active && label="$(remaining_label)"; then
     "$SKETCHYBAR_BIN" --set "$ITEM_NAME" \
-      icon.color=0xffcdd6f4 \
+      icon.color="$TEXT" \
       label="$label" \
       label.drawing=on \
       background.drawing=on >/dev/null 2>&1 || true
   else
     clear_state
     "$SKETCHYBAR_BIN" --set "$ITEM_NAME" \
-      icon.color=0xffcdd6f4 \
+      icon.color="$TEXT" \
       label.drawing=off \
       background.drawing=off >/dev/null 2>&1 || true
   fi

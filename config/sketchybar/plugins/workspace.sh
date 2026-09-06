@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$CONFIG_DIR/lib/palette.sh"
+
 find_aerospace() {
   command -v aerospace 2>/dev/null || {
     [[ -x /opt/homebrew/bin/aerospace ]] && printf '%s\n' /opt/homebrew/bin/aerospace && return
@@ -27,12 +30,12 @@ for workspace in {1..9}; do
   elif [[ "$workspace" == "$focused" ]]; then
     sketchybar --set "workspace.$workspace" \
       drawing=on \
-      icon.color=0xff89b4fa \
+      icon.color="$ACCENT" \
       background.drawing=off
   else
     sketchybar --set "workspace.$workspace" \
       drawing=on \
-      icon.color=0xff7f849c \
+      icon.color="$MUTED" \
       background.drawing=off
   fi
 done

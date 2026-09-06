@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$CONFIG_DIR/lib/palette.sh"
+
 status="$(pmset -g batt 2>/dev/null)"
 percentage="$(printf '%s\n' "$status" | sed -nE 's/.*[[:space:]]([0-9]+)%.*/\1/p' | head -n 1)"
 [[ -n "$percentage" ]] || percentage="?"
@@ -19,4 +22,4 @@ elif [[ "$percentage" != "?" ]]; then
   fi
 fi
 
-sketchybar --set "$NAME" icon="$icon" icon.color=0xffcdd6f4 label="${percentage}%"
+sketchybar --set "$NAME" icon="$icon" icon.color="$TEXT" label="${percentage}%"
