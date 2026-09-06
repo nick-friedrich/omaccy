@@ -44,6 +44,16 @@ swift build -c release --package-path apps/hyperkey
 ```
 
 See `apps/hyperkey/README.md` for the palette preview and keyboard details.
-Script-only changes do not require rebuilding the Swift app. Installation tracks
-the unsigned build hash and resets Accessibility state only when that binary
-changes; retain that distinction when modifying app deployment.
+Script-only changes do not require rebuilding the Swift app.
+
+`install.sh` fetches the latest Developer ID-signed, notarized release by
+default; it never rebuilds the Swift app unless `OMACCY_HYPERKEY_BUILD_LOCAL=1`
+is set. To test unreleased Swift changes end-to-end, run
+`OMACCY_HYPERKEY_BUILD_LOCAL=1 bash scripts/install.sh`, which builds from the
+current checkout, ad-hoc signs it, and resets Accessibility state only when the
+built binary's hash changes — retain that distinction when modifying app
+deployment. Tagging and pushing `v*` triggers `.github/workflows/release.yml`,
+which builds, signs, notarizes, staples, and publishes the app as a GitHub
+release asset alongside a `.sha256` checksum file; both the zip filename
+pattern (`omaccy-hyperkey-*.zip[.sha256]`) and the checksum format (a bare
+hex digest) are load-bearing for `scripts/lib/hyperkey.sh`'s parsing.
