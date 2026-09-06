@@ -23,9 +23,10 @@ install_hyperkey_app() {
   /bin/launchctl bootout "gui/$(id -u)/com.omaccy.hyperkey" 2>/dev/null || true
   pkill -x omaccy-hyperkey 2>/dev/null || true
 
-  mkdir -p "$APP_DIR/Contents/MacOS"
+  mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
   cp "$built_binary" "$installed_binary"
   cp "$REPO_ROOT/apps/hyperkey/Info.plist" "$APP_DIR/Contents/Info.plist"
+  printf '%s' "$REPO_ROOT" > "$APP_DIR/Contents/Resources/omaccy-checkout.txt"
   codesign --force --sign - --identifier com.omaccy.hyperkey "$APP_DIR"
   printf '%s\n' "$built_hash" > "$build_stamp"
   if [[ "$binary_changed" == "1" ]]; then

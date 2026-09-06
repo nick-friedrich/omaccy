@@ -8,14 +8,16 @@ struct MenuEntry: Sendable {
     var systemAction: SystemAction? = nil
     var package: HomebrewPackage? = nil
     var upgradesAll = false
+    var updatesOmaccy = false
 }
 
-enum MenuPage: String, Sendable { case home = "Home", apps = "Apps", help = "Help", install = "Install", system = "System" }
+enum MenuPage: String, Sendable { case home = "Home", apps = "Apps", help = "Help", install = "Install", omaccy = "Omaccy", system = "System" }
 
 enum MenuCatalog {
     static let categories = [
         MenuEntry(title: "Apps", detail: "Find and open an application", destination: .apps),
         MenuEntry(title: "Install", detail: "Search Homebrew apps and command-line tools", destination: .install),
+        MenuEntry(title: "Omaccy", detail: "Update Omaccy from your local checkout", destination: .omaccy),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
         MenuEntry(title: "System", detail: "Sleep, restart, or shut down your Mac", destination: .system),
     ]
@@ -26,6 +28,11 @@ enum MenuCatalog {
 
     static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry]) -> [MenuEntry] {
         if page == .install { return [] }
+        if page == .omaccy {
+            let entry = MenuEntry(title: "Update Omaccy", detail: "Run update.sh from your local checkout · Opens Ghostty", updatesOmaccy: true)
+            let words = query.split(whereSeparator: \.isWhitespace)
+            return words.allSatisfy { (entry.title + " " + entry.detail).localizedCaseInsensitiveContains(String($0)) } ? [entry] : []
+        }
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         if words.isEmpty {
             switch page {
@@ -33,7 +40,7 @@ enum MenuCatalog {
             case .apps: return apps
             case .help: return help
             case .system: return system
-            case .install: return []
+            case .install, .omaccy: return []
             }
         }
         // Search always spans the whole menu, even while browsing a category.
@@ -280,8 +287,12 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard rows.indices.contains(table.selectedRow) else { actionHint.stringValue = ""; return }
         let entry = rows[table.selectedRow]
-        if entry.upgradesAll {
-            actionHint.stringValue = HomebrewUpgrade.availableCount(installedPackages) > 0 ? "↵  Confirm upgrade all…" : "No updates available"
+        if entry.updatesOmaccy {
+            actionHint.stringValue = "↵  Open updater…"
+        } else if entry.upgradesAll {
+            actionHint.stringValue = !inventoryReady
+                ? (inventoryError ? "Reopen Install to retry" : "Checking installed packages…")
+                : HomebrewUpgrade.availableCount(installedPackages) > 0 ? "↵  Confirm upgrade all…" : "No updates available"
         } else if let package = entry.package {
             actionHint.stringValue = !inventoryReady
                 ? (inventoryError ? "Reopen Install to retry" : "Checking installed packages…")
@@ -296,18 +307,18 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let cell = NSView()
         let title = PaletteStyle.label(entry.title, size: 14, weight: .medium)
         let isApp = entry.bundleID != nil
-        let detail = PaletteStyle.label((entry.upgradesAll || entry.package != nil || entry.destination != nil || entry.systemAction != nil) && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
+        let detail = PaletteStyle.label((entry.updatesOmaccy || entry.upgradesAll || entry.package != nil || entry.destination != nil || entry.systemAction != nil) && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let image: NSImage
         if let id = entry.bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
             image = NSWorkspace.shared.icon(forFile: url.path)
         } else {
-            image = NSImage(systemSymbolName: entry.systemAction?.symbol ?? (entry.upgradesAll || entry.package != nil || entry.destination == .install ? "arrow.down.circle" : entry.destination == .system ? "power" : entry.destination == .apps ? "square.grid.2x2" : entry.destination == .help ? "keyboard" : "command"), accessibilityDescription: nil)!
+            image = NSImage(systemSymbolName: entry.systemAction?.symbol ?? (entry.updatesOmaccy || entry.upgradesAll || entry.package != nil || entry.destination == .install ? "arrow.down.circle" : entry.destination == .system ? "power" : entry.destination == .apps ? "square.grid.2x2" : entry.destination == .help ? "keyboard" : "command"), accessibilityDescription: nil)!
         }
         let icon = NSImageView(image: image)
         icon.contentTintColor = PaletteStyle.accent
         icon.imageScaling = .scaleProportionallyUpOrDown
-        let keys = PaletteStyle.label(entry.package?.status ?? (entry.detail.hasPrefix("Hyper") ? entry.detail : entry.destination != nil ? "›" : !isApp && entry.systemAction == nil && entry.package == nil && !entry.upgradesAll ? entry.detail : ""), size: 11, weight: .medium)
+        let keys = PaletteStyle.label(entry.package?.status ?? (entry.detail.hasPrefix("Hyper") ? entry.detail : entry.destination != nil ? "›" : !isApp && entry.systemAction == nil && entry.package == nil && !entry.upgradesAll && !entry.updatesOmaccy ? entry.detail : ""), size: 11, weight: .medium)
         keys.textColor = entry.destination != nil || entry.package?.outdated == true ? PaletteStyle.accent : NSColor(calibratedWhite: 0.72, alpha: 1)
         keys.alignment = .right
         keys.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -356,6 +367,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         } else if let bundleID = entry.bundleID {
             panel.orderOut(nil)
             HotkeyBindings.focusOrLaunch(bundleIdentifier: bundleID)
+        } else if entry.updatesOmaccy {
+            updateOmaccy()
         } else if entry.upgradesAll {
             upgradeAll()
         } else if let package = entry.package {
@@ -379,7 +392,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 if page == .install { filter(preservingSelection: true) }
             }
         }
-        guard !loadingPackages, catalogLoadedAt.map({ Date().timeIntervalSince($0) > 3600 }) ?? true else { return }
+        guard page == .install, !loadingPackages, catalogLoadedAt.map({ Date().timeIntervalSince($0) > 3600 }) ?? true else { return }
         loadingPackages = true
         packageError = false
         Task { @MainActor in
@@ -414,6 +427,18 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             return
         }
         guard let arguments = package.ghosttyArguments(brew: brew) else { return }
+        launchPackageCommand(arguments: arguments)
+    }
+
+    private func updateOmaccy() {
+        panel.orderOut(nil)
+        guard let checkout = OmaccyUpdate.checkout(),
+              let arguments = OmaccyUpdate.ghosttyArguments(checkout: checkout) else {
+            showPackageLaunchError("The Omaccy checkout is missing or has moved. Run scripts/update.sh from its new location to restore this menu action.")
+            return
+        }
+        // update.sh explains the setup changes and asks for confirmation in
+        // Ghostty. Its independent process survives the app restarting itself.
         launchPackageCommand(arguments: arguments)
     }
 

@@ -44,19 +44,19 @@ tiling state, a Caffeinate control, battery, and the clock. The canonical
 editable files live under `~/.omaccy/config/sketchybar` and are symlinked into
 `~/.config/sketchybar` with any previous configuration backed up.
 
-The compact Omaccy palette has four sections, **Apps**, **Install**, **Help**, and **System**:
+The compact Omaccy palette has five sections, **Apps**, **Install**, **Omaccy**, **Help**, and **System**:
 
 - **Hyper+?** opens searchable shortcut help from your app bindings and AeroSpace
   configuration. Type `?` as usual for your keyboard layout (Shift+/ on US,
   Shift+ß on German).
-- **Hyper+Space** opens the menu with keyboard-selectable Apps, Install, Help, and System collections. **Hyper+Shift+Space** still toggles
+- **Hyper+Space** opens the menu with keyboard-selectable Apps, Install, Omaccy, Help, and System collections. **Hyper+Shift+Space** still toggles
   floating windows in AeroSpace.
-- Type outside Install to search all apps, shortcuts, and system actions. Use ↑/↓ or Tab/Shift+Tab to
+- Type outside Install and Omaccy to search all apps, shortcuts, and system actions. Use ↑/↓ or Tab/Shift+Tab to
   select, and Return or a single click to browse a collection or launch/focus an
   app (including app shortcuts in Help). Escape clears
   search, then goes back to the menu, then closes it. Backspace on an empty search
   also goes back. Clicking outside or repeating the opening chord dismisses it.
-- The Hyperkey status menu also offers **Omaccy — Apps, Install, Help & System**.
+- The Hyperkey status menu also offers **Omaccy Launcher**.
 
 **Install** opens with all Homebrew-installed packages (including dependencies
 and custom taps), with available updates first. Rows show installed versions and
@@ -78,11 +78,19 @@ not included in this inventory. Newly installed packages are user-requested pack
 installed; remove them with `brew uninstall --formula NAME` or
 `brew uninstall --cask NAME`. Search within Install stays scoped to Homebrew.
 
-**Upgrade all** appears at the top of Install (also searchable as `upgrade all`).
+**Install → Upgrade all** manages bulk Homebrew upgrades.
 It confirms the number of currently reported unpinned updates, then opens Ghostty
 with `brew upgrade` for all eligible formulae and casks. Homebrew’s normal upgrade
 rules apply, including pinned and self-updating apps; refreshed metadata may find
-additional updates. Reopen Install after it finishes to refresh status.
+additional updates. Reopen Install after it finishes to refresh status. Individual package installs
+and updates remain in Install.
+
+**Omaccy → Update Omaccy** opens the checkout’s `scripts/update.sh` in Ghostty.
+The script explains the changes and asks for confirmation, then rebuilds local
+code, refreshes unchanged defaults, preserves customized configs, and restarts
+Omaccy. It does not download newer repository code. Keep the checkout in place;
+if it moves, run `scripts/update.sh` from its new location to restore the menu
+entry’s path.
 
 **System** offers Sleep, Restart, and Shut Down. Sleep acts immediately; Restart
 and Shut Down ask for confirmation with Cancel selected by default. macOS handles

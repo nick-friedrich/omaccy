@@ -2,7 +2,7 @@
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Install, Help & System palette |
+| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Install, Omaccy, Help & System palette |
 | `config/` | Shipped defaults for Hyperkey, AeroSpace, Ghostty, SketchyBar, and the LaunchAgent |
 | `scripts/install.sh` | Confirmation followed by the installation sequence |
 | `scripts/update.sh` | Delegates to installation with the update explanation and one confirmation |
@@ -86,3 +86,13 @@ Install’s Upgrade all action uses a confirmed, fixed `brew upgrade` command in
 Ghostty. Its count comes from the complete installed inventory, independent of
 search results and their limit. Homebrew determines final eligibility, preserving
 pins and its standard cask update rules. No bulk upgrade runs during validation.
+
+The Omaccy collection offers Update Omaccy, opening `scripts/update.sh` from the
+checkout in Ghostty. Installation records the checkout path inside the signed app
+bundle at `Contents/Resources/omaccy-checkout.txt`; uninstall removes it with the
+app. Debug builds resolve their source checkout. Missing/moved checkouts show a
+recovery message instead of guessing another location. The updater receives the
+path as a separate argument and clears the assume-yes override, retaining the
+script’s single confirmation before setup changes. Ghostty survives the app’s
+restart. This rebuilds local code; it does not fetch a newer Git revision.
+Bulk Homebrew upgrades remain under Install alongside individual package actions.
