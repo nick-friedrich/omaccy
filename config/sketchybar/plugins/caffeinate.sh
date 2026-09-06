@@ -44,9 +44,9 @@ start_caffeinate() {
   mkdir -p "$STATE_DIR"
 
   if (( duration > 0 )); then
-    "$CAFFEINATE_BIN" -i -t "$duration" >/dev/null 2>&1 &
+    "$CAFFEINATE_BIN" -i -d -t "$duration" >/dev/null 2>&1 &
   else
-    "$CAFFEINATE_BIN" -i >/dev/null 2>&1 &
+    "$CAFFEINATE_BIN" -i -d >/dev/null 2>&1 &
   fi
   pid=$!
   printf '%s\n' "$pid" > "$PID_FILE"
