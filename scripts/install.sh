@@ -66,7 +66,6 @@ main() {
   "$REPO_ROOT/scripts/aerospace-control.sh" start
   echo "Starting SketchyBar and enabling its background service at login..."
   brew services restart sketchybar
-  enable_native_menu_bar_autohide
   echo ""
   echo "Omaccy installed: Caps Lock → Command+Control+Option; Hyper+T → Ghostty; AeroSpace tiling and SketchyBar enabled."
   printf 'To uninstall: bash %q\n' "$REPO_ROOT/scripts/uninstall.sh"

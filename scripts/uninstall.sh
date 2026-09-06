@@ -115,7 +115,6 @@ main() {
     rm -f "$OMACCY_DIR/sketchybar-service-was-running"
     echo "Restarted the user's pre-existing SketchyBar service."
   fi
-  restore_native_menu_bar_autohide
   rmdir "$HOME/.config/omaccy" 2>/dev/null || true
   rmdir "$HOME/.config/aerospace" 2>/dev/null || true
   rmdir "$CONF_DIR/aerospace" 2>/dev/null || true

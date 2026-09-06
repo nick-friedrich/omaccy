@@ -3,41 +3,6 @@
 # Apply and restore menu-bar and Mission Control preferences.
 # Sourced by the entry points; loading this file performs no system changes.
 
-enable_native_menu_bar_autohide() {
-  local saved_setting="$OMACCY_DIR/native-menubar-autohide.original"
-  local saved_option="$OMACCY_DIR/native-menubar-autohide-option.original"
-  local current_value
-  local had_legacy_saved_setting=0
-  [[ -f "$saved_setting" ]] && had_legacy_saved_setting=1
-
-  if [[ ! -f "$saved_setting" ]]; then
-    if current_value="$(defaults read NSGlobalDomain _HIHideMenuBar 2>/dev/null)"; then
-      printf 'value=%s\n' "$current_value" > "$saved_setting"
-    else
-      printf 'unset\n' > "$saved_setting"
-    fi
-  fi
-
-  if [[ ! -f "$saved_option" ]]; then
-    if [[ "$had_legacy_saved_setting" == "1" ]]; then
-      # Migrate installations made by the first SketchyBar installer revision,
-      # which wrote only the legacy key. Tahoe's corresponding prior UI value
-      # was "In Full Screen Only".
-      printf 'value=2\n' > "$saved_option"
-    elif current_value="$(defaults read com.apple.controlcenter AutoHideMenuBarOption 2>/dev/null)"; then
-      printf 'value=%s\n' "$current_value" > "$saved_option"
-    else
-      printf 'unset\n' > "$saved_option"
-    fi
-  fi
-
-  defaults write com.apple.controlcenter AutoHideMenuBarOption -int 0
-  defaults write NSGlobalDomain _HIHideMenuBar -bool true
-  killall ControlCenter 2>/dev/null || true
-  killall SystemUIServer 2>/dev/null || true
-  echo "Enabled native menu-bar auto-hide for the SketchyBar replacement."
-}
-
 enable_mission_control_grouping() {
   local saved_setting="$OMACCY_DIR/mission-control-group-apps.original"
   local current_value
@@ -112,36 +77,6 @@ disable_mission_control_arrow_shortcuts() {
   rm -f "$prefs_file"
   killall cfprefsd 2>/dev/null || true
   echo "Disabled conflicting macOS Mission Control and Spaces arrow shortcuts."
-}
-
-restore_native_menu_bar_autohide() {
-  local saved_setting="$OMACCY_DIR/native-menubar-autohide.original"
-  local saved_option="$OMACCY_DIR/native-menubar-autohide-option.original"
-  [[ -f "$saved_setting" || -f "$saved_option" ]] || return 0
-
-  local saved_value
-  if [[ -f "$saved_setting" ]]; then
-    saved_value="$(cat "$saved_setting")"
-    case "$saved_value" in
-      value=1|value=true) defaults write NSGlobalDomain _HIHideMenuBar -bool true ;;
-      value=0|value=false) defaults write NSGlobalDomain _HIHideMenuBar -bool false ;;
-      unset) defaults delete NSGlobalDomain _HIHideMenuBar 2>/dev/null || true ;;
-    esac
-  fi
-
-  if [[ -f "$saved_option" ]]; then
-    saved_value="$(cat "$saved_option")"
-    case "$saved_value" in
-      value=*) defaults write com.apple.controlcenter AutoHideMenuBarOption -int "${saved_value#value=}" ;;
-      unset) defaults delete com.apple.controlcenter AutoHideMenuBarOption 2>/dev/null || true ;;
-    esac
-  fi
-
-  rm -f "$saved_setting"
-  rm -f "$saved_option"
-  killall ControlCenter 2>/dev/null || true
-  killall SystemUIServer 2>/dev/null || true
-  echo "Restored the previous native menu-bar auto-hide setting."
 }
 
 restore_mission_control_grouping() {
