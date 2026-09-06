@@ -962,7 +962,9 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         emptyState.isHidden = !rows.isEmpty
         tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
         // Home stays compact; long collections and results get room to breathe.
-        let height: CGFloat = rows.count <= 3 ? 250 + CGFloat(max(rows.count, 2)) * 64 : 560
+        // 650 fits all 7 Home rows (211pt of chrome + 7 * 62pt rows ≈ 645pt,
+        // measured directly against the table) without a scrollbar.
+        let height: CGFloat = rows.count <= 3 ? 250 + CGFloat(max(rows.count, 2)) * 64 : 650
         var frame = panel.frame
         frame.origin.y += frame.height - height
         frame.size.height = height
