@@ -169,6 +169,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var openingSection: Section = .apps
     private var keyMonitor: Any?
     private var builtFor: String?
+    private var previewGeneration = 0
     private var apps: [MenuEntry] = []
     private var help: [MenuEntry] = []
     private var rows: [MenuEntry] = []
@@ -226,7 +227,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             menu.addItem(edit)
             NSApp.mainMenu = menu
         }
-        panel = PalettePanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 480),
+        panel = PalettePanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 500),
                              styleMask: [.borderless], backing: .buffered, defer: false)
         panel.onDismiss = { [weak self] in self?.back() }
         panel.title = "Omaccy"
@@ -376,7 +377,14 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         guard builtFor != PaletteStyle.theme.identity, let frame = teardownPanelForRebuild() else { return }
         let query = search.stringValue
         build()
-        panel.setFrameOrigin(frame.origin)
+        // Restore the exact prior frame, not just its origin: build() always
+        // starts a fresh panel at a fixed default height, and filter() below
+        // only nudges the height by the delta from whatever height it finds
+        // on the panel right now. Seeding just the origin left the height at
+        // that fixed default, so every in-place rebuild (i.e. every theme
+        // pick while the palette stays open) quietly walked the window's top
+        // edge down by the gap between the default and the real height.
+        panel.setFrame(frame, display: false)
         search.stringValue = query
         filter()
         NSApp.activate(ignoringOtherApps: true)
@@ -539,6 +547,30 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let row = (max(table.selectedRow, 0) + delta + rows.count) % rows.count
         table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         table.scrollRowToVisible(row)
+        previewAppearance(for: rows[row])
+    }
+
+    /// Live-previews a theme/font as arrow-key browsing passes over it —
+    /// clicking a row already applies immediately via activate(row:), so
+    /// this makes keyboard navigation match. Debounced so holding the
+    /// arrow key down (or arrowing straight through the list) doesn't
+    /// rebuild the palette and reload SketchyBar on every repeat tick;
+    /// only the row the user actually settles on gets applied.
+    private func previewAppearance(for entry: MenuEntry) {
+        let apply: () -> Void
+        if let themeName = entry.theme, themeName != OmaccyAppearance.currentThemeName {
+            apply = { self.applyTheme(named: themeName) }
+        } else if let fontKey = entry.font, fontKey != OmaccyAppearance.currentFontKey {
+            apply = { self.applyFont(named: fontKey) }
+        } else {
+            return
+        }
+        previewGeneration += 1
+        let generation = previewGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+            guard let self, self.previewGeneration == generation else { return }
+            apply()
+        }
     }
 
     @objc private func activateClickedRow() {
@@ -578,18 +610,11 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             panel.orderOut(nil)
             HotkeyBindings.focusOrLaunch(bundleIdentifier: bundleID)
         } else if let themeName = entry.theme {
-            applyAppearance {
-                guard OmaccyAppearance.applyTheme(themeName) else { return false }
-                return true
-            } onSettled: {
-                self.restoreSelection { $0.theme == themeName }
-            }
+            previewGeneration += 1
+            applyTheme(named: themeName)
         } else if let fontKey = entry.font {
-            applyAppearance {
-                OmaccyAppearance.applyFont(fontKey)
-            } onSettled: {
-                self.restoreSelection { $0.font == fontKey }
-            }
+            previewGeneration += 1
+            applyFont(named: fontKey)
         } else if entry.updatesOmaccy {
             updateOmaccy()
         } else if entry.upgradesAll {
@@ -600,6 +625,23 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             activateAgent(agent)
         } else if let action = entry.systemAction {
             performSystemAction(action)
+        }
+    }
+
+    private func applyTheme(named themeName: String) {
+        applyAppearance {
+            guard OmaccyAppearance.applyTheme(themeName) else { return false }
+            return true
+        } onSettled: {
+            self.restoreSelection { $0.theme == themeName }
+        }
+    }
+
+    private func applyFont(named fontKey: String) {
+        applyAppearance {
+            OmaccyAppearance.applyFont(fontKey)
+        } onSettled: {
+            self.restoreSelection { $0.font == fontKey }
         }
     }
 
@@ -920,7 +962,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         emptyState.isHidden = !rows.isEmpty
         tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
         // Home stays compact; long collections and results get room to breathe.
-        let height: CGFloat = rows.count <= 3 ? 230 + CGFloat(max(rows.count, 2)) * 64 : 530
+        let height: CGFloat = rows.count <= 3 ? 250 + CGFloat(max(rows.count, 2)) * 64 : 560
         var frame = panel.frame
         frame.origin.y += frame.height - height
         frame.size.height = height
