@@ -32,6 +32,12 @@ struct HomebrewPackage: Sendable, Equatable {
 
     var detail: String { "\(kind == .cask ? "App" : "Command-line tool") · \(token) · \(description)" }
 
+    // Homebrew's formulae site mirrors the same token/kind split used for install commands.
+    var homebrewURL: URL? {
+        guard installCommand != nil else { return nil }
+        return URL(string: "https://formulae.brew.sh/\(kind == .cask ? "cask" : "formula")/\(token)")
+    }
+
     // Only validated catalog or installed-package identifiers become shell arguments, never search text.
     var installCommand: String? {
         guard !token.isEmpty, token.split(separator: "/", omittingEmptySubsequences: false).allSatisfy({ !$0.isEmpty && $0.first != "-" && $0 != "." && $0 != ".." }),

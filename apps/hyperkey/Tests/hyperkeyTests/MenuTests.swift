@@ -24,7 +24,7 @@ final class MenuTests: XCTestCase {
     func testCategoryBrowsingAndEmptySearch() {
         let apps = [MenuEntry(title: "Finder", detail: "Application")]
         let help = [MenuEntry(title: "Focus left", detail: "Hyper + H")]
-        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .install, .omaccy, .help, .system, .settings])
+        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .agents, .install, .omaccy, .help, .system, .settings])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .apps, apps: apps, help: help).map(\.title), ["Finder"])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .help, apps: apps, help: help).map(\.title), ["Focus left"])
         XCTAssertTrue(MenuCatalog.results(query: "missing", page: .home, apps: apps, help: help).isEmpty)
@@ -117,6 +117,16 @@ final class MenuTests: XCTestCase {
         XCTAssertEqual(MenuCatalog.themeEntries(matching: "tokyo-night", themes: themes, active: "tokyo-night").map(\.theme), ["tokyo-night"])
         XCTAssertEqual(MenuCatalog.themeEntries(matching: "active", themes: themes, active: "tokyo-night").map(\.theme), ["tokyo-night"])
         XCTAssertTrue(MenuCatalog.themeEntries(matching: "missing", themes: themes, active: "tokyo-night").isEmpty)
+    }
+
+    func testAgentEntriesMarkDefaultAndFilter() {
+        let entries = MenuCatalog.agentEntries(matching: "", defaultToken: "codex")
+        XCTAssertEqual(entries.map(\.agent), CodingAgent.allCases)
+        XCTAssertEqual(entries.first { $0.agent == .codexCLI }?.isDefaultAgent, true)
+        XCTAssertEqual(entries.first { $0.agent == .claudeCode }?.isDefaultAgent, false)
+        XCTAssertEqual(MenuCatalog.agentEntries(matching: "claude code", defaultToken: nil).map(\.agent), [.claudeCode])
+        XCTAssertEqual(MenuCatalog.agentEntries(matching: "chatgpt", defaultToken: nil).map(\.agent), [.chatGPTDesktop])
+        XCTAssertTrue(MenuCatalog.agentEntries(matching: "missing-agent", defaultToken: nil).isEmpty)
     }
 
     func testFontEntriesMarkActiveAndFilter() {

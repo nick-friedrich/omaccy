@@ -44,13 +44,15 @@ tiling state, a Caffeinate control, battery, and the clock. The canonical
 editable files live under `~/.omaccy/config/sketchybar` and are symlinked into
 `~/.config/sketchybar` with any previous configuration backed up.
 
-The compact Omaccy palette has five sections, **Apps**, **Install**, **Omaccy**, **Help**, and **System**:
+The compact Omaccy palette has six sections, **Apps**, **Agents**, **Install**, **Omaccy**, **Help**, and **System**:
 
 - **Hyper+?** opens searchable shortcut help from your app bindings and AeroSpace
   configuration. Type `?` as usual for your keyboard layout (Shift+/ on US,
   Shift+ß on German).
-- **Hyper+Space** opens the menu with keyboard-selectable Apps, Install, Omaccy, Help, and System collections. **Hyper+Shift+Space** still toggles
+- **Hyper+Space** opens the menu with keyboard-selectable Apps, Agents, Install, Omaccy, Help, and System collections. **Hyper+Shift+Space** still toggles
   floating windows in AeroSpace.
+- **Hyper+A** launches your default agent directly; **Hyper+Shift+A** opens the
+  Agents collection to browse or switch it.
 - Type outside Install and Omaccy to search all apps, shortcuts, and system actions. Use ↑/↓ or Tab/Shift+Tab to
   select, and Return or a single click to browse a collection or launch/focus an
   app (including app shortcuts in Help). Escape clears
@@ -91,6 +93,17 @@ code, refreshes unchanged defaults, preserves customized configs, and restarts
 Omaccy. It does not download newer repository code. Keep the checkout in place;
 if it moves, run `scripts/update.sh` from its new location to restore the menu
 entry’s path.
+
+**Agents** lists Claude Code, Codex CLI, and opencode (terminal agents) plus the
+Claude, ChatGPT, and T3 Code desktop apps. Return launches an installed agent;
+⌘Return sets the selected agent as the `default_agent` that Hyper+A launches
+directly. Terminal agents run inside [herdr](https://herdr.dev), a tmux-like
+multiplexer built for coding agents, in a dedicated Ghostty window switched to
+its own AeroSpace workspace (`agent`); desktop agents launch like any other app
+binding. An agent that isn't installed yet is installed via a confirmed
+`brew install` in Ghostty first, matching the Install collection's pattern —
+herdr itself ships as a core Omaccy dependency, installed alongside Ghostty,
+AeroSpace, and SketchyBar.
 
 **System** offers Sleep, Restart, and Shut Down. Sleep acts immediately; Restart
 and Shut Down ask for confirmation with Cancel selected by default. macOS handles

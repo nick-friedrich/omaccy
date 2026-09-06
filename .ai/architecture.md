@@ -106,6 +106,21 @@ Ghostty. Its count comes from the complete installed inventory, independent of
 search results and their limit. Homebrew determines final eligibility, preserving
 pins and its standard cask update rules. No bulk upgrade runs during validation.
 
+The Agents collection (`AgentCatalog.swift`) lists three terminal agents (Claude
+Code, Codex CLI, opencode) and three desktop apps (Claude, ChatGPT, T3 Code).
+Hyper+A launches the agent named by `default_agent` in `hyperkey.toml` directly,
+falling back to opening the Agents collection when unset; Hyper+Shift+A always
+opens it. Selecting an entry sets `default_agent` with ⌘Return; Return launches
+it. Desktop agents launch by bundle ID like ordinary app bindings and install
+through the same confirmed-`brew install`-in-Ghostty path as the Install
+collection. Terminal agents run inside herdr, a tmux-like multiplexer, in a
+dedicated Ghostty window switched first to its own AeroSpace workspace
+(`agent`); their launch script is idempotent (`command -v herdr || brew install
+herdr`, then the agent binary, then `exec herdr <binary>`), so the same script
+serves both the already-installed and confirm-then-install-then-launch paths.
+herdr is a core Omaccy dependency (`ensure_formula herdr`), installed and
+removed alongside Ghostty, AeroSpace, and SketchyBar rather than lazily per agent.
+
 The Omaccy collection offers Update Omaccy, opening `scripts/update.sh` from the
 checkout in Ghostty. Installation records the checkout path inside the signed app
 bundle at `Contents/Resources/omaccy-checkout.txt`; uninstall removes it with the

@@ -37,7 +37,7 @@ confirm_setup() {
     echo "This does not download newer repository code or upgrade existing Homebrew packages."
   fi
   echo "This will:"
-  echo "  - Install Homebrew if needed, plus missing Ghostty, AeroSpace, and SketchyBar dependencies."
+  echo "  - Install Homebrew if needed, plus missing Ghostty, AeroSpace, SketchyBar, and Herdr dependencies."
   echo "  - Install/rebuild Omaccy Hyperkey, configure launch at login, and map Caps Lock to Command+Control+Option."
   echo "  - Back up existing configs before replacing their paths with Omaccy symlinks."
   echo "  - Start AeroSpace and enable SketchyBar as a background service at login; restart Omaccy Hyperkey."

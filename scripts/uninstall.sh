@@ -105,6 +105,7 @@ main() {
   remove_owned_cask font-jetbrains-mono "the JetBrains Mono font"
   remove_owned_cask font-lora "the Lora font"
   remove_owned_formula sketchybar SketchyBar
+  remove_owned_formula herdr Herdr
   if [[ -f "$OMACCY_DIR/sketchybar-service-was-running" ]] && command -v sketchybar >/dev/null 2>&1; then
     brew services start sketchybar || true
     rm -f "$OMACCY_DIR/sketchybar-service-was-running"

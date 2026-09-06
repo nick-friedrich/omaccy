@@ -3,6 +3,7 @@ import Foundation
 struct Configuration {
     var escapeOnTap: Bool
     var bindings: [String: String]
+    var defaultAgent: String? = nil
 
     static var fileURL: URL {
         if let override = ProcessInfo.processInfo.environment["OMACCY_HYPERKEY_CONFIG"],
@@ -42,6 +43,8 @@ struct Configuration {
                 configuration.bindings[key] = value
             } else if key == "escape_on_tap" {
                 configuration.escapeOnTap = value.lowercased() == "true"
+            } else if key == "default_agent", section.isEmpty {
+                configuration.defaultAgent = value.isEmpty ? nil : value
             }
         }
         return configuration
@@ -51,6 +54,10 @@ struct Configuration {
         let destination = Self.fileURL.resolvingSymlinksInPath()
         var contents = "# Send Escape when Caps Lock is tapped without another key.\n"
         contents += "escape_on_tap = \(escapeOnTap)\n"
+        if let defaultAgent {
+            contents += "\n# Coding agent launched directly by Hyper+A.\n"
+            contents += "default_agent = \"\(defaultAgent)\"\n"
+        }
         if !bindings.isEmpty {
             contents += "\n# Launch-or-focus application bundle identifiers.\n[bindings]\n"
             for key in bindings.keys.sorted() {

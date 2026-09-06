@@ -30,10 +30,18 @@ enum HotkeyBindings {
             if heldKeys.contains(keyCode) { return true }
             let help = MenuShortcut.isQuestionMark(keyCode: keyCode, flags: flags)
             let apps = keyCode == 0x31 && !flags.contains(.maskShift)
-            if help || apps {
+            let agentDefault = keyCode == 0x00 && !flags.contains(.maskShift)
+            let agentMenu = keyCode == 0x00 && flags.contains(.maskShift)
+            if help || apps || agentDefault || agentMenu {
                 heldKeys.insert(keyCode)
                 DispatchQueue.main.async {
-                    SuperMenuController.shared.toggle(section: help ? .help : .apps)
+                    if agentDefault {
+                        SuperMenuController.shared.launchDefaultAgent()
+                    } else if agentMenu {
+                        SuperMenuController.shared.toggle(section: .agents)
+                    } else {
+                        SuperMenuController.shared.toggle(section: help ? .help : .apps)
+                    }
                 }
                 return true
             }

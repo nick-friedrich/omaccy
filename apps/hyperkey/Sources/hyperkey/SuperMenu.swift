@@ -11,17 +11,20 @@ struct MenuEntry: Sendable {
     var updatesOmaccy = false
     var theme: String? = nil
     var font: String? = nil
+    var agent: CodingAgent? = nil
+    var isDefaultAgent = false
 }
 
 enum MenuPage: String, Sendable {
     case home = "Home", apps = "Apps", help = "Help", install = "Install"
-    case omaccy = "Omaccy", system = "System"
+    case omaccy = "Omaccy", system = "System", agents = "Agents"
     case settings = "Settings", theme = "Theme", font = "Font"
 }
 
 enum MenuCatalog {
     static let categories = [
         MenuEntry(title: "Apps", detail: "Find and open an application", destination: .apps),
+        MenuEntry(title: "Agents", detail: "Launch a coding agent in a terminal or its own app", destination: .agents),
         MenuEntry(title: "Install", detail: "Search Homebrew apps and command-line tools", destination: .install),
         MenuEntry(title: "Omaccy", detail: "Update Omaccy from your local checkout", destination: .omaccy),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
@@ -38,7 +41,7 @@ enum MenuCatalog {
         MenuEntry(title: $0.title, detail: $0.detail, systemAction: $0)
     }
 
-    static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry]) -> [MenuEntry] {
+    static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry], defaultAgent: String? = nil) -> [MenuEntry] {
         if page == .install { return [] }
         if page == .omaccy {
             let entry = MenuEntry(title: "Update Omaccy", detail: "Run update.sh from your local checkout · Opens Ghostty", updatesOmaccy: true)
@@ -50,6 +53,7 @@ enum MenuCatalog {
         }
         if page == .theme { return themeEntries(matching: query) }
         if page == .font { return fontEntries(matching: query) }
+        if page == .agents { return agentEntries(matching: query, defaultToken: defaultAgent) }
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         if words.isEmpty {
             switch page {
@@ -57,7 +61,7 @@ enum MenuCatalog {
             case .apps: return apps
             case .help: return help
             case .system: return system
-            case .install, .omaccy, .settings, .theme, .font: return []
+            case .install, .omaccy, .settings, .theme, .font, .agents: return []
             }
         }
         // Search always spans the whole menu, even while browsing a category.
@@ -85,6 +89,16 @@ enum MenuCatalog {
             MenuEntry(title: OmaccyTheme.fontFamilies[key] ?? key,
                       detail: key == current ? "Active" : "UI font", font: key)
         }, searchText: { "\($0.title) \($0.font ?? "") \($0.detail)" })
+    }
+
+    static func agentEntries(matching query: String, defaultToken: String?) -> [MenuEntry] {
+        matching(query, in: CodingAgent.allCases.map { agent in
+            MenuEntry(title: agent.title,
+                      detail: "\(agent.detail) · \(agent.isInstalled ? "Installed" : "Installs via Homebrew")",
+                      bundleID: agent.bundleID,
+                      agent: agent,
+                      isDefaultAgent: agent.rawValue == defaultToken)
+        }, searchText: { "\($0.title) \($0.detail)" })
     }
 
     private static func matching(_ query: String, in entries: [MenuEntry], searchText: (MenuEntry) -> String) -> [MenuEntry] {
@@ -142,7 +156,7 @@ private final class PalettePanel: NSPanel {
 @MainActor
 final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate,
                                  NSTableViewDataSource, NSTableViewDelegate {
-    enum Section: Int { case apps, help }
+    enum Section: Int { case apps, help, agents }
     static let shared = SuperMenuController()
     private var panel: PalettePanel!
     private let search = NSTextField()
@@ -159,6 +173,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var help: [MenuEntry] = []
     private var rows: [MenuEntry] = []
     private var installedApps: [String: MenuEntry] = [:]
+    private var defaultAgentToken: String?
     private var indexing = false
     private var packages: [HomebrewPackage] = []
     private var installedPackages: [HomebrewPackage] = []
@@ -181,7 +196,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if panel.isVisible && openingSection == section { dismiss(); return }
         if !panel.isVisible { previousApp = NSWorkspace.shared.frontmostApplication }
         openingSection = section
-        page = section == .help ? .help : .home
+        page = section == .help ? .help : section == .agents ? .agents : .home
         search.stringValue = ""
         reloadCatalog()
         filter()
@@ -317,7 +332,14 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             case 125: self.select(delta: 1)
             case 126: self.select(delta: -1)
             case 48: self.select(delta: event.modifierFlags.contains(.shift) ? -1 : 1)
-            case 36, 76: self.activateSelection()
+            case 36, 76:
+                if self.page == .agents, event.modifierFlags.contains(.command) {
+                    self.setDefaultAgent()
+                } else if self.page == .install, event.modifierFlags.contains(.command) {
+                    self.openSelectedPackageOnHomebrew()
+                } else {
+                    self.activateSelection()
+                }
             case 53: self.back()
             case 51 where self.search.stringValue.isEmpty && self.page != .home: self.back()
             default:
@@ -383,9 +405,15 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 ? (inventoryError ? "Reopen Install to retry" : "Checking installed packages…")
                 : HomebrewUpgrade.availableCount(installedPackages) > 0 ? "↵  Confirm upgrade all…" : "No updates available"
         } else if let package = entry.package {
+            let openHint = package.homebrewURL != nil ? "  ·  ⌘↵  Open on Homebrew" : ""
             actionHint.stringValue = !inventoryReady
                 ? (inventoryError ? "Reopen Install to retry" : "Checking installed packages…")
-                : package.actionTitle.map { "↵  " + $0 + "…" } ?? (package.pinned ? "Pinned in Homebrew" : "Installed")
+                : (package.actionTitle.map { "↵  " + $0 + "…" } ?? (package.pinned ? "Pinned in Homebrew" : "Installed")) + openHint
+        } else if let agent = entry.agent {
+            let installed = agent.kind == .terminal ? agent.isInstalled && CodingAgent.herdrInstalled : agent.isInstalled
+            actionHint.stringValue = installed
+                ? (entry.isDefaultAgent ? "↵  Launch  ·  Default" : "↵  Launch  ·  ⌘↵  Set default")
+                : "↵  Install \(agent.title)…"
         } else {
             actionHint.stringValue = entry.destination != nil ? "↵  Browse" : entry.bundleID != nil ? "↵  Open app" : entry.theme != nil ? "↵  Apply theme" : entry.font != nil ? "↵  Apply font" : entry.systemAction != nil ? "↵  " + (entry.systemAction == .sleep ? "Sleep" : "Confirm…") : "Shortcut reference"
         }
@@ -402,6 +430,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let isApp = entry.bundleID != nil
         let describesItself = entry.updatesOmaccy || entry.upgradesAll || entry.package != nil
             || entry.destination != nil || entry.systemAction != nil || entry.theme != nil || entry.font != nil
+            || entry.agent != nil
         let detail = PaletteStyle.label(describesItself && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let icon: NSView
@@ -478,6 +507,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     }
 
     private static func symbol(for entry: MenuEntry) -> String {
+        if let agent = entry.agent { return agent.symbol }
         if let action = entry.systemAction { return action.symbol }
         if entry.theme != nil || entry.destination == .theme { return "paintpalette" }
         if entry.font != nil || entry.destination == .font { return "textformat" }
@@ -496,6 +526,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private static func keyHint(for entry: MenuEntry, isApp: Bool) -> String {
         if let status = entry.package?.status { return status }
         if entry.theme != nil || entry.font != nil { return entry.detail == "Active" ? "✓" : "" }
+        if entry.agent != nil { return entry.isDefaultAgent ? "✓" : "" }
         if entry.detail.hasPrefix("Hyper") { return entry.detail }
         if entry.destination != nil { return "›" }
         let isShortcut = !isApp && entry.systemAction == nil && entry.package == nil
@@ -511,11 +542,27 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     }
 
     @objc private func activateClickedRow() {
+        if page == .agents, NSApp.currentEvent?.modifierFlags.contains(.command) == true {
+            table.selectRowIndexes(IndexSet(integer: table.clickedRow), byExtendingSelection: false)
+            setDefaultAgent()
+            return
+        }
+        if page == .install, NSApp.currentEvent?.modifierFlags.contains(.command) == true {
+            table.selectRowIndexes(IndexSet(integer: table.clickedRow), byExtendingSelection: false)
+            openSelectedPackageOnHomebrew()
+            return
+        }
         activate(row: table.clickedRow)
     }
 
     private func activateSelection() {
         activate(row: table.selectedRow)
+    }
+
+    private func openSelectedPackageOnHomebrew() {
+        guard rows.indices.contains(table.selectedRow), let package = rows[table.selectedRow].package,
+              let url = package.homebrewURL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func activate(row: Int) {
@@ -549,6 +596,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             upgradeAll()
         } else if let package = entry.package {
             install(package)
+        } else if let agent = entry.agent {
+            activateAgent(agent)
         } else if let action = entry.systemAction {
             performSystemAction(action)
         }
@@ -652,6 +701,137 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         launchPackageCommand(arguments: arguments)
     }
 
+    /// Launches the agent configured as `default_agent`, or opens the Agents
+    /// collection to pick one if none is set. Works even before the palette
+    /// has ever been opened, since Hyper+A can be the very first press.
+    func launchDefaultAgent() {
+        guard let token = Configuration.load().defaultAgent, let agent = CodingAgent(rawValue: token) else {
+            toggle(section: .agents)
+            return
+        }
+        activateAgent(agent)
+    }
+
+    private func activateAgent(_ agent: CodingAgent) {
+        switch agent.kind {
+        case .desktop:
+            if agent.isInstalled {
+                panel?.orderOut(nil)
+                HotkeyBindings.focusOrLaunch(bundleIdentifier: agent.bundleID!)
+            } else {
+                confirmAndInstallDesktopAgent(agent)
+            }
+        case .terminal:
+            if agent.isInstalled && CodingAgent.herdrInstalled {
+                panel?.orderOut(nil)
+                launchTerminalAgent(agent)
+            } else {
+                confirmAndInstallTerminalAgent(agent)
+            }
+        }
+    }
+
+    /// Mirrors `install(_:)`'s confirm-then-run-in-Ghostty flow, but skips its
+    /// `inventoryReady` gate: that flag only becomes true once the Install
+    /// page's async Homebrew inventory has loaded, which a fresh Hyper+A or
+    /// Hyper+Shift+A press has no reason to have triggered yet. Agent install
+    /// status already comes from a synchronous bundle-identifier lookup.
+    private func confirmAndInstallDesktopAgent(_ agent: CodingAgent) {
+        panel?.orderOut(nil)
+        guard let brew = HomebrewInventory.executable else {
+            let alert = NSAlert()
+            alert.messageText = "Homebrew is required"
+            alert.informativeText = "Install Homebrew from brew.sh, then try again."
+            alert.runModal()
+            panel?.makeKeyAndOrderFront(nil)
+            panel?.makeFirstResponder(search)
+            return
+        }
+        let package = HomebrewPackage(token: agent.brewToken, name: agent.title, description: agent.detail, kind: .cask)
+        guard let command = package.actionCommand else { return }
+        let alert = NSAlert()
+        alert.messageText = "Install \(agent.title)?"
+        alert.informativeText = "Ghostty will run:\n\n\(command)\n\nHomebrew may install dependencies or ask for your password. Reopen Agents and press Return again once it finishes."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Install")
+        guard alert.runModal() == .alertSecondButtonReturn else {
+            panel?.makeKeyAndOrderFront(nil)
+            panel?.makeFirstResponder(search)
+            return
+        }
+        guard let arguments = package.ghosttyArguments(brew: brew) else { return }
+        launchPackageCommand(arguments: arguments)
+    }
+
+    private func confirmAndInstallTerminalAgent(_ agent: CodingAgent) {
+        panel?.orderOut(nil)
+        guard HomebrewInventory.executable != nil else {
+            let alert = NSAlert()
+            alert.messageText = "Homebrew is required"
+            alert.informativeText = "Install Homebrew from brew.sh, then try again."
+            alert.runModal()
+            panel?.makeKeyAndOrderFront(nil)
+            panel?.makeFirstResponder(search)
+            return
+        }
+        var steps: [String] = []
+        if !CodingAgent.herdrInstalled { steps.append("brew install herdr") }
+        if !agent.isInstalled { steps.append("brew install \(agent.brewKind == .cask ? "--cask " : "")\(agent.brewToken)") }
+        steps.append("herdr \(agent.binaryName!)")
+        let alert = NSAlert()
+        alert.messageText = "Launch \(agent.title)?"
+        alert.informativeText = "A new Ghostty window in its own AeroSpace workspace will run:\n\n\(steps.joined(separator: "\n"))\n\nHomebrew may install dependencies or ask for your password."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Install & Launch")
+        guard alert.runModal() == .alertSecondButtonReturn else {
+            panel?.makeKeyAndOrderFront(nil)
+            panel?.makeFirstResponder(search)
+            return
+        }
+        launchTerminalAgent(agent)
+    }
+
+    /// Ensures herdr and the agent binary are present, then hands off to herdr
+    /// in a dedicated Ghostty window inside its own AeroSpace workspace. The
+    /// script is idempotent, so this also serves as the "already installed"
+    /// launch path — no separate install-then-launch chaining is needed.
+    private func launchTerminalAgent(_ agent: CodingAgent) {
+        guard let brew = HomebrewInventory.executable, let binary = agent.binaryName else {
+            showPackageLaunchError("Homebrew is required. Install it from brew.sh, then try again.")
+            return
+        }
+        let prefix = String(brew.dropLast("/bin/brew".count))
+        let installFlag = agent.brewKind == .cask ? "--cask " : ""
+        let script = """
+        export PATH=\(prefix)/bin:\(prefix)/sbin:$PATH
+        command -v herdr >/dev/null 2>&1 || brew install herdr
+        command -v \(binary) >/dev/null 2>&1 || brew install \(installFlag)\(agent.brewToken)
+        exec herdr \(binary)
+        """
+        let arguments = ["--wait-after-command=true", "--quit-after-last-window-closed=true",
+                          "-e", "/bin/bash", "-c", script]
+        // Switch workspace off the main thread, like HotkeyBindings.focusOrLaunch does for
+        // its own AeroSpace calls, then hand off to the main actor via DispatchQueue (not
+        // Task/MainActor.run) so this doesn't need to capture non-Sendable `self`.
+        DispatchQueue.global(qos: .userInitiated).async {
+            if let aerospace = HotkeyBindings.aeroSpaceExecutableURL() {
+                _ = HotkeyBindings.run(aerospace, arguments: ["workspace", "agent"])
+            }
+            DispatchQueue.main.async {
+                SuperMenuController.shared.launchPackageCommand(arguments: arguments)
+            }
+        }
+    }
+
+    private func setDefaultAgent() {
+        guard rows.indices.contains(table.selectedRow), let agent = rows[table.selectedRow].agent else { return }
+        var config = Configuration.load()
+        config.defaultAgent = agent.rawValue
+        config.save()
+        defaultAgentToken = agent.rawValue
+        filter(preservingSelection: true)
+    }
+
     private func launchPackageCommand(arguments: [String]) {
         guard let ghostty = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") else {
             showPackageLaunchError("Ghostty could not be found. Install Ghostty, then try again.")
@@ -673,8 +853,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         failure.messageText = "Couldn’t open the installer in Ghostty"
         failure.informativeText = message
         failure.runModal()
-        panel.makeKeyAndOrderFront(nil)
-        panel.makeFirstResponder(search)
+        panel?.makeKeyAndOrderFront(nil)
+        panel?.makeFirstResponder(search)
     }
 
     private func performSystemAction(_ action: SystemAction) {
@@ -711,7 +891,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             ? HomebrewCatalog.search(search.stringValue, packages: HomebrewInventory.merge(catalog: packages, installed: installedPackages)).map {
                 MenuEntry(title: $0.name, detail: $0.detail, package: $0)
             }
-            : MenuCatalog.results(query: search.stringValue, page: page, apps: apps, help: help)
+            : MenuCatalog.results(query: search.stringValue, page: page, apps: apps, help: help, defaultAgent: defaultAgentToken)
         let upgradeQuery = search.stringValue.lowercased().split(whereSeparator: \.isWhitespace)
         if page == .install && inventoryReady && upgradeQuery.allSatisfy({ "upgrade all update packages".contains($0) }) {
             let available = HomebrewUpgrade.availableCount(installedPackages)
@@ -748,6 +928,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     }
     private func reloadCatalog(refreshApps: Bool = true) {
         let config = Configuration.load()
+        defaultAgentToken = config.defaultAgent
         var byID: [String: MenuEntry] = [:]
         if refreshApps && !indexing {
             indexing = true
