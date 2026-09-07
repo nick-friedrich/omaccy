@@ -1,11 +1,13 @@
 import Foundation
 
-// Setup records its checkout in the app bundle; removing the app removes this
-// reference too. Debug builds can resolve the checkout from their source path.
+// Setup records its checkout outside the app bundle so re-signing the
+// downloaded, notarized release build is never required. Debug builds can
+// resolve the checkout from their source path.
 enum OmaccyUpdate {
     static func checkout(bundle: Bundle = .main) -> URL? {
-        if let resource = bundle.url(forResource: "omaccy-checkout", withExtension: "txt") {
-            guard let path = try? String(contentsOf: resource, encoding: .utf8), path.hasPrefix("/") else { return nil }
+        let checkoutFile = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".omaccy/hyperkey-checkout.txt")
+        if let path = try? String(contentsOf: checkoutFile, encoding: .utf8), path.hasPrefix("/") {
             return URL(fileURLWithPath: path, isDirectory: true)
         }
         guard bundle.bundleURL.pathExtension != "app" else { return nil }

@@ -15,8 +15,9 @@
 | `scripts/lib/dependencies.sh` | Homebrew setup, ownership markers, and optional dependency removal |
 | `scripts/lib/config.sh` | Config copying, hash stamps, symlinks, backup/restore, and legacy migration |
 | `scripts/lib/macos.sh` | Menu-bar and Mission Control settings with paired restoration functions |
-| `scripts/lib/hyperkey.sh` | Swift build, app signing, build-hash tracking, and launch |
+| `scripts/lib/hyperkey.sh` | Fetches the signed, notarized release build by default (local Swift build under `OMACCY_HYPERKEY_BUILD_LOCAL=1`), plus launch |
 | `tests/scripts-smoke.sh` | Isolated shell lifecycle checks |
+| `.github/workflows/release.yml` | Builds, Developer ID-signs, notarizes, and publishes the hyperkey app to GitHub Releases on `v*` tags |
 
 ## Installed state
 
@@ -33,17 +34,36 @@
   already present. `*.original` files preserve macOS preference values.
 - The app is installed at `~/Applications/Omaccy Hyperkey.app`; its LaunchAgent
   lives at `~/Library/LaunchAgents/com.omaccy.hyperkey.plist`.
+- `~/.omaccy/hyperkey-release` records the installed release tag so reinstalls
+  skip re-downloading an unchanged version; `~/.omaccy/hyperkey-checkout.txt`
+  records the checkout path outside the signed app bundle, since writing into
+  an already-notarized bundle's Resources after the fact would invalidate its
+  signature.
 
 ## Current setup behavior
 
 Run scripts from a complete local checkout using `bash scripts/install.sh`,
 `bash scripts/update.sh`, or `bash scripts/uninstall.sh`. Paths are resolved from
 the scripts, so the current working directory does not matter. A standalone
-download of `install.sh` is insufficient: it requires the libraries, configs,
-and Swift sources. A hosted bootstrap installer and Homebrew distribution remain
-planning topics.
+download of `install.sh` is insufficient: it requires the libraries and configs
+from the checkout, though not the Swift sources — the hyperkey app itself comes
+from the latest GitHub release by default. A hosted bootstrap installer (running
+`install.sh` without a full checkout) and Homebrew distribution remain planning
+topics; releases are published directly on GitHub instead of through a tap.
 
-Update rebuilds from the current checkout and refreshes pristine defaults. It
+The hyperkey app ships as a Developer ID-signed, notarized build from
+`.github/workflows/release.yml`, triggered by pushing a `v*` tag. `install.sh`
+downloads the latest release's zip and its `.sha256` checksum from the GitHub
+API, verifies the checksum, and replaces `$APP_DIR` with `ditto`; no local
+build, codesign, or `tccutil` reset is needed since the signing identity is
+stable across releases. Set `OMACCY_HYPERKEY_BUILD_LOCAL=1` to instead build
+from the current checkout's Swift sources — the pre-existing ad-hoc-signed
+path, needed when testing unreleased hyperkey changes, which still resets
+Accessibility state when the built binary's hash changes.
+
+Update reruns the installation sequence (refetching the latest hyperkey release
+by default, or rebuilding from the current checkout under
+`OMACCY_HYPERKEY_BUILD_LOCAL=1`) and refreshes pristine config defaults. It
 does not fetch Git changes or upgrade already installed Homebrew packages.
 
 All three operations explain their effects and require Y/Yes (case-insensitive).
@@ -160,11 +180,13 @@ it when Omaccy itself installed it, since a pre-existing herdr may be hosting
 the user's own unrelated agent sessions in that same default session.
 
 The Omaccy collection offers Update Omaccy, opening `scripts/update.sh` from the
-checkout in Ghostty. Installation records the checkout path inside the signed app
-bundle at `Contents/Resources/omaccy-checkout.txt`; uninstall removes it with the
-app. Debug builds resolve their source checkout. Missing/moved checkouts show a
-recovery message instead of guessing another location. The updater receives the
-path as a separate argument and clears the assume-yes override, retaining the
-script’s single confirmation before setup changes. Ghostty survives the app’s
-restart. This rebuilds local code; it does not fetch a newer Git revision.
+checkout in Ghostty. Installation records the checkout path at
+`~/.omaccy/hyperkey-checkout.txt`, outside the signed app bundle so the
+downloaded, notarized release build never needs re-signing; uninstall removes
+it alongside the app. Debug builds resolve their source checkout. Missing/moved
+checkouts show a recovery message instead of guessing another location. The
+updater receives the path as a separate argument and clears the assume-yes
+override, retaining the script's single confirmation before setup changes.
+Ghostty survives the app's restart. This reruns the installation sequence; it
+does not fetch a newer Git revision.
 Bulk Homebrew upgrades remain under Install alongside individual package actions.
