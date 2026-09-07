@@ -113,6 +113,16 @@ enum HotkeyBindings {
         }.first
     }
 
+    /// Whether any Ghostty window currently sits in the given AeroSpace workspace,
+    /// so terminal-agent launches can skip opening a redundant one.
+    static func ghosttyWindowExists(inWorkspace workspace: String) -> Bool {
+        guard let executableURL = aeroSpaceExecutableURL(),
+              let listing = run(executableURL, arguments: ["list-windows", "--workspace", workspace, "--format", "%{app-bundle-id}"]),
+              listing.status == 0 else { return false }
+        return listing.output.split(whereSeparator: \.isNewline)
+            .contains { $0.trimmingCharacters(in: .whitespaces) == "com.mitchellh.ghostty" }
+    }
+
     private static func focusAeroSpaceWindow(windowID: String) -> Bool {
         guard let executableURL = aeroSpaceExecutableURL() else { return false }
         return run(

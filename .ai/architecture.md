@@ -126,13 +126,38 @@ falling back to opening the Agents collection when unset; Hyper+Shift+A always
 opens it. Selecting an entry sets `default_agent` with ⌘Return; Return launches
 it. Desktop agents launch by bundle ID like ordinary app bindings and install
 through the same confirmed-`brew install`-in-Ghostty path as the Install
-collection. Terminal agents run inside herdr, a tmux-like multiplexer, in a
-dedicated Ghostty window switched first to its own AeroSpace workspace
-(`agent`); their launch script is idempotent (`command -v herdr || brew install
-herdr`, then the agent binary, then `exec herdr <binary>`), so the same script
-serves both the already-installed and confirm-then-install-then-launch paths.
-herdr is a core Omaccy dependency (`ensure_formula herdr`), installed and
-removed alongside Ghostty, AeroSpace, and SketchyBar rather than lazily per agent.
+collection.
+
+Terminal agents run inside herdr, a persistent multiplexer for coding agents,
+using its one shared *default* session rather than a session per agent kind: a
+session herdr itself doesn't own the lifecycle of would need its own service
+supervision to survive a closed terminal, whereas the default session is kept
+alive by `brew services start herdr` — a real launchd daemon, installed and
+started the same way this repo already runs SketchyBar. Each agent kind gets
+its own labeled herdr *workspace* inside that one session.
+
+When herdr and the agent binary are already installed, `activateAgent` does
+all of the herdr socket-API work headlessly, off the main thread, before
+deciding whether a terminal is even needed: `HerdrBridge.runningWorkspaceID`
+asks herdr (`agent get <binary>`) whether the agent is already alive; if not,
+`HerdrBridge.provisionWorkspace` creates its labeled workspace and starts it
+there — neither step touches a pty. Either way the result is a workspace ID to
+focus, then `revealAgentWorkspace` switches to the AeroSpace `agent` workspace
+and opens a Ghostty window running only `exec herdr` — but only when
+`HotkeyBindings.ghosttyWindowExists` finds none already there. So reattaching
+to a running agent, and switching to a different already-provisioned one, are
+both instant and never spawn a duplicate window; a Ghostty window already open
+for one agent is reused (via herdr's own workspace focus) when launching
+another. Only when something needs installing does `confirmAndInstallTerminalAgent`
+take the slower, visible path: after confirming, `launchTerminalAgent` runs an
+idempotent script in a dedicated new Ghostty window (install progress and any
+password prompt should actually be seen) that installs what's missing, starts
+herdr's service, provisions the workspace, and `exec herdr`s to attach.
+
+herdr is a core Omaccy dependency (`ensure_formula herdr`), installed
+alongside Ghostty, AeroSpace, and SketchyBar; uninstall only stops and removes
+it when Omaccy itself installed it, since a pre-existing herdr may be hosting
+the user's own unrelated agent sessions in that same default session.
 
 The Omaccy collection offers Update Omaccy, opening `scripts/update.sh` from the
 checkout in Ghostty. Installation records the checkout path inside the signed app

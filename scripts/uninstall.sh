@@ -109,6 +109,11 @@ main() {
   remove_owned_cask font-jetbrains-mono "the JetBrains Mono font"
   remove_owned_cask font-lora "the Lora font"
   remove_owned_formula sketchybar SketchyBar
+  # Only stop herdr's service if Omaccy installed herdr: it can host the
+  # user's own unrelated agent sessions, and stopping it would kill those too.
+  if [[ -f "$OMACCY_DIR/installed-formulas" ]] && grep -qx herdr "$OMACCY_DIR/installed-formulas"; then
+    brew services stop herdr || true
+  fi
   remove_owned_formula herdr Herdr
   if [[ -f "$OMACCY_DIR/sketchybar-service-was-running" ]] && command -v sketchybar >/dev/null 2>&1; then
     brew services start sketchybar || true

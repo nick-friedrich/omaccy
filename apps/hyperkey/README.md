@@ -97,13 +97,23 @@ entry’s path.
 **Agents** lists Claude Code, Codex CLI, and opencode (terminal agents) plus the
 Claude, ChatGPT, and T3 Code desktop apps. Return launches an installed agent;
 ⌘Return sets the selected agent as the `default_agent` that Hyper+A launches
-directly. Terminal agents run inside [herdr](https://herdr.dev), a tmux-like
-multiplexer built for coding agents, in a dedicated Ghostty window switched to
-its own AeroSpace workspace (`agent`); desktop agents launch like any other app
-binding. An agent that isn't installed yet is installed via a confirmed
-`brew install` in Ghostty first, matching the Install collection's pattern —
-herdr itself ships as a core Omaccy dependency, installed alongside Ghostty,
-AeroSpace, and SketchyBar.
+directly. Terminal agents run inside [herdr](https://herdr.dev), a persistent
+multiplexer for coding agents, kept alive by its own `brew services start herdr`
+background daemon (started the same way this repo runs SketchyBar) so an agent
+keeps running even after you close its window; each agent kind gets its own
+labeled herdr workspace inside herdr's one shared session. Launching an agent
+that's already running, or switching to a different already-provisioned one,
+just focuses its herdr workspace and the AeroSpace workspace (`agent`) —
+reusing an existing Ghostty window whenever one is already open there, rather
+than spawning a duplicate. Provisioning a not-yet-running agent (creating its
+workspace, starting it) happens headlessly the same way, before that same
+reveal step decides whether a window is even needed. Desktop agents
+launch like any other app binding. An agent that isn't installed yet is
+installed via a confirmed `brew install` in Ghostty first, matching the Install
+collection's pattern — herdr itself ships as a core Omaccy dependency,
+installed alongside Ghostty, AeroSpace, and SketchyBar (uninstall only stops
+and removes it when Omaccy installed it, since a pre-existing herdr may already
+host unrelated agent sessions of your own).
 
 **System** offers Sleep, Restart, and Shut Down. Sleep acts immediately; Restart
 and Shut Down ask for confirmation with Cancel selected by default. macOS handles

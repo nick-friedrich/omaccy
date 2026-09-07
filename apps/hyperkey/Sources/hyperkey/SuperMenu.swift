@@ -764,12 +764,39 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 confirmAndInstallDesktopAgent(agent)
             }
         case .terminal:
-            if agent.isInstalled && CodingAgent.herdrInstalled {
-                panel?.orderOut(nil)
-                launchTerminalAgent(agent)
-            } else {
+            guard let binary = agent.binaryName else { return }
+            guard agent.isInstalled, CodingAgent.herdrInstalled else {
                 confirmAndInstallTerminalAgent(agent)
+                return
             }
+            panel?.orderOut(nil)
+            // herdr's own CLI can block briefly, so do all of this off the main
+            // thread — same rule HotkeyBindings.focusOrLaunch follows for its
+            // AeroSpace calls. Provisioning (creating a workspace, starting the
+            // agent) is headless and needs no terminal, so it happens here
+            // whether or not the agent was already running — only the final
+            // reveal decides whether a Ghostty window is even needed.
+            DispatchQueue.global(qos: .userInitiated).async {
+                let workspaceID = HerdrBridge.runningWorkspaceID(for: binary) ?? HerdrBridge.provisionWorkspace(binary: binary)
+                if let workspaceID { HerdrBridge.focusWorkspace(workspaceID) }
+                Self.revealAgentWorkspace()
+            }
+        }
+    }
+
+    /// Switches to the dedicated AeroSpace workspace and opens Ghostty there
+    /// only if nothing is already showing it — so reattaching to an agent
+    /// that's already visible never spawns a redundant window.
+    nonisolated private static func revealAgentWorkspace() {
+        guard let aerospace = HotkeyBindings.aeroSpaceExecutableURL() else { return }
+        _ = HotkeyBindings.run(aerospace, arguments: ["workspace", "agent"])
+        guard !HotkeyBindings.ghosttyWindowExists(inWorkspace: "agent") else { return }
+        DispatchQueue.main.async {
+            SuperMenuController.shared.launchPackageCommand(arguments: [
+                "--wait-after-command=true", "--quit-after-last-window-closed=true",
+                "-e", "/bin/bash", "-c",
+                "export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:$PATH; exec herdr",
+            ])
         }
     }
 
@@ -819,10 +846,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         var steps: [String] = []
         if !CodingAgent.herdrInstalled { steps.append("brew install herdr") }
         if !agent.isInstalled { steps.append("brew install \(agent.brewKind == .cask ? "--cask " : "")\(agent.brewToken)") }
-        steps.append("herdr \(agent.binaryName!)")
+        steps.append("start \(agent.title) in a herdr session")
         let alert = NSAlert()
         alert.messageText = "Launch \(agent.title)?"
-        alert.informativeText = "A new Ghostty window in its own AeroSpace workspace will run:\n\n\(steps.joined(separator: "\n"))\n\nHomebrew may install dependencies or ask for your password."
+        alert.informativeText = "A new Ghostty window in its own AeroSpace workspace will:\n\n\(steps.joined(separator: "\n"))\n\nHomebrew may install dependencies or ask for your password."
         alert.addButton(withTitle: "Cancel")
         alert.addButton(withTitle: "Install & Launch")
         guard alert.runModal() == .alertSecondButtonReturn else {
@@ -833,10 +860,22 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         launchTerminalAgent(agent)
     }
 
-    /// Ensures herdr and the agent binary are present, then hands off to herdr
-    /// in a dedicated Ghostty window inside its own AeroSpace workspace. The
-    /// script is idempotent, so this also serves as the "already installed"
-    /// launch path — no separate install-then-launch chaining is needed.
+    /// Only reached via `confirmAndInstallTerminalAgent`, after the user has
+    /// confirmed something needs installing — so unlike the ordinary
+    /// already-installed launch path (`activateAgent`, which provisions
+    /// headlessly and reuses an existing Ghostty window when one already
+    /// shows the agent workspace), this always opens a fresh Ghostty window:
+    /// the user was told a new window would show install progress and any
+    /// password prompt, so it should actually appear even if another agent's
+    /// window is already open elsewhere in the AeroSpace workspace.
+    ///
+    /// Verified live against herdr 0.8.2: a per-launch `herdr server --session
+    /// <name> &` backgrounded under Ghostty's own pty dies with the window
+    /// (SIGHUP), which is why this targets herdr's shared *default* session —
+    /// the one `brew services start herdr` (a real launchd daemon, exactly
+    /// like this repo already runs SketchyBar as) keeps alive independently of
+    /// any terminal window — with one labeled workspace per agent kind rather
+    /// than a session per kind that would need its own service supervision.
     private func launchTerminalAgent(_ agent: CodingAgent) {
         guard let brew = HomebrewInventory.executable, let binary = agent.binaryName else {
             showPackageLaunchError("Homebrew is required. Install it from brew.sh, then try again.")
@@ -848,7 +887,16 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         export PATH=\(prefix)/bin:\(prefix)/sbin:$PATH
         command -v herdr >/dev/null 2>&1 || brew install herdr
         command -v \(binary) >/dev/null 2>&1 || brew install \(installFlag)\(agent.brewToken)
-        exec herdr \(binary)
+        brew services start herdr >/dev/null 2>&1
+        created=$(herdr workspace create --label \(binary) --cwd "$HOME" 2>/dev/null)
+        ws=$(printf '%s' "$created" | grep -o '"workspace_id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        pane=$(printf '%s' "$created" | grep -o '"pane_id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        for _ in $(seq 1 12); do
+          herdr agent start \(binary) --kind \(binary) --pane "$pane" >/dev/null 2>&1 && break
+          sleep 0.2
+        done
+        herdr workspace focus "$ws" >/dev/null 2>&1
+        exec herdr
         """
         let arguments = ["--wait-after-command=true", "--quit-after-last-window-closed=true",
                           "-e", "/bin/bash", "-c", script]
@@ -985,7 +1033,9 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
         byID = installedApps
         help = [MenuEntry(title: "Open shortcut help", detail: "Hyper + ?", destination: .help),
-                MenuEntry(title: "Open app launcher", detail: "Hyper + Space", destination: .home)]
+                MenuEntry(title: "Open app launcher", detail: "Hyper + Space", destination: .home),
+                MenuEntry(title: "Launch default agent", detail: "Hyper + A", destination: .agents),
+                MenuEntry(title: "Open Agents", detail: "Hyper + Shift + A", destination: .agents)]
         for (key, id) in config.bindings.sorted(by: { $0.key < $1.key }) {
             let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)
             let name = url.map { FileManager.default.displayName(atPath: $0.path)
