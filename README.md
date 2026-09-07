@@ -1,0 +1,217 @@
+# Omaccy
+
+A keyboard-centric, tiling macOS setup — an Omakub-inspired "rice" that combines
+best-of-breed tools with a thin glue layer of configs and one native app.
+
+| Component | What it is |
+| --- | --- |
+| **Omaccy Hyperkey** | Our Swift app: Caps Lock → Hyper (⌘⌃⌥), app launch shortcuts, and the Hyper+Space palette |
+| **AeroSpace** | i3-style tree tiling with its own workspaces (no SIP changes) |
+| **SketchyBar** | Menu-bar replacement, skinned to match the active theme |
+| **Ghostty** | Default terminal, themed alongside the bar and the palette |
+| **herdr** | Persistent multiplexer that keeps terminal coding agents alive |
+
+Everything is installed from a checkout of this repository, with a clean
+uninstall that restores the configs and macOS settings it displaced.
+
+## Requirements
+
+- macOS 13 or newer (Apple Silicon or Intel)
+- Command Line Tools for Xcode (only for development; `swift` must be on PATH)
+- Homebrew — installed automatically if missing
+
+## Install
+
+```bash
+git clone https://github.com/nick-friedrich/omaccy.git && cd omaccy && bash scripts/install.sh
+```
+
+Keep the checkout: the installed configs are symlinked into it, and
+`scripts/update.sh` and `scripts/uninstall.sh` run from there.
+
+The script prints exactly what it will do and waits for a `y`/`yes`. Nothing on
+the system changes before that confirmation. It then:
+
+- installs any missing dependencies (Ghostty, AeroSpace, SketchyBar, herdr, and
+  the Inter / JetBrains Mono / Lora fonts), recording which ones it installed
+  so uninstall leaves pre-existing ones alone;
+- downloads the signed, notarized **Omaccy Hyperkey** release, installs it to
+  `~/Applications/Omaccy Hyperkey.app`, and registers its LaunchAgent;
+- backs up any configs it displaces into a timestamped directory under
+  `~/.omaccy/backups/`, then symlinks Omaccy's own;
+- hides the native menu bar, disables the conflicting Mission Control arrow
+  shortcuts, enables window grouping, and starts AeroSpace and SketchyBar.
+
+macOS will ask to grant **Accessibility** access to Omaccy Hyperkey on first
+launch; the keyboard engine does not work until you approve it.
+
+`OMACCY_ASSUME_YES=1` bypasses every confirmation for unattended runs.
+
+### Update
+
+```bash
+bash scripts/update.sh
+```
+
+Reruns the installation sequence: refetches the latest Hyperkey release,
+refreshes defaults that you have not edited, and keeps the ones you have.
+It does **not** `git pull` — run that yourself first — and it does not upgrade
+already-installed Homebrew packages.
+
+### Uninstall
+
+```bash
+bash scripts/uninstall.sh
+```
+
+Stops the services, restores Caps Lock, the backed-up configs, and the changed
+macOS settings, and asks separately before removing each dependency that Omaccy
+installed. Packages you installed yourself — including anything installed
+through the launcher's Install collection — are left in place.
+
+## Using it
+
+Hyper is **Caps Lock** (Command+Control+Option, deliberately without Shift).
+
+| Shortcut | Action |
+| --- | --- |
+| `Hyper+Space` | Palette: Apps, Agents, Install, Omaccy, Help, System |
+| `Hyper+?` | Searchable shortcut help, built from your live config |
+| `Hyper+A` / `Hyper+Shift+A` | Launch your default agent / choose one |
+| `Hyper+H/J/K/L` | Focus window left/down/up/right (`+Shift` moves it) |
+| `Hyper+U` / `Hyper+I` | Shrink / grow the focused window (hold to repeat) |
+| `Hyper+1…9` | Switch workspace (`+Shift` moves the window there) |
+| `Hyper+T`, `+B`, `+F`, `+R`, `+C` | Ghostty, Chrome, Finder, Reminders, Codex |
+
+App bindings live in `~/.config/omaccy/hyperkey.toml`; the tiling shortcuts are
+plain AeroSpace bindings in `~/.config/aerospace/aerospace.toml`. Both are
+symlinks into `~/.omaccy/config/`, which is where your edits belong — updates
+preserve them.
+
+Themes and fonts are shared by SketchyBar, the palette, and Ghostty:
+
+```bash
+bash scripts/theme.sh list && bash scripts/theme.sh set tokyo-night
+bash scripts/font.sh set jetbrains-mono
+```
+
+Both are also available under the palette's Settings, which previews changes
+live.
+
+## Development
+
+Read [AGENTS.md](AGENTS.md) first, then [.ai/architecture.md](.ai/architecture.md)
+for the repository map and [.ai/development.md](.ai/development.md) for the
+lifecycle invariants that setup changes must preserve.
+
+### Shell changes
+
+Setup logic lives in `scripts/`, with reusable behavior in `scripts/lib/`
+grouped by responsibility. Target the macOS system Bash (3.2). From the
+repository root:
+
+```bash
+for script in scripts/*.sh scripts/lib/*.sh tests/*.sh; do bash -n "$script" || exit; done
+bash tests/scripts-smoke.sh
+git diff --check
+```
+
+The smoke checks run against temporary directories and only exercise
+cancellation in the real entry points — they install nothing and touch no
+services. A full install/uninstall changes your actual desktop, so treat it as a
+deliberate manual integration check rather than a test.
+
+### Hyperkey app changes
+
+```bash
+swift test --package-path apps/hyperkey
+swift build -c release --package-path apps/hyperkey
+```
+
+To preview the palette UI without capturing keyboards or remapping Caps Lock:
+
+```bash
+swift build --package-path apps/hyperkey
+apps/hyperkey/.build/debug/omaccy-hyperkey --preview-menu
+```
+
+`install.sh` never builds the Swift app — it downloads the published release. To
+install the app from your working tree instead:
+
+```bash
+OMACCY_HYPERKEY_BUILD_LOCAL=1 bash scripts/install.sh
+```
+
+That build is signed with a Developer ID Application certificate when your
+keychain holds one, and ad-hoc signed otherwise. Prefer Developer ID locally if
+you can: its designated requirement binds to the bundle ID and team rather than
+the binary's hash, so one Accessibility grant covers every rebuild *and* the
+released app. Ad-hoc builds take a new code identity whenever the executable
+changes and must be granted again each time. `OMACCY_SIGNING_IDENTITY` pins a
+certificate by hash or name, or forces ad-hoc signing with `-`. See
+[.ai/development.md](.ai/development.md) for the keychain prompt this raises the
+first time.
+
+Script-only changes need no rebuild.
+
+## Releases
+
+**A release is the Omaccy Hyperkey app only — not the whole project.**
+
+The rest of Omaccy (the AeroSpace, SketchyBar, Ghostty, and Hyperkey configs,
+and the setup scripts themselves) is distributed as this Git repository: you get
+it by cloning, and you update it with `git pull` followed by
+`bash scripts/update.sh`. There is no release artifact, no Homebrew tap, and no
+hosted one-line installer for that part.
+
+The app is the exception because it is a native binary that needs Apple's
+signing chain to run without warnings and to hold onto its Accessibility grant.
+Pushing a `v*` tag runs [.github/workflows/release.yml](.github/workflows/release.yml),
+which builds a universal (arm64 + x86_64) binary, stamps the version from the
+tag, Developer ID-signs it, notarizes and staples it, verifies the result with
+`stapler validate` and `spctl`, and publishes two assets:
+
+```
+omaccy-hyperkey-<version>.zip
+omaccy-hyperkey-<version>.zip.sha256
+```
+
+```bash
+git tag v0.3.0 && git push origin v0.3.0
+```
+
+`scripts/lib/hyperkey.sh` reads the latest release from the GitHub API, verifies
+the archive against that checksum sidecar, and installs the bundle — so both the
+asset filename pattern and the bare-hex checksum format are load-bearing. Bump
+`Constants.version` and `Info.plist` for development builds; CI stamps the real
+value from the tag.
+
+Running the workflow manually (Actions → Release Hyperkey → Run workflow)
+performs the identical build, signing, and notarization chain but skips
+publishing, which is gated on a tag. Use it to verify credentials without
+cutting a release.
+
+[.ai/releasing.md](.ai/releasing.md) documents the required repository secrets,
+certificate rotation, and troubleshooting.
+
+## Repository layout
+
+| Path | Contents |
+| --- | --- |
+| `apps/hyperkey/` | The Swift package: keyboard engine, launcher, and palette |
+| `config/` | Shipped defaults for Hyperkey, AeroSpace, Ghostty, SketchyBar, LaunchAgent |
+| `scripts/` | Install, update, uninstall entry points plus `lib/` and the theme, font, and AeroSpace helpers |
+| `tests/` | Isolated shell lifecycle checks |
+| `.ai/` | Architecture, development, and release documentation |
+| `plan.md` | Historical decisions and future ideas — not a statement of what is implemented |
+
+## Credits and license
+
+Omaccy is MIT licensed; see [LICENSE](LICENSE).
+
+The keyboard engine is a fork of
+[`feedthejim/hyperkey`](https://github.com/feedthejim/hyperkey) (MIT); see
+[apps/hyperkey/LICENSE](apps/hyperkey/LICENSE) and
+[apps/hyperkey/UPSTREAM_NOTES.md](apps/hyperkey/UPSTREAM_NOTES.md). AeroSpace,
+SketchyBar, Ghostty, and herdr are separate upstream projects installed through
+Homebrew.

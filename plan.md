@@ -40,7 +40,7 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 
 ### 2. App launching
 - **Hyper + letter** → launch or focus a bound app across workspaces
-  (Hyper+B → Chrome, Hyper+C → ChatGPT, Hyper+F → Finder,
+  (Hyper+B → Chrome, Hyper+C → Codex, Hyper+F → Finder,
   Hyper+R → Reminders, Hyper+T → Ghostty).
 - **Hyper + Space** → open the super menu palette for everything else.
 - Bindings are user-editable in our TOML config.
@@ -92,7 +92,7 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 - [x] **Hyperkey engine vendored:** forked `feedthejim/hyperkey` at `532f2b3`, removed Shift from `Constants.hyperFlags`, added symlinked TOML config and LaunchAgent startup, and retained the Accessibility onboarding prompt.
 - [x] **Global app bindings:** Hyper chords can launch or focus bundle identifiers
   across workspaces from `hyperkey.toml`; defaults map Hyper+B to Chrome,
-  Hyper+C to ChatGPT, Hyper+F to Finder, Hyper+R to Reminders, and Hyper+T to Ghostty.
+  Hyper+C to Codex, Hyper+F to Finder, Hyper+R to Reminders, and Hyper+T to Ghostty.
 - [x] **Ghostty config wired:** the active config is deployed through `~/.omaccy/config`, symlinked into Ghostty's Application Support directory, and restored safely on uninstall.
 - [x] **AeroSpace tiling wired:** an initial Hyper-driven i3-style config is deployed through `~/.omaccy/config`, AeroSpace is installed only when missing, its live config uses the backup-safe symlink lifecycle, and `scripts/aerospace-control.sh` provides start/stop/toggle commands.
 - [x] **Custom menu bar wired:** SketchyBar is managed with `brew services`, its backup-safe config shows AeroSpace workspaces, the front app, tiling availability, Caffeinate state, battery, and time, and workspace changes update immediately.
