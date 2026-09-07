@@ -78,7 +78,8 @@ main() {
   rm -rf "$APP_DIR"
   rm -f "$OMACCY_DIR/hyperkey-release" \
     "$OMACCY_DIR/hyperkey-checkout.txt" \
-    "$OMACCY_DIR/hyperkey-build.sha256"
+    "$OMACCY_DIR/hyperkey-build.sha256" \
+    "$OMACCY_DIR/hyperkey-signing-mode"
   rm -f "$CONF_DIR/launchagents/com.omaccy.hyperkey.plist" \
     "$CONF_DIR/hyperkey/hyperkey.toml" \
     "$CONF_DIR/ghostty/config.ghostty" \

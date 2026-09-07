@@ -18,6 +18,7 @@
 | `scripts/lib/hyperkey.sh` | Fetches the signed, notarized release build by default (local Swift build under `OMACCY_HYPERKEY_BUILD_LOCAL=1`), plus launch |
 | `tests/scripts-smoke.sh` | Isolated shell lifecycle checks |
 | `.github/workflows/release.yml` | Builds, Developer ID-signs, notarizes, and publishes the hyperkey app to GitHub Releases on `v*` tags |
+| `.ai/releasing.md` | Release pipeline, signing secrets, and certificate rotation |
 
 ## Installed state
 
@@ -32,6 +33,9 @@
   defaults while retaining customized files.
 - Dependency markers distinguish packages installed by Omaccy from packages
   already present. `*.original` files preserve macOS preference values.
+- `~/.omaccy/hyperkey-signing-mode` records whether the installed app was
+  ad-hoc or Developer ID signed, so Accessibility state is reset only when
+  that identity actually changes.
 - The app is installed at `~/Applications/Omaccy Hyperkey.app`; its LaunchAgent
   lives at `~/Library/LaunchAgents/com.omaccy.hyperkey.plist`.
 - `~/.omaccy/hyperkey-release` records the installed release tag so reinstalls

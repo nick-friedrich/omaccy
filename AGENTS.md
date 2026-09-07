@@ -3,6 +3,7 @@
 Omaccy combines a native Hyperkey app with AeroSpace, SketchyBar, and Ghostty.
 Read [.ai/architecture.md](.ai/architecture.md) for the repository map and
 [.ai/development.md](.ai/development.md) for setup lifecycle rules and checks.
+[.ai/releasing.md](.ai/releasing.md) covers the signed release pipeline.
 `plan.md` contains historical decisions and future ideas; it is not a guarantee
 that a feature or distribution method is implemented.
 

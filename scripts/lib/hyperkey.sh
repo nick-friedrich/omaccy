@@ -5,6 +5,23 @@
 
 OMACCY_RELEASE_REPO="nick-friedrich/omaccy"
 
+# Local builds are ad-hoc signed unless a Developer ID Application identity is
+# available in the keychain. Developer ID signing keeps one code identity across
+# rebuilds: the designated requirement is the bundle identifier plus the team,
+# not the binary's hash, so the Accessibility grant survives every rebuild and
+# matches the identity of the released app. Set OMACCY_SIGNING_IDENTITY to a
+# certificate hash or name to pick one, or to "-" to force ad-hoc signing.
+resolve_hyperkey_signing_identity() {
+  if [[ -n "${OMACCY_SIGNING_IDENTITY:-}" ]]; then
+    printf '%s' "$OMACCY_SIGNING_IDENTITY"
+    return
+  fi
+  # Select by certificate hash: a keychain can hold several certificates
+  # sharing one Developer ID name, which codesign rejects as ambiguous.
+  security find-identity -v -p codesigning 2>/dev/null \
+    | awk '/Developer ID Application/ { print $2; exit }'
+}
+
 # Default path: download the Developer ID-signed, notarized app CI publishes
 # for tagged releases. Set OMACCY_HYPERKEY_BUILD_LOCAL=1 to build from the
 # current checkout instead, for Swift changes not yet released.
@@ -23,8 +40,11 @@ install_hyperkey_app_from_source() {
   local built_binary="$REPO_ROOT/apps/hyperkey/.build/release/omaccy-hyperkey"
   local installed_binary="$APP_DIR/Contents/MacOS/omaccy-hyperkey"
   local build_stamp="$OMACCY_DIR/hyperkey-build.sha256"
+  local mode_stamp="$OMACCY_DIR/hyperkey-signing-mode"
   local built_hash
   local binary_changed=0
+  local identity signing_mode
+  local previous_mode=""
 
   echo "Building Omaccy Hyperkey from source (OMACCY_HYPERKEY_BUILD_LOCAL=1)..."
   swift build -c release --package-path "$REPO_ROOT/apps/hyperkey"
@@ -42,18 +62,40 @@ install_hyperkey_app_from_source() {
   mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
   cp "$built_binary" "$installed_binary"
   cp "$REPO_ROOT/apps/hyperkey/Info.plist" "$APP_DIR/Contents/Info.plist"
-  codesign --force --sign - --identifier com.omaccy.hyperkey "$APP_DIR"
+  identity="$(resolve_hyperkey_signing_identity)"
+  if [[ -z "$identity" || "$identity" == "-" ]]; then
+    signing_mode="adhoc"
+    codesign --force --sign - --identifier com.omaccy.hyperkey "$APP_DIR"
+  else
+    signing_mode="developer-id"
+    # --timestamp=none keeps rebuilds fast and working offline; a trusted
+    # timestamp matters for distribution, which the release workflow handles.
+    codesign --force --options runtime --timestamp=none \
+      --sign "$identity" --identifier com.omaccy.hyperkey "$APP_DIR"
+  fi
+  [[ -f "$mode_stamp" ]] && previous_mode="$(cat "$mode_stamp")"
   printf '%s\n' "$built_hash" > "$build_stamp"
-  if [[ "$binary_changed" == "1" ]]; then
-    # Ad-hoc local builds have a new code hash; clear stale TCC state only when
-    # the executable actually changed. Config-only updates keep their grant.
+  printf '%s\n' "$signing_mode" > "$mode_stamp"
+
+  # Ad-hoc builds get a new code identity whenever the executable changes, so
+  # their TCC entry goes stale. A Developer ID identity only changes when the
+  # signing mode itself changes. Config-only updates keep their grant either way.
+  if [[ "$signing_mode" != "$previous_mode" ]] \
+    || [[ "$signing_mode" == "adhoc" && "$binary_changed" == "1" ]]; then
     tccutil reset Accessibility com.omaccy.hyperkey 2>/dev/null || true
+  fi
+  if [[ "$signing_mode" == "developer-id" ]]; then
+    echo "Signed with Developer ID; the Accessibility grant survives rebuilds."
+  else
+    echo "Ad-hoc signed; Accessibility must be granted again whenever the binary changes."
   fi
   echo "Installed → $APP_DIR"
 }
 
 install_hyperkey_app_from_release() {
   local installed_tag_file="$OMACCY_DIR/hyperkey-release"
+  local mode_stamp="$OMACCY_DIR/hyperkey-signing-mode"
+  local previous_mode=""
   local release_json tag_name zip_url sha_url
 
   echo "Checking latest Omaccy Hyperkey release..."
@@ -106,6 +148,15 @@ install_hyperkey_app_from_release() {
   rm -rf "$tmp_dir"
   printf '%s' "$tag_name" > "$installed_tag_file"
   rm -f "$OMACCY_DIR/hyperkey-build.sha256"
+
+  # Released builds carry the same team-scoped identity as a Developer
+  # ID-signed local build, so only a previous ad-hoc build leaves a stale
+  # TCC entry behind.
+  [[ -f "$mode_stamp" ]] && previous_mode="$(cat "$mode_stamp")"
+  printf 'developer-id\n' > "$mode_stamp"
+  if [[ "$previous_mode" != "developer-id" ]]; then
+    tccutil reset Accessibility com.omaccy.hyperkey 2>/dev/null || true
+  fi
   echo "Installed Omaccy Hyperkey $tag_name → $APP_DIR"
 }
 

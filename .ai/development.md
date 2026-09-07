@@ -48,30 +48,43 @@ Script-only changes do not require rebuilding the Swift app.
 
 `install.sh` fetches the latest Developer ID-signed, notarized release by
 default; it never rebuilds the Swift app unless `OMACCY_HYPERKEY_BUILD_LOCAL=1`
-is set. To test unreleased Swift changes end-to-end, run
-`OMACCY_HYPERKEY_BUILD_LOCAL=1 bash scripts/install.sh`, which builds from the
-current checkout, ad-hoc signs it, and resets Accessibility state only when the
-built binary's hash changes — retain that distinction when modifying app
-deployment. Tagging and pushing `v*` triggers `.github/workflows/release.yml`,
-which builds, signs, notarizes, staples, and publishes the app as a GitHub
-release asset alongside a `.sha256` checksum file; both the zip filename
-pattern (`omaccy-hyperkey-*.zip[.sha256]`) and the checksum format (a bare
-hex digest) are load-bearing for `scripts/lib/hyperkey.sh`'s parsing.
+is set. To build and install the current checkout instead:
 
-Released builds are universal (`--arch arm64 --arch x86_64`, output under
-`.build/apple/Products/Release/`) because Omaccy supports macOS 13+ and the
-runner is arm64. The version is stamped from the tag into `Constants.swift`
-before the build and into the bundle's `Info.plist` when it is assembled.
-Signing uses `--options runtime --timestamp`, both required for notarization,
-and selects the identity by certificate hash rather than name: a keychain can
-hold several certificates sharing one Developer ID name, which `codesign`
-rejects as ambiguous. The temporary keychain uses a generated password and is
-deleted in an `always()` step.
+```sh
+OMACCY_HYPERKEY_BUILD_LOCAL=1 bash scripts/install.sh
+```
 
-Running the workflow manually (`workflow_dispatch`) performs the whole build,
-signing, and notarization chain but skips publishing, so credentials can be
-verified without cutting a release. Required repository secrets:
-`APPLE_CERTIFICATE_P12` (base64 of a `.p12` holding the Developer ID
-Application certificate and its private key), `APPLE_CERTIFICATE_PASSWORD`,
-`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` (an app-specific password), and
-`APPLE_TEAM_ID`.
+That build is signed with a Developer ID Application identity when the keychain
+holds one, and ad-hoc signed otherwise. Signing locally with Developer ID is
+worth the setup because the designated requirement is the bundle identifier plus
+the team rather than the binary's hash, so a single Accessibility grant covers
+every rebuild and the released app as well; ad-hoc builds take a new code
+identity whenever the executable changes and have to be granted again.
+Installation records which mode was used in `~/.omaccy/hyperkey-signing-mode`
+and resets Accessibility state only when that mode changes, or when an ad-hoc
+binary changes. Retain that distinction when modifying app deployment.
+
+The first local Developer ID signature on a machine raises a keychain
+authorization dialog asking whether `codesign` may use the private key, and
+setup blocks until it is answered — choosing "Always Allow" adds `codesign` to
+the key's ACL so later builds are silent, whereas "Allow" authorizes only that
+one signature. It can also be granted ahead of time:
+
+```sh
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+  -k "$(read -rs -p 'login password: ' p; echo "$p")" ~/Library/Keychains/login.keychain-db
+```
+
+`OMACCY_SIGNING_IDENTITY` overrides the choice: a certificate hash or name pins
+one, and `-` forces ad-hoc signing. Detection reads
+`security find-identity -v -p codesigning` and selects by hash, because a
+keychain can hold several certificates sharing one Developer ID name, which
+`codesign` rejects as ambiguous rather than resolving. Local signing passes
+`--timestamp=none` so rebuilds stay fast and work offline; a trusted timestamp
+matters for distribution, which the release workflow handles.
+
+Tagging and pushing `v*` triggers `.github/workflows/release.yml`. The asset
+filename pattern (`omaccy-hyperkey-*.zip[.sha256]`) and the checksum format (a
+bare hex digest) are load-bearing for `scripts/lib/hyperkey.sh`'s parsing. See
+[releasing.md](releasing.md) for the pipeline, its repository secrets,
+certificate rotation, and troubleshooting.
