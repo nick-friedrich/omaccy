@@ -1,8 +1,13 @@
 name: Release Hyperkey
 
+# Tag pushes build, sign, notarize, and publish. A manual run does everything
+# except publish, so signing and notarization credentials can be verified
+# without cutting a release.
+
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,55 +20,109 @@ jobs:
   build:
     name: Build, sign, and notarize
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
-      - name: Derive version from tag
+      - name: Check release credentials
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          for name in APPLE_CERTIFICATE_P12 APPLE_CERTIFICATE_PASSWORD APPLE_ID \
+                      APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            eval "value=\$$name"
+            [ -n "$value" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "Missing repository secrets:$missing" >&2
+            exit 1
+          fi
+
+      - name: Derive version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/hyperkey/Info.plist)"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building version $version"
+
+      - name: Stamp version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Constants.version is compiled in, so it has to be stamped before the
+          # build; the bundle's Info.plist is stamped when it is assembled.
+          sed -i '' -E "s/(static let version = \")[^\"]*(\")/\1$VERSION\2/" \
+            apps/hyperkey/Sources/hyperkey/Constants.swift
+          grep -n 'static let version' apps/hyperkey/Sources/hyperkey/Constants.swift
 
       - name: Run Swift package tests
         run: swift test --package-path apps/hyperkey
 
-      - name: Build release binary
-        run: swift build -c release --package-path apps/hyperkey
+      - name: Build universal release binary
+        run: |
+          # Omaccy supports macOS 13+, which includes Intel Macs; the runner is
+          # arm64, so both slices have to be requested explicitly.
+          swift build -c release --arch arm64 --arch x86_64 --package-path apps/hyperkey
+          lipo -info apps/hyperkey/.build/apple/Products/Release/omaccy-hyperkey
 
       - name: Assemble app bundle
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           APP="$RUNNER_TEMP/Omaccy Hyperkey.app"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-          cp apps/hyperkey/.build/release/omaccy-hyperkey "$APP/Contents/MacOS/omaccy-hyperkey"
+          cp apps/hyperkey/.build/apple/Products/Release/omaccy-hyperkey "$APP/Contents/MacOS/omaccy-hyperkey"
           cp apps/hyperkey/Info.plist "$APP/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.version.outputs.version }}" "$APP/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
           echo "APP_PATH=$APP" >> "$GITHUB_ENV"
 
       - name: Import Apple signing certificate
         env:
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
           CERT_PATH="$RUNNER_TEMP/certificate.p12"
-          echo "$APPLE_CERTIFICATE_P12" | base64 --decode --output "$CERT_PATH"
+          echo "SIGNING_KEYCHAIN=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+          printf '%s' "$APPLE_CERTIFICATE_P12" | base64 --decode > "$CERT_PATH"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          rm -f "$CERT_PATH"
+
+          # Select by certificate hash: a keychain can hold several certificates
+          # sharing one Developer ID name, which codesign rejects as ambiguous.
+          identity="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | awk '/Developer ID Application/ { print $2; exit }')"
+          [ -n "$identity" ] || { echo "No Developer ID Application identity in the certificate" >&2; exit 1; }
+          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
       - name: Sign app
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" \
-            --identifier com.omaccy.hyperkey "$APP_PATH"
+          codesign --force --timestamp --options runtime \
+            --sign "$SIGNING_IDENTITY" --identifier com.omaccy.hyperkey "$APP_PATH"
           codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign --display --verbose=4 "$APP_PATH"
 
       - name: Notarize app
         env:
@@ -72,19 +131,39 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/notarize.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+
+          set +e
+          result="$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --wait --timeout 30m --output-format json)"
+          set -e
+          echo "$result"
+
+          id="$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')"
+          status="$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
+          if [ "$status" != "Accepted" ]; then
+            echo "Notarization status: ${status:-unknown}" >&2
+            [ -n "$id" ] && xcrun notarytool log "$id" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" >&2
+            exit 1
+          fi
+
           xcrun stapler staple "$APP_PATH"
+          xcrun stapler validate "$APP_PATH"
+          spctl --assess --type exec --verbose=4 "$APP_PATH"
 
       - name: Package release asset
         run: |
           mkdir -p dist
           ASSET="dist/omaccy-hyperkey-${{ steps.version.outputs.version }}.zip"
           ditto -c -k --keepParent "$APP_PATH" "$ASSET"
+          # install.sh downloads this sidecar to verify the archive.
           shasum -a 256 "$ASSET" | awk '{print $1}' > "$ASSET.sha256"
+          cat "$ASSET.sha256"
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -93,9 +172,16 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          security list-keychains -d user -s login.keychain-db || true
+          [ -n "${SIGNING_KEYCHAIN:-}" ] && security delete-keychain "$SIGNING_KEYCHAIN" || true
+
   publish:
     name: Publish GitHub release
     needs: build
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

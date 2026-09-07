@@ -57,3 +57,21 @@ which builds, signs, notarizes, staples, and publishes the app as a GitHub
 release asset alongside a `.sha256` checksum file; both the zip filename
 pattern (`omaccy-hyperkey-*.zip[.sha256]`) and the checksum format (a bare
 hex digest) are load-bearing for `scripts/lib/hyperkey.sh`'s parsing.
+
+Released builds are universal (`--arch arm64 --arch x86_64`, output under
+`.build/apple/Products/Release/`) because Omaccy supports macOS 13+ and the
+runner is arm64. The version is stamped from the tag into `Constants.swift`
+before the build and into the bundle's `Info.plist` when it is assembled.
+Signing uses `--options runtime --timestamp`, both required for notarization,
+and selects the identity by certificate hash rather than name: a keychain can
+hold several certificates sharing one Developer ID name, which `codesign`
+rejects as ambiguous. The temporary keychain uses a generated password and is
+deleted in an `always()` step.
+
+Running the workflow manually (`workflow_dispatch`) performs the whole build,
+signing, and notarization chain but skips publishing, so credentials can be
+verified without cutting a release. Required repository secrets:
+`APPLE_CERTIFICATE_P12` (base64 of a `.p12` holding the Developer ID
+Application certificate and its private key), `APPLE_CERTIFICATE_PASSWORD`,
+`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` (an app-specific password), and
+`APPLE_TEAM_ID`.
