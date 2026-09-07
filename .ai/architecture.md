@@ -2,7 +2,7 @@
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Install, Omaccy, Help, System & Settings palette |
+| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Agents, Mail, Editors, Install, Omaccy, Help, System & Settings palette |
 | `config/` | Shipped defaults for Hyperkey, AeroSpace, Ghostty, SketchyBar, and the LaunchAgent |
 | `scripts/install.sh` | Confirmation followed by the installation sequence |
 | `scripts/update.sh` | Delegates to installation with the update explanation and one confirmation |
@@ -142,6 +142,30 @@ Install’s Upgrade all action uses a confirmed, fixed `brew upgrade` command in
 Ghostty. Its count comes from the complete installed inventory, independent of
 search results and their limit. Homebrew determines final eligibility, preserving
 pins and its standard cask update rules. No bulk upgrade runs during validation.
+
+`AppCollections.swift` holds the picker collections that are plain app choices:
+Mail (Hyper+E) and Editors (Hyper+C). Each is a fixed list of interchangeable
+apps with one default recorded in `hyperkey.toml` (`default_mail`,
+`default_editor`); ⌘Return sets it, Return launches the selected app through
+the same `focusOrLaunch` path as a configured binding. Agents keep their own
+type because terminal agents run inside herdr rather than launching as apps.
+
+A choice names the bundle it installs as (`Cursor.app`) and reads the real
+bundle identifier off that bundle at use time, rather than carrying a hardcoded
+identifier for an app we do not build: a stale identifier would break launching
+and installed-detection silently, and only the identifiers of apps found in
+`/Applications`, `/System/Applications`, or `~/Applications` are ever needed.
+An uninstalled choice offers its own install route — a confirmed `brew install`
+in Ghostty, matching the Install collection, or the Mac App Store for Xcode,
+which Homebrew does not carry — and the result stays user-managed, so uninstall
+leaves it alone.
+
+The picker chords (Hyper+A, Hyper+E, Hyper+C) yield to an explicit `[bindings]`
+entry on the same letter, unlike Hyper+Space and Hyper+?, which are
+unconditional. The shipped config therefore no longer binds `c`, but a user who
+binds it keeps their app. `Configuration` ignores commented-out lines, which its
+`#`-splitting previously treated as live settings whenever the comment contained
+a `key = value`.
 
 The Agents collection (`AgentCatalog.swift`) lists three terminal agents (Claude
 Code, Codex CLI, opencode) and three desktop apps (Claude, ChatGPT, T3 Code).

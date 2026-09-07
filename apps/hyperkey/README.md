@@ -28,11 +28,13 @@ windows to their AeroSpace workspace. The defaults are:
 ```toml
 [bindings]
 b = "com.google.Chrome"
-c = "com.openai.codex"
 f = "com.apple.finder"
 r = "com.apple.reminders"
 t = "com.mitchellh.ghostty"
 ```
+
+A binding on `a`, `c`, or `e` takes that letter back from the Agents, Editors,
+and Mail collections below, which otherwise own it.
 
 Build it with `swift build -c release --package-path apps/hyperkey` from the
 repository root. Accessibility access is required when the installed app first
@@ -44,15 +46,20 @@ tiling state, a Caffeinate control, battery, and the clock. The canonical
 editable files live under `~/.omaccy/config/sketchybar` and are symlinked into
 `~/.config/sketchybar` with any previous configuration backed up.
 
-The compact Omaccy palette has six sections, **Apps**, **Agents**, **Install**, **Omaccy**, **Help**, and **System**:
+The compact Omaccy palette has eight sections, **Apps**, **Agents**, **Mail**,
+**Editors**, **Install**, **Omaccy**, **Help**, and **System**:
 
 - **Hyper+?** opens searchable shortcut help from your app bindings and AeroSpace
   configuration. Type `?` as usual for your keyboard layout (Shift+/ on US,
   Shift+ß on German).
-- **Hyper+Space** opens the menu with keyboard-selectable Apps, Agents, Install, Omaccy, Help, and System collections. **Hyper+Shift+Space** still toggles
+- **Hyper+Space** opens the menu with keyboard-selectable Apps, Agents, Mail, Editors, Install, Omaccy, Help, and System collections. **Hyper+Shift+Space** still toggles
   floating windows in AeroSpace.
 - **Hyper+A** launches your default agent directly; **Hyper+Shift+A** opens the
   Agents collection to browse or switch it.
+- **Hyper+E** and **Hyper+C** do the same for your mail client and your code
+  editor, with **Hyper+Shift+E** and **Hyper+Shift+C** opening those
+  collections. Each chord steps aside for an explicit `[bindings]` entry on the
+  same letter.
 - Type outside Install and Omaccy to search all apps, shortcuts, and system actions. Use ↑/↓ or Tab/Shift+Tab to
   select, and Return or a single click to browse a collection or launch/focus an
   app (including app shortcuts in Help). Escape clears
@@ -93,6 +100,25 @@ code, refreshes unchanged defaults, preserves customized configs, and restarts
 Omaccy. It does not download newer repository code. Keep the checkout in place;
 if it moves, run `scripts/update.sh` from its new location to restore the menu
 entry’s path.
+
+**Mail** and **Editors** pick one app out of a fixed list and remember it as the
+one their chord launches. Mail offers [Emzero](https://github.com/nick-friedrich/emzero),
+Apple Mail, Mimestream, Thunderbird, Proton Mail, Spark, and Microsoft Outlook;
+Editors offers Cursor, Zed, Visual Studio Code, Xcode, Sublime Text, IntelliJ
+IDEA, and Nova. Return launches the selected app — following its window across
+AeroSpace workspaces like any other binding — and ⌘Return records it as
+`default_mail` or `default_editor` in `hyperkey.toml`. An app that isn't
+installed offers its install route instead: a confirmed `brew install` in
+Ghostty, matching the Install collection, or the Mac App Store for Xcode, which
+Homebrew does not carry. Apple Mail always counts as installed.
+
+Choices are matched to the app bundle they install as (`Cursor.app`) rather than
+to a hardcoded bundle identifier, which is read from the installed app itself.
+A vendor renaming an identifier therefore cannot silently break launching or
+installed-detection. Apps found anywhere other than `/Applications`,
+`/System/Applications`, or `~/Applications` are not detected. Installing from
+these collections leaves the package user-managed, exactly as the Install
+collection does — Omaccy's uninstaller leaves it alone.
 
 **Agents** lists Claude Code, Codex CLI, and opencode (terminal agents) plus the
 Claude, ChatGPT, and T3 Code desktop apps. Return launches an installed agent;

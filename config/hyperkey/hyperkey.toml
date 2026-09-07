@@ -1,11 +1,18 @@
 # Send Escape when Caps Lock is tapped without another key.
 escape_on_tap = false
 
+# Apps launched directly by their own Hyper chord, chosen in the launcher with
+# ⌘Return. Hyper+A, Hyper+E, and Hyper+C launch these; add Shift to browse the
+# collection instead. Unset means the chord opens the collection to pick one.
+# default_agent = "claude-code"
+# default_mail = "emzero"
+# default_editor = "zed"
+
 # Values are macOS application bundle identifiers. A binding launches a closed
-# app or focuses its existing window across workspaces.
+# app or focuses its existing window across workspaces. A binding on a, c, or e
+# takes that letter back from the collection above.
 [bindings]
 b = "com.google.Chrome"
-c = "com.openai.codex"
 f = "com.apple.finder"
 r = "com.apple.reminders"
 t = "com.mitchellh.ghostty"

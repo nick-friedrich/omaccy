@@ -23,7 +23,7 @@ final class MenuTests: XCTestCase {
     func testCategoryBrowsingAndEmptySearch() {
         let apps = [MenuEntry(title: "Finder", detail: "Application")]
         let help = [MenuEntry(title: "Focus left", detail: "Hyper + H")]
-        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .agents, .install, .omaccy, .help, .system, .settings])
+        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .agents, .mail, .editors, .install, .omaccy, .help, .system, .settings])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .apps, apps: apps, help: help).map(\.title), ["Finder"])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .help, apps: apps, help: help).map(\.title), ["Focus left"])
         XCTAssertTrue(MenuCatalog.results(query: "missing", page: .home, apps: apps, help: help).isEmpty)
@@ -38,6 +38,57 @@ final class MenuTests: XCTestCase {
                 let results = MenuCatalog.results(query: query, page: page, apps: [], help: [])
                 XCTAssertEqual(results.compactMap(\.systemAction), [expected])
             }
+        }
+    }
+
+    func testCollectionsListEveryChoiceAndMarkTheDefault() {
+        for collection in AppCollection.allCases {
+            let rows = MenuCatalog.results(query: "", page: collection.page, apps: [], help: [],
+                                           defaultApps: [collection: collection.choices[1].id])
+            XCTAssertEqual(rows.map(\.title), collection.choices.map(\.title))
+            XCTAssertEqual(rows.filter(\.isDefaultChoice).map(\.title), [collection.choices[1].title])
+            // Choices launch or install themselves; they never browse elsewhere.
+            XCTAssertTrue(rows.allSatisfy { $0.destination == nil && $0.choice != nil })
+        }
+    }
+
+    func testCollectionSearchMatchesTitleAndDescription() {
+        let mail = MenuCatalog.results(query: "emzero", page: .mail, apps: [], help: [])
+        XCTAssertEqual(mail.map(\.title), ["Emzero"])
+        let editors = MenuCatalog.results(query: "jetbrains", page: .editors, apps: [], help: [])
+        XCTAssertEqual(editors.map(\.title), ["IntelliJ IDEA"])
+        XCTAssertTrue(MenuCatalog.results(query: "nothing here", page: .mail, apps: [], help: []).isEmpty)
+    }
+
+    func testCollectionChoicesInstallFromExactlyOneSource() {
+        for choice in AppCollection.allCases.flatMap(\.choices) {
+            XCTAssertTrue(choice.appName.hasSuffix(".app"), choice.id)
+            switch choice.source {
+            case .bundled:
+                XCTAssertNil(choice.package, choice.id)
+                XCTAssertNil(choice.appStoreURL, choice.id)
+            case .homebrew:
+                // A malformed token yields no command, which would strand the row.
+                XCTAssertNotNil(choice.package?.actionCommand, choice.id)
+                XCTAssertNil(choice.appStoreURL, choice.id)
+            case .appStore:
+                XCTAssertNil(choice.package, choice.id)
+                XCTAssertNotNil(choice.appStoreURL, choice.id)
+            }
+        }
+    }
+
+    func testCollectionIdentitiesAndChordsAreDistinct() {
+        let ids = AppCollection.allCases.flatMap { $0.choices.map(\.id) }
+        XCTAssertEqual(Set(ids).count, ids.count)
+        // Chords must resolve to a real key and never collide with each other
+        // or with the agents chord, which is reserved the same way.
+        var chords = ["a"]
+        for collection in AppCollection.allCases {
+            let chord = collection.chord.lowercased()
+            XCTAssertNotNil(KeyNames.virtualKeyCode(for: chord), chord)
+            XCTAssertFalse(chords.contains(chord), chord)
+            chords.append(chord)
         }
     }
 
@@ -121,8 +172,8 @@ final class MenuTests: XCTestCase {
     func testAgentEntriesMarkDefaultAndFilter() {
         let entries = MenuCatalog.agentEntries(matching: "", defaultToken: "codex")
         XCTAssertEqual(entries.map(\.agent), CodingAgent.allCases)
-        XCTAssertEqual(entries.first { $0.agent == .codexCLI }?.isDefaultAgent, true)
-        XCTAssertEqual(entries.first { $0.agent == .claudeCode }?.isDefaultAgent, false)
+        XCTAssertEqual(entries.first { $0.agent == .codexCLI }?.isDefaultChoice, true)
+        XCTAssertEqual(entries.first { $0.agent == .claudeCode }?.isDefaultChoice, false)
         XCTAssertEqual(MenuCatalog.agentEntries(matching: "claude code", defaultToken: nil).map(\.agent), [.claudeCode])
         XCTAssertEqual(MenuCatalog.agentEntries(matching: "chatgpt", defaultToken: nil).map(\.agent), [.chatGPTDesktop])
         XCTAssertTrue(MenuCatalog.agentEntries(matching: "missing-agent", defaultToken: nil).isEmpty)

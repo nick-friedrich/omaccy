@@ -4,6 +4,24 @@ struct Configuration {
     var escapeOnTap: Bool
     var bindings: [String: String]
     var defaultAgent: String? = nil
+    var defaultMail: String? = nil
+    var defaultEditor: String? = nil
+
+    /// The app a picker collection launches directly from its own Hyper chord.
+    subscript(collection: AppCollection) -> String? {
+        get {
+            switch collection {
+            case .mail: return defaultMail
+            case .editors: return defaultEditor
+            }
+        }
+        set {
+            switch collection {
+            case .mail: defaultMail = newValue
+            case .editors: defaultEditor = newValue
+            }
+        }
+    }
 
     static var fileURL: URL {
         if let override = ProcessInfo.processInfo.environment["OMACCY_HYPERKEY_CONFIG"],
@@ -23,8 +41,10 @@ struct Configuration {
         var section = ""
 
         for rawLine in contents.split(whereSeparator: \.isNewline) {
-            let line = rawLine.split(separator: "#", maxSplits: 1).first?
-                .trimmingCharacters(in: .whitespaces) ?? ""
+            // omittingEmptySubsequences would drop the empty piece before a
+            // leading '#', turning a commented-out setting into a live one.
+            let line = rawLine.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+                .first?.trimmingCharacters(in: .whitespaces) ?? ""
             guard !line.isEmpty else { continue }
 
             if line.hasPrefix("["), line.hasSuffix("]") {
@@ -45,6 +65,9 @@ struct Configuration {
                 configuration.escapeOnTap = value.lowercased() == "true"
             } else if key == "default_agent", section.isEmpty {
                 configuration.defaultAgent = value.isEmpty ? nil : value
+            } else if section.isEmpty,
+                      let collection = AppCollection.allCases.first(where: { $0.configKey == key }) {
+                configuration[collection] = value.isEmpty ? nil : value
             }
         }
         return configuration
@@ -57,6 +80,11 @@ struct Configuration {
         if let defaultAgent {
             contents += "\n# Coding agent launched directly by Hyper+A.\n"
             contents += "default_agent = \"\(defaultAgent)\"\n"
+        }
+        for collection in AppCollection.allCases {
+            guard let choice = self[collection] else { continue }
+            contents += "\n# \(collection.itemLabel) launched directly by Hyper+\(collection.chord).\n"
+            contents += "\(collection.configKey) = \"\(choice)\"\n"
         }
         if !bindings.isEmpty {
             contents += "\n# Launch-or-focus application bundle identifiers.\n[bindings]\n"

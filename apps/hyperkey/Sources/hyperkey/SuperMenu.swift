@@ -12,12 +12,16 @@ struct MenuEntry: Sendable {
     var theme: String? = nil
     var font: String? = nil
     var agent: CodingAgent? = nil
-    var isDefaultAgent = false
+    var collection: AppCollection? = nil
+    var choice: AppChoice? = nil
+    /// Marks the agent or app this collection launches from its own chord.
+    var isDefaultChoice = false
 }
 
 enum MenuPage: String, Sendable {
     case home = "Home", apps = "Apps", help = "Help", install = "Install"
     case omaccy = "Omaccy", system = "System", agents = "Agents"
+    case mail = "Mail", editors = "Editors"
     case settings = "Settings", theme = "Theme", font = "Font"
 }
 
@@ -25,6 +29,8 @@ enum MenuCatalog {
     static let categories = [
         MenuEntry(title: "Apps", detail: "Find and open an application", destination: .apps),
         MenuEntry(title: "Agents", detail: "Launch a coding agent in a terminal or its own app", destination: .agents),
+        MenuEntry(title: "Mail", detail: AppCollection.mail.summary, destination: .mail, collection: .mail),
+        MenuEntry(title: "Editors", detail: AppCollection.editors.summary, destination: .editors, collection: .editors),
         MenuEntry(title: "Install", detail: "Search Homebrew apps and command-line tools", destination: .install),
         MenuEntry(title: "Omaccy", detail: "Update Omaccy from your local checkout", destination: .omaccy),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
@@ -41,7 +47,9 @@ enum MenuCatalog {
         MenuEntry(title: $0.title, detail: $0.detail, systemAction: $0)
     }
 
-    static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry], defaultAgent: String? = nil) -> [MenuEntry] {
+    static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry],
+                        defaultAgent: String? = nil,
+                        defaultApps: [AppCollection: String] = [:]) -> [MenuEntry] {
         if page == .install { return [] }
         if page == .omaccy {
             let entry = MenuEntry(title: "Update Omaccy", detail: "Run update.sh from your local checkout · Opens Ghostty", updatesOmaccy: true)
@@ -54,6 +62,9 @@ enum MenuCatalog {
         if page == .theme { return themeEntries(matching: query) }
         if page == .font { return fontEntries(matching: query) }
         if page == .agents { return agentEntries(matching: query, defaultToken: defaultAgent) }
+        if let collection = AppCollection.allCases.first(where: { $0.page == page }) {
+            return choiceEntries(matching: query, in: collection, defaultToken: defaultApps[collection])
+        }
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         if words.isEmpty {
             switch page {
@@ -61,7 +72,7 @@ enum MenuCatalog {
             case .apps: return apps
             case .help: return help
             case .system: return system
-            case .install, .omaccy, .settings, .theme, .font, .agents: return []
+            case .install, .omaccy, .settings, .theme, .font, .agents, .mail, .editors: return []
             }
         }
         // Search always spans the whole menu, even while browsing a category.
@@ -97,7 +108,21 @@ enum MenuCatalog {
                       detail: "\(agent.detail) · \(agent.isInstalled ? "Installed" : "Installs via Homebrew")",
                       bundleID: agent.bundleID,
                       agent: agent,
-                      isDefaultAgent: agent.rawValue == defaultToken)
+                      isDefaultChoice: agent.rawValue == defaultToken)
+        }, searchText: { "\($0.title) \($0.detail)" })
+    }
+
+    /// Rows for a picker collection: every choice, installed or not, so an app
+    /// can be set as the default and installed from the same place.
+    static func choiceEntries(matching query: String, in collection: AppCollection,
+                              defaultToken: String?) -> [MenuEntry] {
+        matching(query, in: collection.choices.map { choice in
+            let status = choice.isInstalled ? "Installed" : (choice.installLabel ?? "Included with macOS")
+            return MenuEntry(title: choice.title,
+                             detail: "\(collection.itemLabel) · \(choice.summary) · \(status)",
+                             collection: collection,
+                             choice: choice,
+                             isDefaultChoice: choice.id == defaultToken)
         }, searchText: { "\($0.title) \($0.detail)" })
     }
 
@@ -156,7 +181,17 @@ private final class PalettePanel: NSPanel {
 @MainActor
 final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate,
                                  NSTableViewDataSource, NSTableViewDelegate {
-    enum Section: Int { case apps, help, agents }
+    enum Section { case apps, help, agents, collection(AppCollection)
+
+        var page: MenuPage {
+            switch self {
+            case .apps: return .home
+            case .help: return .help
+            case .agents: return .agents
+            case let .collection(collection): return collection.page
+            }
+        }
+    }
     static let shared = SuperMenuController()
     private var panel: PalettePanel!
     private let search = NSTextField()
@@ -175,6 +210,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var rows: [MenuEntry] = []
     private var installedApps: [String: MenuEntry] = [:]
     private var defaultAgentToken: String?
+    private var defaultAppTokens: [AppCollection: String] = [:]
     private var indexing = false
     private var packages: [HomebrewPackage] = []
     private var installedPackages: [HomebrewPackage] = []
@@ -194,10 +230,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             panel.setFrameOrigin(frame.origin)
         }
         if panel == nil { build() }
-        if panel.isVisible && openingSection == section { dismiss(); return }
+        if panel.isVisible && openingSection.page == section.page { dismiss(); return }
         if !panel.isVisible { previousApp = NSWorkspace.shared.frontmostApplication }
         openingSection = section
-        page = section == .help ? .help : section == .agents ? .agents : .home
+        page = section.page
         search.stringValue = ""
         reloadCatalog()
         filter()
@@ -334,8 +370,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             case 126: self.select(delta: -1)
             case 48: self.select(delta: event.modifierFlags.contains(.shift) ? -1 : 1)
             case 36, 76:
-                if self.page == .agents, event.modifierFlags.contains(.command) {
-                    self.setDefaultAgent()
+                if self.isPickerPage, event.modifierFlags.contains(.command) {
+                    self.setDefaultChoice()
                 } else if self.page == .install, event.modifierFlags.contains(.command) {
                     self.openSelectedPackageOnHomebrew()
                 } else {
@@ -420,8 +456,13 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         } else if let agent = entry.agent {
             let installed = agent.kind == .terminal ? agent.isInstalled && CodingAgent.herdrInstalled : agent.isInstalled
             actionHint.stringValue = installed
-                ? (entry.isDefaultAgent ? "↵  Launch  ·  Default" : "↵  Launch  ·  ⌘↵  Set default")
+                ? (entry.isDefaultChoice ? "↵  Launch  ·  Default" : "↵  Launch  ·  ⌘↵  Set default")
                 : "↵  Install \(agent.title)…"
+        } else if let choice = entry.choice {
+            actionHint.stringValue = choice.isInstalled
+                ? (entry.isDefaultChoice ? "↵  Launch  ·  Default" : "↵  Launch  ·  ⌘↵  Set default")
+                : choice.appStoreURL != nil ? "↵  Open in the Mac App Store  ·  ⌘↵  Set default"
+                : "↵  Install \(choice.title)…  ·  ⌘↵  Set default"
         } else {
             actionHint.stringValue = entry.destination != nil ? "↵  Browse" : entry.bundleID != nil ? "↵  Open app" : entry.theme != nil ? "↵  Apply theme" : entry.font != nil ? "↵  Apply font" : entry.systemAction != nil ? "↵  " + (entry.systemAction == .sleep ? "Sleep" : "Confirm…") : "Shortcut reference"
         }
@@ -438,7 +479,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let isApp = entry.bundleID != nil
         let describesItself = entry.updatesOmaccy || entry.upgradesAll || entry.package != nil
             || entry.destination != nil || entry.systemAction != nil || entry.theme != nil || entry.font != nil
-            || entry.agent != nil
+            || entry.agent != nil || entry.choice != nil
         let detail = PaletteStyle.label(describesItself && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let icon: NSView
@@ -516,6 +557,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
 
     private static func symbol(for entry: MenuEntry) -> String {
         if let agent = entry.agent { return agent.symbol }
+        if let collection = entry.collection { return collection.symbol }
         if let action = entry.systemAction { return action.symbol }
         if entry.theme != nil || entry.destination == .theme { return "paintpalette" }
         if entry.font != nil || entry.destination == .font { return "textformat" }
@@ -534,7 +576,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private static func keyHint(for entry: MenuEntry, isApp: Bool) -> String {
         if let status = entry.package?.status { return status }
         if entry.theme != nil || entry.font != nil { return entry.detail == "Active" ? "✓" : "" }
-        if entry.agent != nil { return entry.isDefaultAgent ? "✓" : "" }
+        if entry.agent != nil || entry.choice != nil { return entry.isDefaultChoice ? "✓" : "" }
         if entry.detail.hasPrefix("Hyper") { return entry.detail }
         if entry.destination != nil { return "›" }
         let isShortcut = !isApp && entry.systemAction == nil && entry.package == nil
@@ -574,9 +616,9 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     }
 
     @objc private func activateClickedRow() {
-        if page == .agents, NSApp.currentEvent?.modifierFlags.contains(.command) == true {
+        if isPickerPage, NSApp.currentEvent?.modifierFlags.contains(.command) == true {
             table.selectRowIndexes(IndexSet(integer: table.clickedRow), byExtendingSelection: false)
-            setDefaultAgent()
+            setDefaultChoice()
             return
         }
         if page == .install, NSApp.currentEvent?.modifierFlags.contains(.command) == true {
@@ -623,6 +665,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             install(package)
         } else if let agent = entry.agent {
             activateAgent(agent)
+        } else if let choice = entry.choice {
+            activateChoice(choice)
         } else if let action = entry.systemAction {
             performSystemAction(action)
         }
@@ -752,6 +796,84 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             return
         }
         activateAgent(agent)
+    }
+
+    /// Launches the app configured for `collection`, or opens the collection
+    /// to pick one when none is set or the configured app is gone. Like
+    /// `launchDefaultAgent`, this works before the palette has ever opened,
+    /// since the chord can be the very first press.
+    func launchDefaultApp(in collection: AppCollection) {
+        guard let token = Configuration.load()[collection],
+              let choice = collection.choice(id: token), choice.isInstalled else {
+            toggle(section: .collection(collection))
+            return
+        }
+        activateChoice(choice)
+    }
+
+    /// Installed apps launch like any other binding, so they follow their
+    /// window across AeroSpace workspaces. Missing ones offer their install
+    /// route instead of failing silently.
+    private func activateChoice(_ choice: AppChoice) {
+        guard let bundleID = choice.bundleID else {
+            confirmAndInstallChoice(choice)
+            return
+        }
+        panel?.orderOut(nil)
+        HotkeyBindings.focusOrLaunch(bundleIdentifier: bundleID)
+    }
+
+    /// Mirrors `confirmAndInstallDesktopAgent`, including its skipped
+    /// `inventoryReady` gate: a chord press has no reason to have loaded the
+    /// Install page's Homebrew inventory, and a choice's installed state comes
+    /// from a synchronous lookup on disk. App Store apps have no command to
+    /// confirm — opening their store page is the whole action.
+    private func confirmAndInstallChoice(_ choice: AppChoice) {
+        panel?.orderOut(nil)
+        if let storeURL = choice.appStoreURL {
+            NSWorkspace.shared.open(storeURL)
+            return
+        }
+        guard choice.package != nil else {
+            // Bundled apps have no install route; one missing from disk is a
+            // removed or relocated system app, not something to install.
+            showRestoringPanel(title: "\(choice.title) is not installed",
+                               message: "\(choice.appName) was not found in Applications.")
+            return
+        }
+        guard let brew = HomebrewInventory.executable else {
+            showRestoringPanel(title: "Homebrew is required",
+                               message: "Install Homebrew from brew.sh, then try again.")
+            return
+        }
+        guard let package = choice.package, let command = package.actionCommand,
+              let arguments = package.ghosttyArguments(brew: brew) else { return }
+        let alert = NSAlert()
+        alert.messageText = "Install \(choice.title)?"
+        alert.informativeText = "Ghostty will run:\n\n\(command)\n\nHomebrew may install dependencies or ask for your password. Reopen \(pageTitleForChoice(choice)) and press Return again once it finishes."
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Install")
+        guard alert.runModal() == .alertSecondButtonReturn else {
+            panel?.makeKeyAndOrderFront(nil)
+            panel?.makeFirstResponder(search)
+            return
+        }
+        launchPackageCommand(arguments: arguments)
+    }
+
+    private func pageTitleForChoice(_ choice: AppChoice) -> String {
+        AppCollection.allCases.first { $0.choices.contains(choice) }?.title ?? "the collection"
+    }
+
+    /// An alert that hands focus back to the palette, the pattern every
+    /// blocked action here already follows.
+    private func showRestoringPanel(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.runModal()
+        panel?.makeKeyAndOrderFront(nil)
+        panel?.makeFirstResponder(search)
     }
 
     private func activateAgent(_ agent: CodingAgent) {
@@ -913,12 +1035,26 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
     }
 
-    private func setDefaultAgent() {
-        guard rows.indices.contains(table.selectedRow), let agent = rows[table.selectedRow].agent else { return }
+    private var isPickerPage: Bool {
+        page == .agents || AppCollection.allCases.contains { $0.page == page }
+    }
+
+    /// ⌘Return on any picker page records the selected entry as the app that
+    /// collection's own Hyper chord launches directly.
+    private func setDefaultChoice() {
+        guard rows.indices.contains(table.selectedRow) else { return }
+        let entry = rows[table.selectedRow]
         var config = Configuration.load()
-        config.defaultAgent = agent.rawValue
+        if let agent = entry.agent {
+            config.defaultAgent = agent.rawValue
+            defaultAgentToken = agent.rawValue
+        } else if let collection = entry.collection, let choice = entry.choice {
+            config[collection] = choice.id
+            defaultAppTokens[collection] = choice.id
+        } else {
+            return
+        }
         config.save()
-        defaultAgentToken = agent.rawValue
         filter(preservingSelection: true)
     }
 
@@ -981,7 +1117,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             ? HomebrewCatalog.search(search.stringValue, packages: HomebrewInventory.merge(catalog: packages, installed: installedPackages)).map {
                 MenuEntry(title: $0.name, detail: $0.detail, package: $0)
             }
-            : MenuCatalog.results(query: search.stringValue, page: page, apps: apps, help: help, defaultAgent: defaultAgentToken)
+            : MenuCatalog.results(query: search.stringValue, page: page, apps: apps, help: help,
+                                  defaultAgent: defaultAgentToken, defaultApps: defaultAppTokens)
         let upgradeQuery = search.stringValue.lowercased().split(whereSeparator: \.isWhitespace)
         if page == .install && inventoryReady && upgradeQuery.allSatisfy({ "upgrade all update packages".contains($0) }) {
             let available = HomebrewUpgrade.availableCount(installedPackages)
@@ -1010,9 +1147,13 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         emptyState.isHidden = !rows.isEmpty
         tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
         // Home stays compact; long collections and results get room to breathe.
-        // 650 fits all 7 Home rows (211pt of chrome + 7 * 62pt rows ≈ 645pt,
-        // measured directly against the table) without a scrollbar.
-        let height: CGFloat = rows.count <= 3 ? 250 + CGFloat(max(rows.count, 2)) * 64 : 650
+        // Home lists 9 collections: 211pt of chrome + 9 * 62pt rows ≈ 769pt,
+        // measured directly against the table, so it needs no scrollbar on a
+        // display with room for it and is clamped to the screen otherwise.
+        let available = ((panel.screen ?? NSScreen.main)?.visibleFrame.height ?? 900) - 80
+        let height: CGFloat = rows.count <= 3
+            ? 250 + CGFloat(max(rows.count, 2)) * 64
+            : min(769, available)
         var frame = panel.frame
         frame.origin.y += frame.height - height
         frame.size.height = height
@@ -1021,6 +1162,9 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private func reloadCatalog(refreshApps: Bool = true) {
         let config = Configuration.load()
         defaultAgentToken = config.defaultAgent
+        defaultAppTokens = AppCollection.allCases.reduce(into: [:]) { tokens, collection in
+            tokens[collection] = config[collection]
+        }
         var byID: [String: MenuEntry] = [:]
         if refreshApps && !indexing {
             indexing = true
@@ -1036,6 +1180,12 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 MenuEntry(title: "Open app launcher", detail: "Hyper + Space", destination: .home),
                 MenuEntry(title: "Launch default agent", detail: "Hyper + A", destination: .agents),
                 MenuEntry(title: "Open Agents", detail: "Hyper + Shift + A", destination: .agents)]
+        for collection in AppCollection.allCases where config.bindings[collection.chord.lowercased()] == nil {
+            help.append(MenuEntry(title: "Launch default \(collection.itemLabel.lowercased())",
+                                  detail: "Hyper + \(collection.chord)", destination: collection.page))
+            help.append(MenuEntry(title: "Open \(collection.title)",
+                                  detail: "Hyper + Shift + \(collection.chord)", destination: collection.page))
+        }
         for (key, id) in config.bindings.sorted(by: { $0.key < $1.key }) {
             let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)
             let name = url.map { FileManager.default.displayName(atPath: $0.path)

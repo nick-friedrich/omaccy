@@ -28,21 +28,9 @@ enum HotkeyBindings {
         if keyDown {
             // Repeats stay consumed even if modifiers change while held.
             if heldKeys.contains(keyCode) { return true }
-            let help = MenuShortcut.isQuestionMark(keyCode: keyCode, flags: flags)
-            let apps = keyCode == 0x31 && !flags.contains(.maskShift)
-            let agentDefault = keyCode == 0x00 && !flags.contains(.maskShift)
-            let agentMenu = keyCode == 0x00 && flags.contains(.maskShift)
-            if help || apps || agentDefault || agentMenu {
+            if let reserved = reservedChord(keyCode: keyCode, flags: flags) {
                 heldKeys.insert(keyCode)
-                DispatchQueue.main.async {
-                    if agentDefault {
-                        SuperMenuController.shared.launchDefaultAgent()
-                    } else if agentMenu {
-                        SuperMenuController.shared.toggle(section: .agents)
-                    } else {
-                        SuperMenuController.shared.toggle(section: help ? .help : .apps)
-                    }
-                }
+                DispatchQueue.main.async { reserved() }
                 return true
             }
             guard let bundleIdentifier = targets[keyCode] else { return false }
@@ -55,6 +43,34 @@ enum HotkeyBindings {
         }
 
         return heldKeys.remove(keyCode) != nil
+    }
+
+    /// The chords the launcher owns, resolved to the action they perform.
+    ///
+    /// Space and `?` are unconditional. The picker chords (Hyper+A for agents,
+    /// and one per app collection) step aside for an explicit `[bindings]`
+    /// entry on the same letter, so configuring `c = "..."` keeps launching
+    /// that app rather than silently losing the binding to a built-in
+    /// collection.
+    private static func reservedChord(keyCode: UInt16, flags: CGEventFlags) -> (@MainActor () -> Void)? {
+        let shift = flags.contains(.maskShift)
+        if MenuShortcut.isQuestionMark(keyCode: keyCode, flags: flags) {
+            return { SuperMenuController.shared.toggle(section: .help) }
+        }
+        if keyCode == 0x31 && !shift {
+            return { SuperMenuController.shared.toggle(section: .apps) }
+        }
+        guard targets[keyCode] == nil else { return nil }
+        if keyCode == 0x00 {
+            if shift { return { SuperMenuController.shared.toggle(section: .agents) } }
+            return { SuperMenuController.shared.launchDefaultAgent() }
+        }
+        for collection in AppCollection.allCases
+        where KeyNames.virtualKeyCode(for: collection.chord) == keyCode {
+            if shift { return { SuperMenuController.shared.toggle(section: .collection(collection)) } }
+            return { SuperMenuController.shared.launchDefaultApp(in: collection) }
+        }
+        return nil
     }
 
     @MainActor
@@ -170,7 +186,7 @@ enum HotkeyBindings {
     }
 }
 
-private enum KeyNames {
+enum KeyNames {
     private static let codes: [String: UInt16] = [
         "a": 0x00, "b": 0x0B, "c": 0x08, "d": 0x02,
         "e": 0x0E, "f": 0x03, "g": 0x05, "h": 0x04,

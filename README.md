@@ -75,18 +75,29 @@ Hyper is **Caps Lock** (Command+Control+Option, deliberately without Shift).
 
 | Shortcut | Action |
 | --- | --- |
-| `Hyper+Space` | Palette: Apps, Agents, Install, Omaccy, Help, System |
+| `Hyper+Space` | Palette: Apps, Agents, Mail, Editors, Install, Omaccy, Help, System |
 | `Hyper+?` | Searchable shortcut help, built from your live config |
-| `Hyper+A` / `Hyper+Shift+A` | Launch your default agent / choose one |
+| `Hyper+A` / `Hyper+Shift+A` | Launch your default coding agent / choose one |
+| `Hyper+E` / `Hyper+Shift+E` | Launch your mail client / choose one |
+| `Hyper+C` / `Hyper+Shift+C` | Launch your code editor / choose one |
 | `Hyper+H/J/K/L` | Focus window left/down/up/right (`+Shift` moves it) |
 | `Hyper+U` / `Hyper+I` | Shrink / grow the focused window (hold to repeat) |
 | `Hyper+1…9` | Switch workspace (`+Shift` moves the window there) |
-| `Hyper+T`, `+B`, `+F`, `+R`, `+C` | Ghostty, Chrome, Finder, Reminders, Codex |
+| `Hyper+T`, `+B`, `+F`, `+R` | Ghostty, Chrome, Finder, Reminders |
+
+Agents, Mail, and Editors each pick one app from a list and remember it:
+Return launches the selected app, ⌘Return makes it the one that chord launches
+directly, and an app you don't have yet offers to install itself through
+Homebrew (or the Mac App Store, for Xcode). Mail includes
+[Emzero](https://github.com/nick-friedrich/emzero), Apple Mail, Mimestream,
+Thunderbird, Proton Mail, Spark, and Outlook; Editors includes Cursor, Zed, VS
+Code, Xcode, Sublime Text, IntelliJ IDEA, and Nova.
 
 App bindings live in `~/.config/omaccy/hyperkey.toml`; the tiling shortcuts are
 plain AeroSpace bindings in `~/.config/aerospace/aerospace.toml`. Both are
 symlinks into `~/.omaccy/config/`, which is where your edits belong — updates
-preserve them.
+preserve them. Binding `a`, `e`, or `c` there takes that letter back from its
+collection, so a chord you have claimed yourself always wins.
 
 Themes and fonts are shared by SketchyBar, the palette, and Ghostty:
 
