@@ -122,17 +122,21 @@ final class ClipboardMonitorTests: XCTestCase {
     private var monitor: ClipboardMonitor!
     private var pasteboard: NSPasteboard!
 
-    override func setUp() {
-        super.setUp()
+    // XCTest's synchronous setUp/tearDown are nonisolated, so on a @MainActor
+    // fixture they cannot touch the fixture's own stored properties -- the
+    // monitor and the pasteboard here. The async overrides inherit the class's
+    // isolation instead, which is what puts them back on the main actor.
+    override func setUp() async throws {
+        try await super.setUp()
         pasteboard = NSPasteboard(name: NSPasteboard.Name("omaccy-test-\(UUID().uuidString)"))
         monitor = ClipboardMonitor(pasteboardName: pasteboard.name)
         monitor.apply(Configuration(escapeOnTap: false, bindings: [:]))
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         monitor.stop()
         pasteboard.releaseGlobally()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// Polls at 0.5s, and the read hops to a background queue and back, so the
