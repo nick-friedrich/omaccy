@@ -16,6 +16,9 @@ struct MenuEntry: Sendable {
     var choice: AppChoice? = nil
     /// Marks the agent or app this collection launches from its own chord.
     var isDefaultChoice = false
+    /// The Hyper letter this collection answers to, absent when a `[bindings]`
+    /// entry has taken that letter back.
+    var chord: String? = nil
 }
 
 enum MenuPage: String, Sendable {
@@ -26,17 +29,26 @@ enum MenuPage: String, Sendable {
 }
 
 enum MenuCatalog {
-    static let categories = [
+    /// `boundKeys` are the letters claimed by `[bindings]`; a collection whose
+    /// letter is claimed no longer advertises a chord it does not answer to.
+    static func categories(boundKeys: Set<String> = []) -> [MenuEntry] { [
         MenuEntry(title: "Apps", detail: "Find and open an application", destination: .apps),
-        MenuEntry(title: "Agents", detail: "Launch a coding agent in a terminal or its own app", destination: .agents),
-        MenuEntry(title: "Mail", detail: AppCollection.mail.summary, destination: .mail, collection: .mail),
-        MenuEntry(title: "Editors", detail: AppCollection.editors.summary, destination: .editors, collection: .editors),
+        MenuEntry(title: "Agents", detail: "Launch a coding agent in a terminal or its own app", destination: .agents,
+                  chord: chord("A", boundKeys)),
+        MenuEntry(title: "Mail", detail: AppCollection.mail.summary, destination: .mail, collection: .mail,
+                  chord: chord(AppCollection.mail.chord, boundKeys)),
+        MenuEntry(title: "Editors", detail: AppCollection.editors.summary, destination: .editors, collection: .editors,
+                  chord: chord(AppCollection.editors.chord, boundKeys)),
         MenuEntry(title: "Install", detail: "Search Homebrew apps and command-line tools", destination: .install),
         MenuEntry(title: "Omaccy", detail: "Update Omaccy from your local checkout", destination: .omaccy),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
         MenuEntry(title: "System", detail: "Sleep, restart, or shut down your Mac", destination: .system),
         MenuEntry(title: "Settings", detail: "Pick the theme and font for the bar and launcher", destination: .settings),
-    ]
+    ] }
+
+    static func chord(_ letter: String, _ boundKeys: Set<String>) -> String? {
+        boundKeys.contains(letter.lowercased()) ? nil : letter
+    }
 
     static let settings = [
         MenuEntry(title: "Theme", detail: "Color palettes for SketchyBar and this launcher", destination: .theme),
@@ -49,7 +61,8 @@ enum MenuCatalog {
 
     static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry],
                         defaultAgent: String? = nil,
-                        defaultApps: [AppCollection: String] = [:]) -> [MenuEntry] {
+                        defaultApps: [AppCollection: String] = [:],
+                        boundKeys: Set<String> = []) -> [MenuEntry] {
         if page == .install { return [] }
         if page == .omaccy {
             let entry = MenuEntry(title: "Update Omaccy", detail: "Run update.sh from your local checkout · Opens Ghostty", updatesOmaccy: true)
@@ -61,14 +74,17 @@ enum MenuCatalog {
         }
         if page == .theme { return themeEntries(matching: query) }
         if page == .font { return fontEntries(matching: query) }
-        if page == .agents { return agentEntries(matching: query, defaultToken: defaultAgent) }
+        if page == .agents {
+            return agentEntries(matching: query, defaultToken: defaultAgent, chord: chord("A", boundKeys))
+        }
         if let collection = AppCollection.allCases.first(where: { $0.page == page }) {
-            return choiceEntries(matching: query, in: collection, defaultToken: defaultApps[collection])
+            return choiceEntries(matching: query, in: collection, defaultToken: defaultApps[collection],
+                                 chord: chord(collection.chord, boundKeys))
         }
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         if words.isEmpty {
             switch page {
-            case .home: return categories
+            case .home: return categories(boundKeys: boundKeys)
             case .apps: return apps
             case .help: return help
             case .system: return system
@@ -77,7 +93,12 @@ enum MenuCatalog {
         }
         // Search always spans the whole menu, even while browsing a category.
         var seenApps = Set<String>()
-        return (categories + settings + apps + help + system).filter { entry in
+        var searchable: [MenuEntry] = categories(boundKeys: boundKeys)
+        searchable += settings
+        searchable += apps
+        searchable += help
+        searchable += system
+        return searchable.filter { entry in
             words.allSatisfy { (entry.title + " " + entry.detail).localizedCaseInsensitiveContains($0) }
         }.filter { entry in
             guard let id = entry.bundleID else { return true }
@@ -102,27 +123,29 @@ enum MenuCatalog {
         }, searchText: { "\($0.title) \($0.font ?? "") \($0.detail)" })
     }
 
-    static func agentEntries(matching query: String, defaultToken: String?) -> [MenuEntry] {
+    static func agentEntries(matching query: String, defaultToken: String?, chord: String? = nil) -> [MenuEntry] {
         matching(query, in: CodingAgent.allCases.map { agent in
             MenuEntry(title: agent.title,
                       detail: "\(agent.detail) · \(agent.isInstalled ? "Installed" : "Installs via Homebrew")",
                       bundleID: agent.bundleID,
                       agent: agent,
-                      isDefaultChoice: agent.rawValue == defaultToken)
+                      isDefaultChoice: agent.rawValue == defaultToken,
+                      chord: chord)
         }, searchText: { "\($0.title) \($0.detail)" })
     }
 
     /// Rows for a picker collection: every choice, installed or not, so an app
     /// can be set as the default and installed from the same place.
     static func choiceEntries(matching query: String, in collection: AppCollection,
-                              defaultToken: String?) -> [MenuEntry] {
+                              defaultToken: String?, chord: String? = nil) -> [MenuEntry] {
         matching(query, in: collection.choices.map { choice in
             let status = choice.isInstalled ? "Installed" : (choice.installLabel ?? "Included with macOS")
             return MenuEntry(title: choice.title,
                              detail: "\(collection.itemLabel) · \(choice.summary) · \(status)",
                              collection: collection,
                              choice: choice,
-                             isDefaultChoice: choice.id == defaultToken)
+                             isDefaultChoice: choice.id == defaultToken,
+                             chord: chord)
         }, searchText: { "\($0.title) \($0.detail)" })
     }
 
@@ -183,6 +206,20 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                                  NSTableViewDataSource, NSTableViewDelegate {
     enum Section { case apps, help, agents, collection(AppCollection)
 
+        /// Resolves a preview page name; anything unrecognized opens Help,
+        /// the section previews have always started on.
+        static func named(_ name: String?) -> Section {
+            switch name?.lowercased() {
+            case "home", "apps": return .apps
+            case "agents": return .agents
+            default:
+                if let collection = AppCollection.allCases.first(where: { $0.rawValue == name?.lowercased() }) {
+                    return .collection(collection)
+                }
+                return .help
+            }
+        }
+
         var page: MenuPage {
             switch self {
             case .apps: return .home
@@ -211,6 +248,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var installedApps: [String: MenuEntry] = [:]
     private var defaultAgentToken: String?
     private var defaultAppTokens: [AppCollection: String] = [:]
+    private var boundKeys: Set<String> = []
     private var indexing = false
     private var packages: [HomebrewPackage] = []
     private var installedPackages: [HomebrewPackage] = []
@@ -576,7 +614,11 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private static func keyHint(for entry: MenuEntry, isApp: Bool) -> String {
         if let status = entry.package?.status { return status }
         if entry.theme != nil || entry.font != nil { return entry.detail == "Active" ? "✓" : "" }
-        if entry.agent != nil || entry.choice != nil { return entry.isDefaultChoice ? "✓" : "" }
+        if entry.agent != nil || entry.choice != nil {
+            guard entry.isDefaultChoice else { return "" }
+            return entry.chord.map { "✓  Hyper + \($0)" } ?? "✓"
+        }
+        if let chord = entry.chord { return "Hyper + \(chord)" }
         if entry.detail.hasPrefix("Hyper") { return entry.detail }
         if entry.destination != nil { return "›" }
         let isShortcut = !isApp && entry.systemAction == nil && entry.package == nil
@@ -1035,6 +1077,23 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
     }
 
+    /// Spells out the chord that opens the current picker collection, so the
+    /// shortcut is visible from inside the collection it belongs to. Empty when
+    /// a `[bindings]` entry has claimed that letter, since the chord no longer
+    /// opens anything.
+    private var pickerChordHint: String {
+        let chord: String?
+        if page == .agents {
+            chord = MenuCatalog.chord("A", boundKeys)
+        } else if let collection = AppCollection.allCases.first(where: { $0.page == page }) {
+            chord = MenuCatalog.chord(collection.chord, boundKeys)
+        } else {
+            return ""
+        }
+        guard let chord else { return "" }
+        return "  ·  HYPER + SHIFT + \(chord)"
+    }
+
     private var isPickerPage: Bool {
         page == .agents || AppCollection.allCases.contains { $0.page == page }
     }
@@ -1118,7 +1177,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 MenuEntry(title: $0.name, detail: $0.detail, package: $0)
             }
             : MenuCatalog.results(query: search.stringValue, page: page, apps: apps, help: help,
-                                  defaultAgent: defaultAgentToken, defaultApps: defaultAppTokens)
+                                  defaultAgent: defaultAgentToken, defaultApps: defaultAppTokens,
+                                  boundKeys: boundKeys)
         let upgradeQuery = search.stringValue.lowercased().split(whereSeparator: \.isWhitespace)
         if page == .install && inventoryReady && upgradeQuery.allSatisfy({ "upgrade all update packages".contains($0) }) {
             let available = HomebrewUpgrade.availableCount(installedPackages)
@@ -1141,19 +1201,19 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             table.scrollRowToVisible(index)
         }
         let searching = !search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        location.stringValue = page == .install ? (inventoryError ? "HOMEBREW · INVENTORY UNAVAILABLE — REOPEN TO RETRY" : loadingInventory ? "HOMEBREW · CHECKING INSTALLED PACKAGES…" : packageError ? "HOMEBREW · CATALOG UNAVAILABLE — INSTALLED ONLY" : searching ? "OMACCY  /  INSTALL · HOMEBREW" : "HOMEBREW · INSTALLED PACKAGES") : searching ? "SEARCH RESULTS · ALL" : page == .home ? "BROWSE" : "OMACCY  /  \(page.rawValue.uppercased())"
+        location.stringValue = page == .install ? (inventoryError ? "HOMEBREW · INVENTORY UNAVAILABLE — REOPEN TO RETRY" : loadingInventory ? "HOMEBREW · CHECKING INSTALLED PACKAGES…" : packageError ? "HOMEBREW · CATALOG UNAVAILABLE — INSTALLED ONLY" : searching ? "OMACCY  /  INSTALL · HOMEBREW" : "HOMEBREW · INSTALLED PACKAGES") : searching ? "SEARCH RESULTS · ALL" : page == .home ? "BROWSE" : "OMACCY  /  \(page.rawValue.uppercased())" + pickerChordHint
         let noun = searching ? "result" : page == .home ? "collection" : "item"
         count.stringValue = "\(page == .install && searching && rows.count == 100 ? "100+" : String(rows.count)) \(noun)\(rows.count == 1 ? "" : "s")"
         emptyState.isHidden = !rows.isEmpty
         tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
         // Home stays compact; long collections and results get room to breathe.
-        // Home lists 9 collections: 211pt of chrome + 9 * 62pt rows ≈ 769pt,
-        // measured directly against the table, so it needs no scrollbar on a
-        // display with room for it and is clamped to the screen otherwise.
+        // Home lists 9 collections: 214pt of chrome + 9 * 64pt rows = 790pt,
+        // measured against a captured preview, so the last row keeps its detail
+        // line. Clamped to the screen for displays without room for it.
         let available = ((panel.screen ?? NSScreen.main)?.visibleFrame.height ?? 900) - 80
         let height: CGFloat = rows.count <= 3
             ? 250 + CGFloat(max(rows.count, 2)) * 64
-            : min(769, available)
+            : min(214 + CGFloat(rows.count) * 64, min(790, available))
         var frame = panel.frame
         frame.origin.y += frame.height - height
         frame.size.height = height
@@ -1165,6 +1225,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         defaultAppTokens = AppCollection.allCases.reduce(into: [:]) { tokens, collection in
             tokens[collection] = config[collection]
         }
+        boundKeys = Set(config.bindings.keys.map { $0.lowercased() })
         var byID: [String: MenuEntry] = [:]
         if refreshApps && !indexing {
             indexing = true
@@ -1177,10 +1238,12 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
         byID = installedApps
         help = [MenuEntry(title: "Open shortcut help", detail: "Hyper + ?", destination: .help),
-                MenuEntry(title: "Open app launcher", detail: "Hyper + Space", destination: .home),
-                MenuEntry(title: "Launch default agent", detail: "Hyper + A", destination: .agents),
-                MenuEntry(title: "Open Agents", detail: "Hyper + Shift + A", destination: .agents)]
-        for collection in AppCollection.allCases where config.bindings[collection.chord.lowercased()] == nil {
+                MenuEntry(title: "Open app launcher", detail: "Hyper + Space", destination: .home)]
+        if !boundKeys.contains("a") {
+            help.append(MenuEntry(title: "Launch default agent", detail: "Hyper + A", destination: .agents))
+            help.append(MenuEntry(title: "Open Agents", detail: "Hyper + Shift + A", destination: .agents))
+        }
+        for collection in AppCollection.allCases where !boundKeys.contains(collection.chord.lowercased()) {
             help.append(MenuEntry(title: "Launch default \(collection.itemLabel.lowercased())",
                                   detail: "Hyper + \(collection.chord)", destination: collection.page))
             help.append(MenuEntry(title: "Open \(collection.title)",

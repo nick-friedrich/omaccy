@@ -92,6 +92,30 @@ final class MenuTests: XCTestCase {
         }
     }
 
+    func testCollectionChordsAppearInTheMenuUntilABindingClaimsTheLetter() {
+        let home = MenuCatalog.results(query: "", page: .home, apps: [], help: [])
+        XCTAssertEqual(home.first { $0.destination == .mail }?.chord, "E")
+        XCTAssertEqual(home.first { $0.destination == .editors }?.chord, "C")
+        XCTAssertEqual(home.first { $0.destination == .agents }?.chord, "A")
+
+        // A binding on the same letter wins, so the chord stops being advertised.
+        let claimed = MenuCatalog.results(query: "", page: .home, apps: [], help: [],
+                                          boundKeys: ["c", "a"])
+        XCTAssertEqual(claimed.first { $0.destination == .mail }?.chord, "E")
+        XCTAssertNil(claimed.first { $0.destination == .editors }?.chord)
+        XCTAssertNil(claimed.first { $0.destination == .agents }?.chord)
+    }
+
+    func testOnlyTheDefaultChoiceCarriesTheLaunchChord() {
+        let rows = MenuCatalog.results(query: "", page: .mail, apps: [], help: [],
+                                       defaultApps: [.mail: "emzero"], boundKeys: [])
+        XCTAssertTrue(rows.allSatisfy { $0.chord == "E" })
+        XCTAssertEqual(rows.filter(\.isDefaultChoice).map(\.title), ["Emzero"])
+        let claimed = MenuCatalog.results(query: "", page: .mail, apps: [], help: [],
+                                          defaultApps: [.mail: "emzero"], boundKeys: ["e"])
+        XCTAssertTrue(claimed.allSatisfy { $0.chord == nil })
+    }
+
     func testPowerActionsRequireConfirmationBeforeQuittingApps() {
         XCTAssertFalse(SystemAction.sleep.requiresConfirmation)
         XCTAssertTrue(SystemAction.restart.requiresConfirmation)
@@ -152,7 +176,7 @@ final class MenuTests: XCTestCase {
     }
 
     func testSettingsReachableFromHomeAndGlobalSearch() {
-        XCTAssertTrue(MenuCatalog.categories.contains { $0.destination == .settings })
+        XCTAssertTrue(MenuCatalog.categories().contains { $0.destination == .settings })
         XCTAssertEqual(MenuCatalog.results(query: "settings", page: .home, apps: [], help: []).compactMap(\.destination), [.settings])
         XCTAssertTrue(MenuCatalog.results(query: "theme", page: .home, apps: [], help: []).contains { $0.destination == .theme })
         XCTAssertTrue(MenuCatalog.results(query: "launcher font", page: .home, apps: [], help: []).contains { $0.destination == .font })

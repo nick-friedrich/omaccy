@@ -19,10 +19,13 @@ struct HyperKeyApp {
         }
 
         // UI preview without installing mappings or starting keyboard capture.
-        if CommandLine.arguments.contains("--preview-menu") {
+        // An optional page name (home, help, agents, mail, editors) opens that
+        // collection directly, since a preview cannot be navigated by chord.
+        if let flag = CommandLine.arguments.firstIndex(of: "--preview-menu") {
             let app = NSApplication.shared
             app.setActivationPolicy(.accessory)
-            SuperMenuController.shared.toggle(section: .help)
+            let name = CommandLine.arguments.indices.contains(flag + 1) ? CommandLine.arguments[flag + 1] : nil
+            SuperMenuController.shared.toggle(section: .named(name))
             app.run()
             return
         }

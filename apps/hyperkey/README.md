@@ -112,6 +112,12 @@ installed offers its install route instead: a confirmed `brew install` in
 Ghostty, matching the Install collection, or the Mac App Store for Xcode, which
 Homebrew does not carry. Apple Mail always counts as installed.
 
+Each collection shows the chord it answers to: the Home row for Agents, Mail,
+and Editors carries its `Hyper + <letter>`, the collection's own header spells
+out `HYPER + SHIFT + <letter>`, and the chosen default is marked `✓ Hyper + E`
+in its row. A letter claimed by a `[bindings]` entry stops being advertised
+anywhere, since the chord no longer opens the collection.
+
 Choices are matched to the app bundle they install as (`Cursor.app`) rather than
 to a hardcoded bundle identifier, which is read from the installed app itself.
 A vendor renaming an identifier therefore cannot silently break launching or
@@ -154,5 +160,12 @@ palette.
 
 For UI development, run `.build/debug/omaccy-hyperkey --preview-menu` from this
 package after building. This previews the palette without capturing keyboards
-or changing Caps Lock mappings. Run `swift test --package-path apps/hyperkey`
+or changing Caps Lock mappings. An optional page name — `home`, `help`,
+`agents`, `mail`, or `editors` — opens that collection directly, since a
+preview cannot be navigated by chord:
+
+```sh
+.build/debug/omaccy-hyperkey --preview-menu mail
+```
+ Run `swift test --package-path apps/hyperkey`
 from the repository root to check shortcut catalog coverage.

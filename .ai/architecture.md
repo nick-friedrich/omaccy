@@ -160,6 +160,12 @@ in Ghostty, matching the Install collection, or the Mac App Store for Xcode,
 which Homebrew does not carry — and the result stays user-managed, so uninstall
 leaves it alone.
 
+Each collection advertises its chord: on its Home row, in its own page header
+(`HYPER + SHIFT + E`), and beside the chosen default (`✓ Hyper + E`). All three
+are suppressed for a letter claimed by `[bindings]`, so the palette never shows
+a shortcut that does not work. `--preview-menu` takes an optional page name for
+developing these pages, which cannot be reached by chord in a preview.
+
 The picker chords (Hyper+A, Hyper+E, Hyper+C) yield to an explicit `[bindings]`
 entry on the same letter, unlike Hyper+Space and Hyper+?, which are
 unconditional. The shipped config therefore no longer binds `c`, but a user who
