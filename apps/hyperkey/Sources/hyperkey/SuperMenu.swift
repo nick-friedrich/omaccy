@@ -19,6 +19,22 @@ struct MenuEntry: Sendable {
     /// The Hyper letter this collection answers to, absent when a `[bindings]`
     /// entry has taken that letter back.
     var chord: String? = nil
+    var clip: ClipboardItem? = nil
+    var clipboardSetting: ClipboardSetting? = nil
+    /// Current state of a two-state setting row.
+    var isOn = false
+}
+
+/// The clipboard-history controls on the Settings page.
+enum ClipboardSetting: String, Sendable, CaseIterable {
+    case enabled, persist, clear
+}
+
+/// What those controls currently read as.
+struct ClipboardSettingsState: Sendable, Equatable {
+    var enabled = true
+    var persist = false
+    var count = 0
 }
 
 enum MenuPage: String, Sendable {
@@ -26,6 +42,8 @@ enum MenuPage: String, Sendable {
     case omaccy = "Omaccy", system = "System", agents = "Agents"
     case mail = "Mail", editors = "Editors"
     case settings = "Settings", theme = "Theme", font = "Font"
+    case clipboardSettings = "Clipboard"
+    case clipboard = "Clipboard History"
 }
 
 enum MenuCatalog {
@@ -39,8 +57,9 @@ enum MenuCatalog {
                   chord: chord(AppCollection.mail.chord, boundKeys)),
         MenuEntry(title: "Editors", detail: AppCollection.editors.summary, destination: .editors, collection: .editors,
                   chord: chord(AppCollection.editors.chord, boundKeys)),
+        MenuEntry(title: "Clipboard", detail: "Paste something you copied earlier", destination: .clipboard,
+                  chord: chord("V", boundKeys)),
         MenuEntry(title: "Install", detail: "Search Homebrew apps and command-line tools", destination: .install),
-        MenuEntry(title: "Omaccy", detail: "Update Omaccy: pull the checkout and reapply it", destination: .omaccy),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
         MenuEntry(title: "System", detail: "Sleep, restart, or shut down your Mac", destination: .system),
         MenuEntry(title: "Settings", detail: "Pick the theme and font for the bar and launcher", destination: .settings),
@@ -53,7 +72,28 @@ enum MenuCatalog {
     static let settings = [
         MenuEntry(title: "Theme", detail: "Color palettes for SketchyBar and this launcher", destination: .theme),
         MenuEntry(title: "Font", detail: "UI font for SketchyBar and this launcher", destination: .font),
+        MenuEntry(title: "Clipboard", detail: "Turn clipboard history on or off and choose how it is kept",
+                  destination: .clipboardSettings),
+        MenuEntry(title: "Update Omaccy", detail: "Pull the checkout and reapply it", destination: .omaccy),
     ]
+
+    /// Rows for the clipboard controls. Each carries its own current state, so
+    /// the page reads as a set of switches rather than a list of commands.
+    static func clipboardEntries(matching query: String, state: ClipboardSettingsState) -> [MenuEntry] {
+        matching(query, in: [
+            MenuEntry(title: "Clipboard history",
+                      detail: state.enabled ? "On · Recording what you copy" : "Off · Nothing is recorded",
+                      clipboardSetting: .enabled, isOn: state.enabled),
+            MenuEntry(title: "Keep history on disk",
+                      detail: state.persist
+                          ? "On · Kept in ~/.omaccy/clipboard, survives a restart"
+                          : "Off · Memory only, cleared when Omaccy restarts",
+                      clipboardSetting: .persist, isOn: state.persist),
+            MenuEntry(title: "Clear clipboard history",
+                      detail: state.count == 1 ? "1 entry recorded" : "\(state.count) entries recorded",
+                      clipboardSetting: .clear),
+        ], searchText: { "\($0.title) \($0.detail)" })
+    }
 
     static let system = SystemAction.allCases.map {
         MenuEntry(title: $0.title, detail: $0.detail, systemAction: $0)
@@ -62,7 +102,9 @@ enum MenuCatalog {
     static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry],
                         defaultAgent: String? = nil,
                         defaultApps: [AppCollection: String] = [:],
-                        boundKeys: Set<String> = []) -> [MenuEntry] {
+                        boundKeys: Set<String> = [],
+                        clipboard: ClipboardSettingsState = ClipboardSettingsState(),
+                        clipboardItems: [ClipboardItem] = []) -> [MenuEntry] {
         if page == .install { return [] }
         if page == .omaccy {
             let entry = MenuEntry(title: "Update Omaccy", detail: "Pull the latest code, then rerun setup · Opens Ghostty", updatesOmaccy: true)
@@ -72,6 +114,8 @@ enum MenuCatalog {
         if page == .settings {
             return matching(query, in: settings) { "\($0.title) \($0.detail)" }
         }
+        if page == .clipboardSettings { return clipboardEntries(matching: query, state: clipboard) }
+        if page == .clipboard { return clipboardHistoryEntries(matching: query, items: clipboardItems) }
         if page == .theme { return themeEntries(matching: query) }
         if page == .font { return fontEntries(matching: query) }
         if page == .agents {
@@ -88,7 +132,8 @@ enum MenuCatalog {
             case .apps: return apps
             case .help: return help
             case .system: return system
-            case .install, .omaccy, .settings, .theme, .font, .agents, .mail, .editors: return []
+            case .install, .omaccy, .settings, .theme, .font, .agents, .mail, .editors,
+                 .clipboardSettings, .clipboard: return []
             }
         }
         // Search always spans the whole menu, even while browsing a category.
@@ -149,6 +194,53 @@ enum MenuCatalog {
         }, searchText: { "\($0.title) \($0.detail)" })
     }
 
+    /// Recorded copies, newest first. Unlike every other page, the query runs
+    /// against the whole entry text rather than the visible row, since finding
+    /// a line buried in something copied earlier is the point of the page.
+    static func clipboardHistoryEntries(matching query: String, items: [ClipboardItem],
+                                        now: Date = Date()) -> [MenuEntry] {
+        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        return items.filter { item in
+            words.allSatisfy { item.text.localizedCaseInsensitiveContains($0) }
+        }.map { item in
+            MenuEntry(title: clipboardTitle(item.text), detail: clipboardDetail(item, now: now), clip: item)
+        }
+    }
+
+    /// The first non-blank line, with runs of whitespace collapsed so that
+    /// indented code or wrapped prose still reads as one line.
+    static func clipboardTitle(_ text: String, limit: Int = 120) -> String {
+        let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        let collapsed = line.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard collapsed.count > limit else { return collapsed }
+        return collapsed.prefix(limit).trimmingCharacters(in: .whitespaces) + "…"
+    }
+
+    static func clipboardDetail(_ item: ClipboardItem, now: Date = Date()) -> String {
+        var parts: [String] = []
+        let lines = item.text.components(separatedBy: .newlines).count
+        if lines > 1 { parts.append("\(lines) lines") }
+        parts.append(item.text.count == 1 ? "1 character" : "\(item.text.count) characters")
+        if let name = clipboardSourceName(item.sourceBundleID) { parts.append(name) }
+        parts.append(clipboardAge(from: item.copiedAt, to: now))
+        return parts.joined(separator: " · ")
+    }
+
+    /// The last component of a bundle identifier reads as the app's name far
+    /// more often than not, and costs no disk lookup per row.
+    static func clipboardSourceName(_ bundleID: String?) -> String? {
+        guard let last = bundleID?.split(separator: ".").last, !last.isEmpty else { return nil }
+        return last.prefix(1).uppercased() + last.dropFirst()
+    }
+
+    static func clipboardAge(from date: Date, to now: Date) -> String {
+        let seconds = max(now.timeIntervalSince(date), 0)
+        if seconds < 60 { return "just now" }
+        if seconds < 3600 { return "\(Int(seconds / 60))m ago" }
+        if seconds < 86_400 { return "\(Int(seconds / 3600))h ago" }
+        return "\(Int(seconds / 86_400))d ago"
+    }
+
     private static func matching(_ query: String, in entries: [MenuEntry], searchText: (MenuEntry) -> String) -> [MenuEntry] {
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty else { return entries }
@@ -204,7 +296,7 @@ private final class PalettePanel: NSPanel {
 @MainActor
 final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate,
                                  NSTableViewDataSource, NSTableViewDelegate {
-    enum Section { case apps, help, agents, collection(AppCollection)
+    enum Section { case apps, help, agents, clipboard, collection(AppCollection)
 
         /// Resolves a preview page name; anything unrecognized opens Help,
         /// the section previews have always started on.
@@ -212,6 +304,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             switch name?.lowercased() {
             case "home", "apps": return .apps
             case "agents": return .agents
+            case "clipboard": return .clipboard
             default:
                 if let collection = AppCollection.allCases.first(where: { $0.rawValue == name?.lowercased() }) {
                     return .collection(collection)
@@ -225,6 +318,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             case .apps: return .home
             case .help: return .help
             case .agents: return .agents
+            case .clipboard: return .clipboard
             case let .collection(collection): return collection.page
             }
         }
@@ -238,6 +332,15 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private let actionHint = PaletteStyle.label("", size: 11)
     private let emptyState = PaletteStyle.label("No matches. Try an app, shortcut, or system action.", size: 14)
     private var page: MenuPage = .home
+    /// The row each page was left on when the user descended out of it, so
+    /// going back lands on the collection they just came from rather than
+    /// snapping to the top of the list. Cleared whenever the palette is opened
+    /// afresh, so a new invocation always starts at the first row.
+    private var selectionMemory: [MenuPage: MenuEntry] = [:]
+    /// Whether ⌘ is held right now, which turns the first nine rows' markers
+    /// into the digits that fire them. Tracked rather than polled so the
+    /// numbers appear on the press and leave again on the release.
+    private var commandHeld = false
     private var openingSection: Section = .apps
     private var keyMonitor: Any?
     private var builtFor: String?
@@ -249,6 +352,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var defaultAgentToken: String?
     private var defaultAppTokens: [AppCollection: String] = [:]
     private var boundKeys: Set<String> = []
+    private var clipboardState = ClipboardSettingsState()
     private var indexing = false
     private var packages: [HomebrewPackage] = []
     private var installedPackages: [HomebrewPackage] = []
@@ -259,6 +363,36 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var packageError = false
     private var catalogLoadedAt: Date?
     private var previousApp: NSRunningApplication?
+
+    /// Mirrors `height=34` in config/sketchybar/sketchybarrc. SketchyBar floats
+    /// above `visibleFrame` rather than reserving space in it -- the native menu
+    /// bar is hidden, so that frame reaches the top of the screen -- which means
+    /// the palette has to keep clear of the bar itself.
+    private static let barHeight: CGFloat = 34
+    private static let screenMargin: CGFloat = 12
+    /// Tall enough for a comfortable page, short enough not to take over the
+    /// screen. Longer lists scroll rather than growing without bound.
+    private static let maxHeight: CGFloat = 700
+
+    /// The region the panel may occupy: the visible frame, less the bar and a
+    /// margin on each edge.
+    private func allowedFrame(on screen: NSScreen?) -> NSRect {
+        guard let visible = screen?.visibleFrame else { return .zero }
+        return NSRect(x: visible.minX + Self.screenMargin,
+                      y: visible.minY + Self.screenMargin,
+                      width: visible.width - Self.screenMargin * 2,
+                      height: visible.height - Self.barHeight - Self.screenMargin * 2)
+    }
+
+    /// Moves a frame back inside `allowed` without resizing it; the height is
+    /// already constrained to fit by the time this runs.
+    private func clamped(_ frame: NSRect, within allowed: NSRect) -> NSRect {
+        guard !allowed.isEmpty else { return frame }
+        var frame = frame
+        if frame.maxY > allowed.maxY { frame.origin.y = allowed.maxY - frame.height }
+        if frame.minY < allowed.minY { frame.origin.y = allowed.minY }
+        return frame
+    }
 
     func toggle(section: Section) {
         // Rebuild the palette when the theme or font changed since it was built.
@@ -272,13 +406,22 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if !panel.isVisible { previousApp = NSWorkspace.shared.frontmostApplication }
         openingSection = section
         page = section.page
+        selectionMemory.removeAll()
+        // The palette leaves by several paths — dismissed, ordered out to launch
+        // an app, or simply losing key status — and the ⌘ release then lands in
+        // whatever came forward instead of here. Clearing on the way in is the
+        // one place that covers all of them.
+        commandHeld = false
         search.stringValue = ""
         reloadCatalog()
         filter()
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
-        if let frame = screen?.visibleFrame {
-            panel.setFrameOrigin(NSPoint(x: frame.midX - panel.frame.width / 2,
-                                         y: frame.midY - panel.frame.height / 2 + frame.height * 0.12))
+        let allowed = allowedFrame(on: screen)
+        if !allowed.isEmpty {
+            let origin = NSPoint(x: allowed.midX - panel.frame.width / 2,
+                                 y: allowed.midY - panel.frame.height / 2 + allowed.height * 0.10)
+            panel.setFrame(clamped(NSRect(origin: origin, size: panel.frame.size), within: allowed),
+                           display: false)
         }
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
@@ -401,21 +544,23 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         ])
         // Keep typing in search after navigation or a mouse selection. All actions
         // are available without moving focus through native controls.
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
             guard let self, self.panel.isKeyWindow else { return event }
+            // ⌘ alone is never ours to swallow — other shortcuts still need it —
+            // so this only repaints the markers and passes the event along.
+            if event.type == .flagsChanged {
+                self.setCommandHeld(event.modifierFlags.contains(.command))
+                return event
+            }
+            if let row = Self.numberedRow(in: event) { self.activate(numberedRow: row); return nil }
             switch event.keyCode {
             case 125: self.select(delta: 1)
             case 126: self.select(delta: -1)
             case 48: self.select(delta: event.modifierFlags.contains(.shift) ? -1 : 1)
-            case 36, 76:
-                if self.isPickerPage, event.modifierFlags.contains(.command) {
-                    self.setDefaultChoice()
-                } else if self.page == .install, event.modifierFlags.contains(.command) {
-                    self.openSelectedPackageOnHomebrew()
-                } else {
-                    self.activateSelection()
-                }
+            case 36, 76: self.performReturn(commandHeld: event.modifierFlags.contains(.command))
             case 53: self.back()
+            case 51 where self.page == .clipboard && event.modifierFlags.contains(.command):
+                self.deleteClipboardSelection()
             case 51 where self.search.stringValue.isEmpty && self.page != .home: self.back()
             default:
                 if self.panel.firstResponder === self.table { self.panel.makeFirstResponder(self.search) }
@@ -424,6 +569,14 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             return nil
         }
         builtFor = PaletteStyle.theme.identity
+    }
+
+    /// Repaints the row markers as ⌘ goes down or up. `reloadData` keeps the
+    /// selection and the scroll position, so only the right-hand column moves.
+    private func setCommandHeld(_ held: Bool) {
+        guard commandHeld != held else { return }
+        commandHeld = held
+        table.reloadData()
     }
 
     private func dismiss() {
@@ -468,7 +621,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
 
     private func back() {
         if !search.stringValue.isEmpty { search.stringValue = ""; filter() }
-        else if page != .home { page = .home; filter() }
+        else if page != .home { page = .home; filter(restoring: selectionMemory.removeValue(forKey: .home)) }
         else { dismiss() }
         if panel.isVisible { panel.makeFirstResponder(search) }
     }
@@ -496,6 +649,12 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             actionHint.stringValue = installed
                 ? (entry.isDefaultChoice ? "↵  Launch  ·  Default" : "↵  Launch  ·  ⌘↵  Set default")
                 : "↵  Install \(agent.title)…"
+        } else if entry.clip != nil {
+            actionHint.stringValue = "↵  Paste  ·  ⌘↵  Copy  ·  ⌘⌫  Delete"
+        } else if let setting = entry.clipboardSetting {
+            actionHint.stringValue = setting == .clear
+                ? (entry.detail.hasPrefix("0 ") ? "Nothing recorded" : "↵  Clear now")
+                : entry.isOn ? "↵  Turn off" : "↵  Turn on"
         } else if let choice = entry.choice {
             actionHint.stringValue = choice.isInstalled
                 ? (entry.isDefaultChoice ? "↵  Launch  ·  Default" : "↵  Launch  ·  ⌘↵  Set default")
@@ -517,7 +676,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let isApp = entry.bundleID != nil
         let describesItself = entry.updatesOmaccy || entry.upgradesAll || entry.package != nil
             || entry.destination != nil || entry.systemAction != nil || entry.theme != nil || entry.font != nil
-            || entry.agent != nil || entry.choice != nil
+            || entry.agent != nil || entry.choice != nil || entry.clipboardSetting != nil || entry.clip != nil
         let detail = PaletteStyle.label(describesItself && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let icon: NSView
@@ -537,13 +696,17 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             imageView.imageScaling = .scaleProportionallyUpOrDown
             icon = imageView
         }
-        let keys = PaletteStyle.label(Self.keyHint(for: entry, isApp: isApp), size: 11, weight: .medium)
-        keys.textColor = entry.destination != nil || entry.package?.outdated == true
+        // While ⌘ is held the first nine rows advertise the digit that fires
+        // them, in place of their usual chevron, ✓, or shortcut.
+        let numbered = commandHeld && row < 9
+        let keys = PaletteStyle.label(numbered ? "⌘\(row + 1)" : Self.keyHint(for: entry, isApp: isApp),
+                                      size: 11, weight: .medium)
+        keys.textColor = numbered || entry.destination != nil || entry.package?.outdated == true
             || entry.theme != nil || entry.font != nil ? PaletteStyle.accent : PaletteStyle.muted
         keys.alignment = .right
         keys.setContentCompressionResistancePriority(.required, for: .horizontal)
         // Its own label so the chord stays muted next to an accented chevron.
-        let chord = PaletteStyle.label(Self.chordHint(for: entry), size: 11, weight: .medium)
+        let chord = PaletteStyle.label(numbered ? "" : Self.chordHint(for: entry), size: 11, weight: .medium)
         chord.textColor = PaletteStyle.muted
         chord.alignment = .right
         chord.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -601,6 +764,15 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     }
 
     private static func symbol(for entry: MenuEntry) -> String {
+        if let setting = entry.clipboardSetting {
+            switch setting {
+            case .enabled: return "doc.on.clipboard"
+            case .persist: return "internaldrive"
+            case .clear: return "trash"
+            }
+        }
+        if entry.destination == .clipboardSettings || entry.destination == .clipboard
+            || entry.clip != nil { return "doc.on.clipboard" }
         if let agent = entry.agent { return agent.symbol }
         if let collection = entry.collection { return collection.symbol }
         if let action = entry.systemAction { return action.symbol }
@@ -621,6 +793,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private static func keyHint(for entry: MenuEntry, isApp: Bool) -> String {
         if let status = entry.package?.status { return status }
         if entry.theme != nil || entry.font != nil { return entry.detail == "Active" ? "✓" : "" }
+        if let setting = entry.clipboardSetting { return setting == .clear ? "" : entry.isOn ? "✓" : "" }
+        if entry.clip != nil { return "" }
         if entry.agent != nil || entry.choice != nil { return entry.isDefaultChoice ? "✓" : "" }
         if entry.detail.hasPrefix("Hyper") { return MenuShortcut.symbolic(entry.detail) }
         if entry.destination != nil { return "›" }
@@ -699,6 +873,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         guard rows.indices.contains(row) else { return }
         let entry = rows[row]
         if let destination = entry.destination {
+            selectionMemory[page] = entry
             page = destination
             if destination == .install { loadPackages() }
             search.stringValue = ""
@@ -723,9 +898,87 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             activateAgent(agent)
         } else if let choice = entry.choice {
             activateChoice(choice)
+        } else if let clip = entry.clip {
+            useClipboardItem(clip, paste: true)
+        } else if let setting = entry.clipboardSetting {
+            toggleClipboard(setting)
         } else if let action = entry.systemAction {
             performSystemAction(action)
         }
+    }
+
+    /// What Return does on the current page. Shared with the ⌘1–9 shortcuts so
+    /// a numbered pick lands on exactly the action the row's hint advertises.
+    private func performReturn(commandHeld: Bool) {
+        if page == .clipboard {
+            activateClipboardSelection(paste: !commandHeld)
+        } else if isPickerPage, commandHeld {
+            setDefaultChoice()
+        } else if page == .install, commandHeld {
+            openSelectedPackageOnHomebrew()
+        } else {
+            activateSelection()
+        }
+    }
+
+    /// The row a ⌘1–9 press points at, zero-based. Matched on the character
+    /// rather than the key code, so the digit printed on the key is the one
+    /// that works on non-US layouts and the numeric keypad comes along free.
+    /// ⇧ turns a digit into a symbol, so ⌘⇧3 and friends never reach here.
+    nonisolated static func numberedRow(in event: NSEvent) -> Int? {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard flags.subtracting([.command, .numericPad, .function, .capsLock]) == [],
+              flags.contains(.command),
+              let digit = event.charactersIgnoringModifiers.flatMap({ Int($0) }),
+              (1...9).contains(digit) else { return nil }
+        return digit - 1
+    }
+
+    /// Jumps to a row by number and fires it. ⌘ is only there to spell the
+    /// chord, so this never means the ⌘Return variant of the row's action.
+    private func activate(numberedRow row: Int) {
+        guard rows.indices.contains(row) else { return }
+        table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        table.scrollRowToVisible(row)
+        performReturn(commandHeld: false)
+    }
+
+    private func activateClipboardSelection(paste: Bool) {
+        guard rows.indices.contains(table.selectedRow), let clip = rows[table.selectedRow].clip else { return }
+        useClipboardItem(clip, paste: paste)
+    }
+
+    /// Puts the entry back on the pasteboard and, unless the user asked only to
+    /// copy it, pastes it into whatever they were using. Dismissing first hands
+    /// focus back to that app; the keystroke is worthless until it has it.
+    private func useClipboardItem(_ item: ClipboardItem, paste: Bool) {
+        ClipboardMonitor.shared.put(item)
+        dismiss()
+        guard paste else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { ClipboardPaste.send() }
+    }
+
+    private func deleteClipboardSelection() {
+        guard rows.indices.contains(table.selectedRow), let clip = rows[table.selectedRow].clip else { return }
+        ClipboardMonitor.shared.remove(clip.id)
+        filter(preservingSelection: true)
+    }
+
+    /// Applies a clipboard control and re-renders the page in place, so the
+    /// row the user just pressed shows its new state without leaving Settings.
+    private func toggleClipboard(_ setting: ClipboardSetting) {
+        var config = Configuration.load()
+        switch setting {
+        case .enabled: config.clipboardHistory.toggle()
+        case .persist: config.clipboardPersist.toggle()
+        case .clear: ClipboardMonitor.shared.clear()
+        }
+        if setting != .clear {
+            config.save()
+            ClipboardMonitor.shared.apply(config)
+        }
+        reloadCatalog(refreshApps: false)
+        filter(preservingSelection: true)
     }
 
     private func applyTheme(named themeName: String) {
@@ -1184,15 +1437,16 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
     }
 
-    private func filter(preservingSelection: Bool = false) {
-        let selected = preservingSelection && rows.indices.contains(table.selectedRow) ? rows[table.selectedRow] : nil
+    private func filter(preservingSelection: Bool = false, restoring: MenuEntry? = nil) {
+        let selected = restoring ?? (preservingSelection && rows.indices.contains(table.selectedRow) ? rows[table.selectedRow] : nil)
         rows = page == .install
             ? HomebrewCatalog.search(search.stringValue, packages: HomebrewInventory.merge(catalog: packages, installed: installedPackages)).map {
                 MenuEntry(title: $0.name, detail: $0.detail, package: $0)
             }
             : MenuCatalog.results(query: search.stringValue, page: page, apps: apps, help: help,
                                   defaultAgent: defaultAgentToken, defaultApps: defaultAppTokens,
-                                  boundKeys: boundKeys)
+                                  boundKeys: boundKeys, clipboard: clipboardState,
+                                  clipboardItems: ClipboardMonitor.shared.items)
         let upgradeQuery = search.stringValue.lowercased().split(whereSeparator: \.isWhitespace)
         if page == .install && inventoryReady && upgradeQuery.allSatisfy({ "upgrade all update packages".contains($0) }) {
             let available = HomebrewUpgrade.availableCount(installedPackages)
@@ -1205,6 +1459,11 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         emptyState.stringValue = page == .install
             ? (loadingInventory ? "Checking installed packages…" : inventoryError ? "Couldn’t read Homebrew. Reopen Install to retry." : loadingPackages ? "Loading Homebrew catalog…" : packageError ? "Couldn’t load Homebrew. Go back and reopen Install to retry."
                 : search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No Homebrew packages installed. Search to install one." : "No Homebrew packages match your search.")
+            : page == .clipboard
+            ? (!clipboardState.enabled
+                ? "Clipboard history is off. Turn it on in Settings → Clipboard."
+                : search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "Nothing copied yet." : "Nothing copied matches your search.")
             : page == .theme && OmaccyAppearance.availableThemes().isEmpty
             ? "No themes installed. Run scripts/update.sh to install them."
             : "No matches. Try an app, shortcut, or system action."
@@ -1221,18 +1480,22 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         emptyState.isHidden = !rows.isEmpty
         tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
         // Home stays compact; long collections and results get room to breathe.
-        // A row is 62pt plus 2pt of intercell spacing, and the chrome around the
-        // table measures 220pt, so a page fits its rows exactly without a
-        // scrollbar. Home's 9 collections set the cap; taller lists scroll, and
-        // a short display clamps before either.
-        let available = ((panel.screen ?? NSScreen.main)?.visibleFrame.height ?? 900) - 80
-        let height: CGFloat = rows.count <= 3
+        // A row is 62pt plus 2pt of intercell spacing and the chrome around the
+        // table measures 220pt, so a short page still fits its rows exactly.
+        // Beyond `maxHeight` -- or beyond what fits clear of SketchyBar on this
+        // display -- the list scrolls instead of growing.
+        let allowed = allowedFrame(on: panel.screen ?? NSScreen.main)
+        let wanted: CGFloat = rows.count <= 3
             ? 250 + CGFloat(max(rows.count, 2)) * 64
-            : min(220 + CGFloat(rows.count) * 64, min(796, available))
+            : 220 + CGFloat(rows.count) * 64
+        let ceiling = allowed.isEmpty ? Self.maxHeight : min(Self.maxHeight, allowed.height)
+        let height = min(wanted, ceiling)
         var frame = panel.frame
+        // Grow downward from a fixed top edge, then pull the whole panel back
+        // inside the allowed region if that pushed it past an edge.
         frame.origin.y += frame.height - height
         frame.size.height = height
-        panel.setFrame(frame, display: true)
+        panel.setFrame(clamped(frame, within: allowed), display: true)
     }
     private func reloadCatalog(refreshApps: Bool = true) {
         let config = Configuration.load()
@@ -1241,6 +1504,9 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             tokens[collection] = config[collection]
         }
         boundKeys = Set(config.bindings.keys.map { $0.lowercased() })
+        clipboardState = ClipboardSettingsState(enabled: config.clipboardHistory,
+                                                persist: config.clipboardPersist,
+                                                count: ClipboardMonitor.shared.count)
         var byID: [String: MenuEntry] = [:]
         if refreshApps && !indexing {
             indexing = true
@@ -1263,6 +1529,9 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                                   detail: "Hyper + \(collection.chord)", destination: collection.page))
             help.append(MenuEntry(title: "Open \(collection.title)",
                                   detail: "Hyper + Shift + \(collection.chord)", destination: collection.page))
+        }
+        if !boundKeys.contains("v") {
+            help.append(MenuEntry(title: "Open clipboard history", detail: "Hyper + V", destination: .clipboard))
         }
         for (key, id) in config.bindings.sorted(by: { $0.key < $1.key }) {
             let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id)

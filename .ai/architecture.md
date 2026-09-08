@@ -2,7 +2,7 @@
 
 | Path | Responsibility |
 | --- | --- |
-| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Agents, Mail, Editors, Install, Omaccy, Help, System & Settings palette |
+| `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, clipboard history, and Apps, Agents, Mail, Editors, Install, Help, System & Settings palette |
 | `config/` | Shipped defaults for Hyperkey, AeroSpace, Ghostty, SketchyBar, and the LaunchAgent |
 | `scripts/install.sh` | Confirmation followed by the installation sequence |
 | `scripts/update.sh` | One confirmation, then the checkout fast-forward, then the installation sequence |
@@ -31,6 +31,20 @@
   `config/sketchybar/lib/palette.sh`; the launcher palette rereads them every
   time it opens. Fonts ship as the font-inter, font-jetbrains-mono, and
   font-lora Homebrew casks.
+- `~/.omaccy/clipboard/history.json` holds clipboard history, written at mode
+  0600 and only while `clipboard_persist` is on; the default is memory-only, so
+  the directory usually does not exist. `ClipboardHistory.swift` documents why:
+  a password copied from a password manager's browser extension carries no
+  concealed marker and is attributed to the browser, so it cannot be filtered
+  out with certainty. Entries copied without a ⌘C keystroke (how extensions
+  write) are never persisted and expire from memory after 90 seconds. The
+  pasteboard read runs off the main run loop, since lazily-provided items make
+  it an IPC round-trip to the owning app and the CGEventTap shares that loop.
+  Hyper+V opens the history page, which yields to a `[bindings]` entry on `v`
+  like the other reserved chords. Pasting writes the entry back, claims the
+  resulting change count so the write is not read back as a new copy, and posts
+  ⌘V tagged with `Constants.injectedEventMarker` so the app's own tap passes it
+  through undecorated.
 - `~/.omaccy/sha256/` records shipped content so updates can refresh unchanged
   defaults while retaining customized files.
 - Dependency markers distinguish packages installed by Omaccy from packages

@@ -24,9 +24,14 @@ enum OmaccyAppearance {
         return files.filter { $0.hasSuffix(".sh") }.map { String($0.dropLast(3)) }.sorted()
     }
 
+    /// Themes whose brand capitalization the generic rule below would get
+    /// wrong ("github-dark" would title-case into "Github Dark").
+    private static let themeDisplayNames = ["github-dark": "GitHub Dark"]
+
     /// "tokyo-night" → "Tokyo Night"; custom theme names get the same treatment.
     static func displayName(forTheme name: String) -> String {
-        name.split(whereSeparator: { $0 == "-" || $0 == "_" })
+        if let known = themeDisplayNames[name] { return known }
+        return name.split(whereSeparator: { $0 == "-" || $0 == "_" })
             .map { $0.prefix(1).uppercased() + $0.dropFirst() }
             .joined(separator: " ")
     }

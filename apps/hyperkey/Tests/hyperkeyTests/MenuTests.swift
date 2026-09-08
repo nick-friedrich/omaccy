@@ -23,7 +23,7 @@ final class MenuTests: XCTestCase {
     func testCategoryBrowsingAndEmptySearch() {
         let apps = [MenuEntry(title: "Finder", detail: "Application")]
         let help = [MenuEntry(title: "Focus left", detail: "Hyper + H")]
-        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .agents, .mail, .editors, .install, .omaccy, .help, .system, .settings])
+        XCTAssertEqual(MenuCatalog.results(query: "  ", page: .home, apps: apps, help: help).compactMap(\.destination), [.apps, .agents, .mail, .editors, .clipboard, .install, .help, .system, .settings])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .apps, apps: apps, help: help).map(\.title), ["Finder"])
         XCTAssertEqual(MenuCatalog.results(query: "", page: .help, apps: apps, help: help).map(\.title), ["Focus left"])
         XCTAssertTrue(MenuCatalog.results(query: "missing", page: .home, apps: apps, help: help).isEmpty)
@@ -181,10 +181,46 @@ final class MenuTests: XCTestCase {
 
     func testSettingsPageListsThemeAndFontCollections() {
         let entries = MenuCatalog.results(query: "", page: .settings, apps: [], help: [])
-        XCTAssertEqual(entries.map(\.title), ["Theme", "Font"])
-        XCTAssertEqual(entries.compactMap(\.destination), [.theme, .font])
+        XCTAssertEqual(entries.map(\.title), ["Theme", "Font", "Clipboard", "Update Omaccy"])
+        XCTAssertEqual(entries.compactMap(\.destination), [.theme, .font, .clipboardSettings, .omaccy])
+        // The updater lives here now rather than on Home, but a search from
+        // Home still reaches it, since global search spans Settings too.
+        XCTAssertFalse(MenuCatalog.categories().contains { $0.destination == .omaccy })
         XCTAssertEqual(MenuCatalog.results(query: "font", page: .settings, apps: [], help: []).map(\.title), ["Font"])
         XCTAssertTrue(MenuCatalog.results(query: "nord", page: .settings, apps: [], help: []).isEmpty)
+    }
+
+    func testClipboardSettingsRowsReadTheirCurrentState() {
+        let on = ClipboardSettingsState(enabled: true, persist: false, count: 3)
+        let rows = MenuCatalog.results(query: "", page: .clipboardSettings, apps: [], help: [], clipboard: on)
+        XCTAssertEqual(rows.compactMap(\.clipboardSetting), [.enabled, .persist, .clear])
+        XCTAssertEqual(rows.map(\.isOn), [true, false, false])
+        XCTAssertTrue(rows[0].detail.hasPrefix("On"))
+        XCTAssertTrue(rows[1].detail.hasPrefix("Off"))
+        XCTAssertEqual(rows[2].detail, "3 entries recorded")
+
+        let off = ClipboardSettingsState(enabled: false, persist: true, count: 1)
+        let flipped = MenuCatalog.results(query: "", page: .clipboardSettings, apps: [], help: [], clipboard: off)
+        XCTAssertEqual(flipped.map(\.isOn), [false, true, false])
+        XCTAssertEqual(flipped[2].detail, "1 entry recorded")
+    }
+
+    func testClipboardSettingsAreSearchableWithinTheirPage() {
+        let state = ClipboardSettingsState()
+        XCTAssertEqual(MenuCatalog.results(query: "disk", page: .clipboardSettings, apps: [], help: [],
+                                           clipboard: state).map(\.title), ["Keep history on disk"])
+        XCTAssertTrue(MenuCatalog.results(query: "nord", page: .clipboardSettings, apps: [], help: [],
+                                          clipboard: state).isEmpty)
+    }
+
+    /// Both clipboard pages are findable from anywhere, but only as pages: no
+    /// individual control, and no recorded entry, is ever a global result.
+    func testOnlyClipboardPagesReachTheGlobalSearch() {
+        for page in [MenuPage.home, .apps, .help, .system] {
+            let results = MenuCatalog.results(query: "clipboard", page: page, apps: [], help: [])
+            XCTAssertEqual(results.compactMap(\.destination), [.clipboard, .clipboardSettings])
+            XCTAssertTrue(results.allSatisfy { $0.clipboardSetting == nil && $0.clip == nil })
+        }
     }
 
     func testSettingsReachableFromHomeAndGlobalSearch() {
@@ -205,9 +241,35 @@ final class MenuTests: XCTestCase {
         XCTAssertTrue(MenuCatalog.themeEntries(matching: "missing", themes: themes, active: "tokyo-night").isEmpty)
     }
 
+    /// ⌘1–9 picks a row directly; every other digit chord stays out of the way.
+    func testCommandDigitPicksARow() {
+        func event(_ characters: String, _ flags: NSEvent.ModifierFlags, keyCode: UInt16 = 18) -> NSEvent {
+            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                             windowNumber: 0, context: nil, characters: characters,
+                             charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode)!
+        }
+        XCTAssertEqual(SuperMenuController.numberedRow(in: event("1", .command)), 0)
+        XCTAssertEqual(SuperMenuController.numberedRow(in: event("9", .command)), 8)
+        // Caps lock and the numeric keypad ride along; the chord still counts.
+        XCTAssertEqual(SuperMenuController.numberedRow(in: event("4", [.command, .capsLock])), 3)
+        XCTAssertEqual(SuperMenuController.numberedRow(in: event("4", [.command, .numericPad, .function])), 3)
+        // No ⌘, a bare digit typed into the search field.
+        XCTAssertNil(SuperMenuController.numberedRow(in: event("1", [])))
+        // ⇧ turns the digit into a symbol, so ⌘⇧3 never reads as row 3.
+        XCTAssertNil(SuperMenuController.numberedRow(in: event("#", [.command, .shift])))
+        // Other modifiers belong to whatever else claims them.
+        XCTAssertNil(SuperMenuController.numberedRow(in: event("1", [.command, .option])))
+        XCTAssertNil(SuperMenuController.numberedRow(in: event("1", [.command, .control])))
+        // 0 is not a row: rows are numbered from 1.
+        XCTAssertNil(SuperMenuController.numberedRow(in: event("0", .command)))
+        XCTAssertNil(SuperMenuController.numberedRow(in: event("a", .command)))
+    }
+
     func testAgentEntriesMarkDefaultAndFilter() {
         let entries = MenuCatalog.agentEntries(matching: "", defaultToken: "codex")
         XCTAssertEqual(entries.map(\.agent), CodingAgent.allCases)
+        // Desktop apps lead the list; the terminal agents follow.
+        XCTAssertEqual(entries.compactMap { $0.agent?.kind }, [.desktop, .desktop, .desktop, .terminal, .terminal, .terminal])
         XCTAssertEqual(entries.first { $0.agent == .codexCLI }?.isDefaultChoice, true)
         XCTAssertEqual(entries.first { $0.agent == .claudeCode }?.isDefaultChoice, false)
         XCTAssertEqual(MenuCatalog.agentEntries(matching: "claude code", defaultToken: nil).map(\.agent), [.claudeCode])

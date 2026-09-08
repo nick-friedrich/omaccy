@@ -1,6 +1,15 @@
 # Send Escape when Caps Lock is tapped without another key.
 escape_on_tap = false
 
+# Record what you copy so it can be browsed in the launcher. Entries stay in
+# memory only unless clipboard_persist is on: a password copied from a password
+# manager's *browser extension* is written by the browser and cannot be told
+# apart from an ordinary copy, so it would be stored like any other text. The
+# desktop apps of most managers mark their copies and are always skipped.
+clipboard_history = true
+clipboard_persist = false
+clipboard_limit = 200
+
 # Apps launched directly by their own Hyper chord, chosen in the launcher with
 # ⌘Return. Hyper+A, Hyper+E, and Hyper+C launch these; add Shift to browse the
 # collection instead. Unset means the chord opens the collection to pick one.

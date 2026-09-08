@@ -101,6 +101,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let savedEscape = configuration.escapeOnTap
         escapeOnTap = savedEscape
 
+        ClipboardMonitor.shared.start(configuration: configuration)
+
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {

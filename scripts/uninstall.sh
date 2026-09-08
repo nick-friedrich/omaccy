@@ -111,6 +111,7 @@ main() {
     "$OMACCY_DIR/sha256/sketchybar/themes/"*.sh
   rm -f "$OMACCY_DIR/aerospace-disabled" \
     "$OMACCY_DIR/native-menu-visible"
+  rm -rf "$OMACCY_DIR/clipboard"
 
   remove_owned_cask ghostty Ghostty
   remove_owned_cask aerospace AeroSpace

@@ -71,6 +71,7 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(OmaccyAppearance.displayName(forTheme: "catppuccin"), "Catppuccin")
         XCTAssertEqual(OmaccyAppearance.displayName(forTheme: "tokyo-night"), "Tokyo Night")
         XCTAssertEqual(OmaccyAppearance.displayName(forTheme: "gruvbox_dark"), "Gruvbox Dark")
+        XCTAssertEqual(OmaccyAppearance.displayName(forTheme: "github-dark"), "GitHub Dark")
         XCTAssertEqual(OmaccyAppearance.displayName(forTheme: "my-custom-theme"), "My Custom Theme")
     }
 }

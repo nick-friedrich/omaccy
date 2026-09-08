@@ -1,11 +1,11 @@
 # Omaccy
 
-A keyboard-centric, tiling macOS setup — an Omakub-inspired "rice" that combines
+A keyboard-centric, tiling macOS setup — an Omarchy-inspired "rice" that combines
 best-of-breed tools with a thin glue layer of configs and one native app.
 
 | Component | What it is |
 | --- | --- |
-| **Omaccy Hyperkey** | Our Swift app: Caps Lock → Hyper (⌘⌃⌥), app launch shortcuts, and the Hyper+Space palette |
+| **Omaccy Hyperkey** | Custom Swift app: Caps Lock → Hyper (⌘⌃⌥), app launch shortcuts, and the Hyper+Space palette |
 | **AeroSpace** | i3-style tree tiling with its own workspaces (no SIP changes) |
 | **SketchyBar** | Menu-bar replacement, skinned to match the active theme |
 | **Ghostty** | Default terminal, themed alongside the bar and the palette |
@@ -87,15 +87,20 @@ Hyper is **Caps Lock** (Command+Control+Option, deliberately without Shift).
 
 | Shortcut | Action |
 | --- | --- |
-| `Hyper+Space` | Palette: Apps, Agents, Mail, Editors, Install, Omaccy, Help, System |
+| `Hyper+Space` | Palette: Apps, Agents, Mail, Editors, Clipboard, Install, Help, System, Settings |
 | `Hyper+?` | Searchable shortcut help, built from your live config |
 | `Hyper+A` / `Hyper+Shift+A` | Launch your default coding agent / choose one |
 | `Hyper+E` / `Hyper+Shift+E` | Launch your mail client / choose one |
 | `Hyper+C` / `Hyper+Shift+C` | Launch your code editor / choose one |
+| `Hyper+V` | Clipboard history: `↵` pastes, `⌘↵` copies, `⌘⌫` deletes |
 | `Hyper+H/J/K/L` | Focus window left/down/up/right (`+Shift` moves it) |
 | `Hyper+U` / `Hyper+I` | Shrink / grow the focused window (hold to repeat) |
 | `Hyper+1…9` | Switch workspace (`+Shift` moves the window there) |
 | `Hyper+T`, `+B`, `+F`, `+R` | Ghostty, Chrome, Finder, Reminders |
+
+Inside the palette, hold ⌘ to number the first nine rows and press ⌘1–9 to
+run one directly. Escape steps back a page, landing on the row you came from,
+and Escape again closes the palette.
 
 Agents, Mail, and Editors each pick one app from a list and remember it:
 Return launches the selected app, ⌘Return makes it the one that chord launches
@@ -120,6 +125,37 @@ bash scripts/font.sh set jetbrains-mono
 
 Both are also available under the palette's Settings, which previews changes
 live.
+
+### Clipboard history
+
+`Hyper+V` opens what you have copied, newest first. Return puts an entry back
+on the clipboard and pastes it into whatever you were using, `⌘Return` only
+copies it, and `⌘Delete` removes it. Typing searches the full text of every
+entry, not just the line shown, so a value buried in something copied earlier
+is still findable — but clipboard entries never appear in the palette's
+global search, only on this page.
+
+Entries
+are held **in memory only** unless you turn on `clipboard_persist`, and the
+history is cleared whenever Omaccy restarts.
+
+That default is deliberate. Copies marked with the
+[nspasteboard.org](http://nspasteboard.org) concealed convention are skipped,
+as are copies from known password-manager apps — but a password copied from a
+password manager's *browser extension* is written by the browser itself and
+looks exactly like any other copy. Omaccy also declines to persist anything
+copied without a ⌘C keystroke, which is how those extensions write, and drops
+such entries from memory after 90 seconds. None of that is airtight, so
+history stays off disk unless you ask otherwise.
+
+Turn it on or off, choose whether it is kept on disk, and clear it under the
+palette's Settings → Clipboard, or in `hyperkey.toml`:
+
+```toml
+clipboard_history = true
+clipboard_persist = false
+clipboard_limit = 200
+```
 
 ## Development
 

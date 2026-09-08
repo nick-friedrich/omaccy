@@ -99,6 +99,11 @@ We use best-of-breed tools rather than building everything ourselves. Our own wo
 - [x] **Ghostty config wired:** the active config is deployed through `~/.omaccy/config`, symlinked into Ghostty's Application Support directory, and restored safely on uninstall.
 - [x] **AeroSpace tiling wired:** an initial Hyper-driven i3-style config is deployed through `~/.omaccy/config`, AeroSpace is installed only when missing, its live config uses the backup-safe symlink lifecycle, and `scripts/aerospace-control.sh` provides start/stop/toggle commands.
 - [x] **Custom menu bar wired:** SketchyBar is managed with `brew services`, its backup-safe config shows AeroSpace workspaces, the front app, tiling availability, Caffeinate state, battery, and time, and workspace changes update immediately.
+- [x] **Clipboard history:** Hyper+V browses what you copied, pasting back into
+  the previous app. Concealed-marked copies and known password-manager apps are
+  skipped, and entries stay in memory unless `clipboard_persist` is set, since a
+  password copied from a manager's browser extension is written by the browser
+  and cannot be distinguished from an ordinary copy.
 - [ ] How our app registers the **Hyper+Space** global hotkey — `CGEvent.tapCreate` vs. Carbon `RegisterEventHotKey`.
 - [ ] Config sync across machines — user-managed dotfiles vs. our own sync mechanism.
 

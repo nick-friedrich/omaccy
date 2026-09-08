@@ -3,12 +3,12 @@ import AppKit
 /// Coding agents offered by the Agents collection: terminal agents run inside
 /// herdr in Ghostty, desktop agents are regular macOS apps launched by bundle ID.
 enum CodingAgent: String, CaseIterable, Sendable {
-    case claudeCode = "claude-code"
-    case codexCLI = "codex"
-    case opencode = "opencode"
     case claudeDesktop = "claude-desktop"
     case chatGPTDesktop = "chatgpt-desktop"
     case t3Code = "t3-code"
+    case claudeCode = "claude-code"
+    case codexCLI = "codex"
+    case opencode = "opencode"
 
     enum Kind: Sendable { case terminal, desktop }
 
@@ -21,12 +21,12 @@ enum CodingAgent: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .claudeCode: return "Claude Code"
-        case .codexCLI: return "Codex CLI"
-        case .opencode: return "opencode"
         case .claudeDesktop: return "Claude"
         case .chatGPTDesktop: return "ChatGPT"
         case .t3Code: return "T3 Code"
+        case .claudeCode: return "Claude Code"
+        case .codexCLI: return "Codex CLI"
+        case .opencode: return "opencode"
         }
     }
 

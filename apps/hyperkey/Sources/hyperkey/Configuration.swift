@@ -6,6 +6,12 @@ struct Configuration {
     var defaultAgent: String? = nil
     var defaultMail: String? = nil
     var defaultEditor: String? = nil
+    var clipboardHistory: Bool = true
+    /// Off by default: a password copied from a browser extension cannot be
+    /// told apart from an ordinary copy, so history stays in memory unless
+    /// the user asks for it on disk.
+    var clipboardPersist: Bool = false
+    var clipboardLimit: Int = 200
 
     /// The app a picker collection launches directly from its own Hyper chord.
     subscript(collection: AppCollection) -> String? {
@@ -63,6 +69,12 @@ struct Configuration {
                 configuration.bindings[key] = value
             } else if key == "escape_on_tap" {
                 configuration.escapeOnTap = value.lowercased() == "true"
+            } else if key == "clipboard_history", section.isEmpty {
+                configuration.clipboardHistory = value.lowercased() != "false"
+            } else if key == "clipboard_persist", section.isEmpty {
+                configuration.clipboardPersist = value.lowercased() == "true"
+            } else if key == "clipboard_limit", section.isEmpty {
+                configuration.clipboardLimit = Int(value) ?? configuration.clipboardLimit
             } else if key == "default_agent", section.isEmpty {
                 configuration.defaultAgent = value.isEmpty ? nil : value
             } else if section.isEmpty,
@@ -77,6 +89,12 @@ struct Configuration {
         let destination = Self.fileURL.resolvingSymlinksInPath()
         var contents = "# Send Escape when Caps Lock is tapped without another key.\n"
         contents += "escape_on_tap = \(escapeOnTap)\n"
+        contents += "\n# Record what you copy, browsable in the launcher.\n"
+        contents += "clipboard_history = \(clipboardHistory)\n"
+        contents += "# Keep that history in ~/.omaccy/clipboard across restarts.\n"
+        contents += "clipboard_persist = \(clipboardPersist)\n"
+        contents += "# How many entries to keep.\n"
+        contents += "clipboard_limit = \(clipboardLimit)\n"
         if let defaultAgent {
             contents += "\n# Coding agent launched directly by Hyper+A.\n"
             contents += "default_agent = \"\(defaultAgent)\"\n"

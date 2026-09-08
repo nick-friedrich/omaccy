@@ -70,6 +70,9 @@ enum HotkeyBindings {
             if shift { return { SuperMenuController.shared.toggle(section: .collection(collection)) } }
             return { SuperMenuController.shared.launchDefaultApp(in: collection) }
         }
+        if keyCode == KeyNames.virtualKeyCode(for: "v") {
+            return { SuperMenuController.shared.toggle(section: .clipboard) }
+        }
         return nil
     }
 

@@ -64,6 +64,12 @@ private func eventTapCallback(
 
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
 
+    // Clipboard history uses this to tell a keyboard copy from a programmatic
+    // one; it never consumes or alters the event.
+    if type == .keyDown {
+        ClipboardKeystroke.note(keyCode: UInt16(keyCode), flags: event.flags)
+    }
+
     if (type == .keyDown || type == .keyUp),
        ResizeKeyRepeat.consumeHeld(keyCode: UInt16(keyCode), keyDown: type == .keyDown) {
         return nil
