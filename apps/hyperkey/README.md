@@ -112,11 +112,15 @@ installed offers its install route instead: a confirmed `brew install` in
 Ghostty, matching the Install collection, or the Mac App Store for Xcode, which
 Homebrew does not carry. Apple Mail always counts as installed.
 
-Each collection shows the chord it answers to: the Home row for Agents, Mail,
-and Editors carries its `Hyper + <letter>`, the collection's own header spells
-out `HYPER + SHIFT + <letter>`, and the chosen default is marked `✓ Hyper + E`
-in its row. A letter claimed by a `[bindings]` entry stops being advertised
-anywhere, since the chord no longer opens the collection.
+Each collection shows the chord it answers to. Hyper is drawn as **✦**, the
+glyph keyboard launchers have settled on, with ⇧ for Shift: the Home row for
+Agents, Mail, and Editors carries a muted `✦ E` beside its chevron, the
+collection's own header spells out `✦ ⇧ E`, and the chosen default is marked
+`✦ E ✓` in its row. Every written chord in the palette renders this way,
+including the Help list, while the rows keep their written text so searching
+for "hyper" or "shift" still matches. A letter claimed by a `[bindings]` entry
+stops being advertised anywhere, since the chord no longer opens the
+collection.
 
 Choices are matched to the app bundle they install as (`Cursor.app`) rather than
 to a hardcoded bundle identifier, which is read from the installed app itself.

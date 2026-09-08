@@ -542,7 +542,12 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             || entry.theme != nil || entry.font != nil ? PaletteStyle.accent : PaletteStyle.muted
         keys.alignment = .right
         keys.setContentCompressionResistancePriority(.required, for: .horizontal)
-        for view in [icon, title, detail, keys] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
+        // Its own label so the chord stays muted next to an accented chevron.
+        let chord = PaletteStyle.label(Self.chordHint(for: entry), size: 11, weight: .medium)
+        chord.textColor = PaletteStyle.muted
+        chord.alignment = .right
+        chord.setContentCompressionResistancePriority(.required, for: .horizontal)
+        for view in [icon, title, detail, chord, keys] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
         NSLayoutConstraint.activate([
             icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 16),
             icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
@@ -554,8 +559,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             keys.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -18),
             keys.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             keys.widthAnchor.constraint(lessThanOrEqualToConstant: 230),
-            title.trailingAnchor.constraint(lessThanOrEqualTo: keys.leadingAnchor, constant: -16),
-            detail.trailingAnchor.constraint(lessThanOrEqualTo: keys.leadingAnchor, constant: -16),
+            chord.trailingAnchor.constraint(equalTo: keys.leadingAnchor, constant: -12),
+            chord.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: chord.leadingAnchor, constant: -16),
+            detail.trailingAnchor.constraint(lessThanOrEqualTo: chord.leadingAnchor, constant: -16),
         ])
         return cell
     }
@@ -614,16 +621,23 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private static func keyHint(for entry: MenuEntry, isApp: Bool) -> String {
         if let status = entry.package?.status { return status }
         if entry.theme != nil || entry.font != nil { return entry.detail == "Active" ? "✓" : "" }
-        if entry.agent != nil || entry.choice != nil {
-            guard entry.isDefaultChoice else { return "" }
-            return entry.chord.map { "✓  Hyper + \($0)" } ?? "✓"
-        }
-        if let chord = entry.chord { return "Hyper + \(chord)" }
-        if entry.detail.hasPrefix("Hyper") { return entry.detail }
+        if entry.agent != nil || entry.choice != nil { return entry.isDefaultChoice ? "✓" : "" }
+        if entry.detail.hasPrefix("Hyper") { return MenuShortcut.symbolic(entry.detail) }
         if entry.destination != nil { return "›" }
         let isShortcut = !isApp && entry.systemAction == nil && entry.package == nil
             && !entry.upgradesAll && !entry.updatesOmaccy
-        return isShortcut ? entry.detail : ""
+        return isShortcut ? MenuShortcut.symbolic(entry.detail) : ""
+    }
+
+    /// The collection chord, shown muted beside the row's own marker so a
+    /// browsable row keeps its chevron. Rows inside a collection carry the
+    /// chord too, but only the chosen default is actually launched by it.
+    private static func chordHint(for entry: MenuEntry) -> String {
+        guard let chord = entry.chord else { return "" }
+        if entry.agent != nil || entry.choice != nil {
+            return entry.isDefaultChoice ? MenuShortcut.hyper(chord) : ""
+        }
+        return MenuShortcut.hyper(chord)
     }
 
     private func select(delta: Int) {
@@ -1091,7 +1105,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             return ""
         }
         guard let chord else { return "" }
-        return "  ·  HYPER + SHIFT + \(chord)"
+        return "  ·  " + MenuShortcut.symbolic("Hyper + Shift + \(chord)")
     }
 
     private var isPickerPage: Bool {
@@ -1207,13 +1221,14 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         emptyState.isHidden = !rows.isEmpty
         tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
         // Home stays compact; long collections and results get room to breathe.
-        // Home lists 9 collections: 214pt of chrome + 9 * 64pt rows = 790pt,
-        // measured against a captured preview, so the last row keeps its detail
-        // line. Clamped to the screen for displays without room for it.
+        // A row is 62pt plus 2pt of intercell spacing, and the chrome around the
+        // table measures 220pt, so a page fits its rows exactly without a
+        // scrollbar. Home's 9 collections set the cap; taller lists scroll, and
+        // a short display clamps before either.
         let available = ((panel.screen ?? NSScreen.main)?.visibleFrame.height ?? 900) - 80
         let height: CGFloat = rows.count <= 3
             ? 250 + CGFloat(max(rows.count, 2)) * 64
-            : min(214 + CGFloat(rows.count) * 64, min(790, available))
+            : min(220 + CGFloat(rows.count) * 64, min(796, available))
         var frame = panel.frame
         frame.origin.y += frame.height - height
         frame.size.height = height

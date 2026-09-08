@@ -4,6 +4,20 @@ import CoreGraphics
 /// Translate with the active layout and physical Shift only, before adding Hyper.
 /// This lets ? work on both US (Shift+/) and German (Shift+ß) keyboards.
 enum MenuShortcut {
+    /// Hyper drawn the way keyboard launchers draw it, so a chord reads as a
+    /// glyph instead of a sentence.
+    static let hyperSymbol = "✦"
+
+    static func hyper(_ key: String) -> String { "\(hyperSymbol) \(key)" }
+
+    /// Rewrites a written chord ("Hyper + Shift + H") for display only. The
+    /// written form stays in the entry's own text, so searching for "hyper" or
+    /// "shift" still matches what the row says it does.
+    static func symbolic(_ chord: String) -> String {
+        chord.replacingOccurrences(of: "Hyper + ", with: "\(hyperSymbol) ")
+            .replacingOccurrences(of: "Shift + ", with: "⇧ ")
+    }
+
     static func isQuestionMark(keyCode: UInt16, flags: CGEventFlags) -> Bool {
         guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
               let pointer = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else {

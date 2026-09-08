@@ -116,6 +116,18 @@ final class MenuTests: XCTestCase {
         XCTAssertTrue(claimed.allSatisfy { $0.chord == nil })
     }
 
+    func testChordsRenderWithTheHyperGlyph() {
+        XCTAssertEqual(MenuShortcut.hyper("E"), "✦ E")
+        XCTAssertEqual(MenuShortcut.symbolic("Hyper + Shift + E"), "✦ ⇧ E")
+        XCTAssertEqual(MenuShortcut.symbolic("Hyper + Space"), "✦ Space")
+        // Text that names no chord is left exactly as written.
+        XCTAssertEqual(MenuShortcut.symbolic("Tap Caps Lock"), "Tap Caps Lock")
+        // The written form stays in the row's own text, so search still matches.
+        let rows = MenuCatalog.results(query: "hyper", page: .help, apps: [],
+                                       help: [MenuEntry(title: "Focus left", detail: "Hyper + H")])
+        XCTAssertEqual(rows.map(\.detail), ["Hyper + H"])
+    }
+
     func testPowerActionsRequireConfirmationBeforeQuittingApps() {
         XCTAssertFalse(SystemAction.sleep.requiresConfirmation)
         XCTAssertTrue(SystemAction.restart.requiresConfirmation)

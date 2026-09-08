@@ -161,9 +161,12 @@ which Homebrew does not carry — and the result stays user-managed, so uninstal
 leaves it alone.
 
 Each collection advertises its chord: on its Home row, in its own page header
-(`HYPER + SHIFT + E`), and beside the chosen default (`✓ Hyper + E`). All three
-are suppressed for a letter claimed by `[bindings]`, so the palette never shows
-a shortcut that does not work. `--preview-menu` takes an optional page name for
+(`✦ ⇧ E`), and beside the chosen default. All three are suppressed for a letter
+claimed by `[bindings]`, so the palette never shows a shortcut that does not
+work. `MenuShortcut` renders Hyper as ✦ and Shift as ⇧ for display only —
+entries keep their written chords so search still matches "hyper" — and the
+chord sits in its own muted label so a browsable row keeps its accented
+chevron. `--preview-menu` takes an optional page name for
 developing these pages, which cannot be reached by chord in a preview.
 
 The picker chords (Hyper+A, Hyper+E, Hyper+C) yield to an explicit `[bindings]`
