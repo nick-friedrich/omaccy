@@ -67,6 +67,38 @@ ensure_formula() {
   record_dep installed-formulas "$formula"
 }
 
+# Registers a formula's Homebrew service so it starts at login.
+#
+# A daemon that is already running outside launchd holds whatever socket or
+# port it binds, so launchctl's bootstrap fails (exit 5, and `brew services
+# list` then reports "error") even though the program itself is working fine.
+# herdr does exactly this when it is already hosting agent sessions. Only
+# login-time auto-start is at stake there, so that case is reported as the
+# non-problem it is instead of a wall of failure output people read as a
+# broken install. Assumes the process is named after the formula, which holds
+# for the services Omaccy registers.
+ensure_login_service() {
+  local formula="$1"
+  local output=""
+
+  if output="$(brew services start "$formula" 2>&1)"; then
+    [[ -n "$output" ]] && echo "$output"
+    return 0
+  fi
+
+  if pgrep -x "$formula" >/dev/null 2>&1; then
+    echo "$formula is already running, so it could not also be registered to start at login."
+    echo "This is not a problem: Omaccy uses the running $formula. To register it later,"
+    echo "quit $formula and run: brew services start $formula"
+    return 0
+  fi
+
+  echo "$output" >&2
+  echo "Warning: could not register $formula's login service, and $formula is not running." >&2
+  echo "Omaccy still works; start it by hand with: brew services start $formula" >&2
+  return 0
+}
+
 remove_owned_cask() {
   local cask="$1"
   local display_name="$2"

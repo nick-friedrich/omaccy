@@ -12,7 +12,7 @@
 | `scripts/font.sh` | Standalone font switcher for Ghostty, SketchyBar, and the launcher |
 | `scripts/lib/paths.sh` | Repository and installed-state paths; no directory creation |
 | `scripts/lib/prompts.sh` | Yes/No handling and descriptions of install, update, and uninstall |
-| `scripts/lib/dependencies.sh` | Homebrew setup, ownership markers, and optional dependency removal |
+| `scripts/lib/dependencies.sh` | Homebrew setup, ownership markers, login-service registration, and optional dependency removal |
 | `scripts/lib/config.sh` | Config copying, hash stamps, symlinks, backup/restore, and legacy migration |
 | `scripts/lib/macos.sh` | Menu-bar and Mission Control settings with paired restoration functions |
 | `scripts/lib/hyperkey.sh` | Fetches the signed, notarized release build by default (local Swift build under `OMACCY_HYPERKEY_BUILD_LOCAL=1`), plus launch |
@@ -83,6 +83,14 @@ uses `trigger-binding`, with at most one request in flight to avoid a backlog.
 AeroSpace remains responsible for the shortcut commands.
 AeroSpace uses its own workspaces. Mission Control grouping is enabled as a
 workaround for tiny previews; its original preference is restored on uninstall.
+
+A daemon already running outside launchd holds whatever socket it binds, so
+`brew services start` fails its bootstrap (exit 5, and `brew services list`
+then reports "error") even though the program itself is working. herdr does
+this whenever it is already hosting agent sessions. `ensure_login_service`
+reports that case as the non-problem it is — only login-time auto-start is
+affected — and surfaces brew's own output only when the daemon really is not
+running.
 
 Starting AeroSpace re-enables an already running but disabled server before
 checking workspace readiness. This handles reinstall after uninstall without

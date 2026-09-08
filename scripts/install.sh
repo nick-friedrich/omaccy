@@ -69,12 +69,9 @@ main() {
   echo "Starting herdr's background service at login..."
   # start, not restart: herdr keeps agent sessions alive across terminal
   # closures, so an already-running instance must not be killed and relaunched.
-  # Non-fatal: a herdr already running outside brew services (started by hand,
-  # or by a previous login item) can leave its default session's socket bound,
-  # which makes launchd's bootstrap fail here even though herdr itself is
-  # already working fine. Only login-time auto-start is at stake, not this
-  # session's Agents feature.
-  brew services start herdr || echo "Warning: could not register herdr's login service (see above); it may already be running some other way."
+  # ensure_login_service explains a bootstrap that loses to an already-running
+  # herdr rather than reporting it as a failure.
+  ensure_login_service herdr
   echo ""
   echo "Omaccy installed: Caps Lock → Command+Control+Option; Hyper+T → Ghostty; AeroSpace tiling and SketchyBar enabled."
   printf 'To uninstall: bash %q\n' "$REPO_ROOT/scripts/uninstall.sh"

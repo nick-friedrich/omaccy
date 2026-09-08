@@ -12,6 +12,12 @@ bash tests/scripts-smoke.sh
 git diff --check
 ```
 
+Assert with `[[ ... ]] || fail "what broke"`, never a bare `[[ ... ]]`: the
+macOS system bash (3.2) does not apply `set -e` to a failing conditional, and
+its ERR trap does not fire for one either, so a bare check silently passes no
+matter what the code does. When adding a check, confirm it actually fails by
+breaking the behavior it covers and rerunning.
+
 The smoke checks use temporary directories for config state and only exercise
 cancellation in the real entry points. They do not install dependencies, restart
 services, or modify macOS preferences. AeroSpace stop/start recovery is checked
