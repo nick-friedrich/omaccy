@@ -19,7 +19,10 @@ matter what the code does. When adding a check, confirm it actually fails by
 breaking the behavior it covers and rerunning.
 
 The smoke checks use temporary directories for config state and only exercise
-cancellation in the real entry points. They do not install dependencies, restart
+cancellation in the real entry points. Checkout fast-forwarding is checked
+against a mocked `checkout_git`, so no repository and no remote is touched;
+because each assertion captures output in a command substitution, that mock
+cannot carry state between calls. They do not install dependencies, restart
 services, or modify macOS preferences. AeroSpace stop/start recovery is checked
 with a mocked CLI, including a disabled server and restricted IPC. The Hyperkey
 agent restart is checked through the `hyperkey_launchctl` seam, covering an
@@ -30,7 +33,9 @@ desktop and should be a deliberate manual integration check.
 Keep these invariants when editing setup logic:
 
 1. No directories, packages, settings, or services change before confirmation.
-2. Update asks once and uses the same installation sequence.
+2. Update asks once, before it fetches or merges anything, and uses the same
+   installation sequence. A refused or impossible fast-forward is reported and
+   skipped, never fatal, and never anything but `--ff-only`.
 3. Original setting backups are saved once, not overwritten by repeated installs.
 4. Customized canonical configs survive an update; pristine defaults can refresh.
 5. Uninstall only restores targets still managed by Omaccy and asks separately

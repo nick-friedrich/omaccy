@@ -95,9 +95,10 @@ additional updates. Reopen Install after it finishes to refresh status. Individu
 and updates remain in Install.
 
 **Omaccy → Update Omaccy** opens the checkout’s `scripts/update.sh` in Ghostty.
-The script explains the changes and asks for confirmation, then rebuilds local
-code, refreshes unchanged defaults, preserves customized configs, and restarts
-Omaccy. It does not download newer repository code. Keep the checkout in place;
+The script explains the changes and asks for confirmation, then fast-forwards
+the checkout, rebuilds from it, refreshes unchanged defaults, preserves
+customized configs, and restarts Omaccy. A checkout it cannot fast-forward
+safely is reported and rebuilt as-is. Keep the checkout in place;
 if it moves, run `scripts/update.sh` from its new location to restore the menu
 entry’s path.
 

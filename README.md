@@ -53,10 +53,16 @@ launch; the keyboard engine does not work until you approve it.
 bash scripts/update.sh
 ```
 
-Reruns the installation sequence: refetches the latest Hyperkey release,
-refreshes defaults that you have not edited, and keeps the ones you have.
-It does **not** `git pull` — run that yourself first — and it does not upgrade
-already-installed Homebrew packages.
+One command for the whole update. It fast-forwards the checkout to the latest
+commit on its remote branch, then reruns the installation sequence: refetches
+the latest Hyperkey release, refreshes defaults that you have not edited, and
+keeps the ones you have. Nothing happens before the single confirmation.
+
+Only a fast-forward is ever performed, so your own commits are never rewritten.
+When the checkout has uncommitted changes or commits the remote does not, or
+the remote is unreachable, the code update is skipped with a note and setup
+rebuilds from the revision you already have. `--no-pull` skips it deliberately.
+Neither form upgrades already-installed Homebrew packages.
 
 ### Uninstall
 
@@ -171,8 +177,8 @@ Script-only changes need no rebuild.
 
 The rest of Omaccy (the AeroSpace, SketchyBar, Ghostty, and Hyperkey configs,
 and the setup scripts themselves) is distributed as this Git repository: you get
-it by cloning, and you update it with `git pull` followed by
-`bash scripts/update.sh`. There is no release artifact, no Homebrew tap, and no
+it by cloning, and `bash scripts/update.sh` both pulls it and reapplies it.
+There is no release artifact, no Homebrew tap, and no
 hosted one-line installer for that part.
 
 The app is the exception because it is a native binary that needs Apple's

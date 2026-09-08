@@ -5,13 +5,14 @@
 | `apps/hyperkey/` | Swift package, app metadata, keyboard engine, app launcher, and Apps, Agents, Mail, Editors, Install, Omaccy, Help, System & Settings palette |
 | `config/` | Shipped defaults for Hyperkey, AeroSpace, Ghostty, SketchyBar, and the LaunchAgent |
 | `scripts/install.sh` | Confirmation followed by the installation sequence |
-| `scripts/update.sh` | Delegates to installation with the update explanation and one confirmation |
+| `scripts/update.sh` | One confirmation, then the checkout fast-forward, then the installation sequence |
 | `scripts/uninstall.sh` | Confirmation followed by service shutdown, restoration, and cleanup |
 | `scripts/aerospace-control.sh` | Standalone start/stop/toggle command with IPC readiness handling |
 | `scripts/theme.sh` | Standalone theme switcher; stores the choice in `~/.omaccy/theme` |
 | `scripts/font.sh` | Standalone font switcher for Ghostty, SketchyBar, and the launcher |
 | `scripts/lib/paths.sh` | Repository and installed-state paths; no directory creation |
 | `scripts/lib/prompts.sh` | Yes/No handling and descriptions of install, update, and uninstall |
+| `scripts/lib/git.sh` | Best-effort fast-forward of the checkout setup runs from |
 | `scripts/lib/dependencies.sh` | Homebrew setup, ownership markers, login-service registration, and optional dependency removal |
 | `scripts/lib/config.sh` | Config copying, hash stamps, symlinks, backup/restore, and legacy migration |
 | `scripts/lib/macos.sh` | Menu-bar and Mission Control settings with paired restoration functions |
@@ -65,10 +66,29 @@ from the current checkout's Swift sources — the pre-existing ad-hoc-signed
 path, needed when testing unreleased hyperkey changes, which still resets
 Accessibility state when the built binary's hash changes.
 
-Update reruns the installation sequence (refetching the latest hyperkey release
-by default, or rebuilding from the current checkout under
-`OMACCY_HYPERKEY_BUILD_LOCAL=1`) and refreshes pristine config defaults. It
-does not fetch Git changes or upgrade already installed Homebrew packages.
+Update fast-forwards the checkout, then reruns the installation sequence
+(refetching the latest hyperkey release by default, or rebuilding from the
+current checkout under `OMACCY_HYPERKEY_BUILD_LOCAL=1`) and refreshes pristine
+config defaults. It does not upgrade already installed Homebrew packages.
+
+The fast-forward is a best-effort step in front of that sequence, never a gate
+on it. `scripts/lib/git.sh` refuses in every case where pulling could lose or
+rewrite work — a missing git, a non-checkout, a detached HEAD, a branch with no
+upstream, uncommitted changes, an unreachable remote, or commits the remote
+does not have — and each refusal prints its reason, says setup continues from
+the present revision, and returns success. Only `merge --ff-only` is ever run.
+`--no-pull` skips the step deliberately, which is also how the smoke checks
+exercise the rebuild without a network.
+
+The update prompt covers both the code update and the setup sequence it feeds,
+so `update.sh` owns the single confirmation and exports `OMACCY_SETUP_CONFIRMED`
+for the install run it hands off to; `confirm_setup` returns early on that
+rather than asking twice. Ordering is load-bearing: nothing is fetched or
+merged until after the confirmation, so declining still leaves the checkout
+untouched. `update.sh` keeps its work in a `main` function that ends in `exec`,
+because Bash reads a script as it runs it and a pull rewriting the file mid-run
+would otherwise resume at a stale byte offset. The exec also means install.sh
+and its libraries are read fresh, at the newly pulled revision.
 
 All three operations explain their effects and require Y/Yes (case-insensitive).
 Empty input, EOF, and other answers cancel. The existing explicit automation
@@ -245,6 +265,6 @@ it alongside the app. Debug builds resolve their source checkout. Missing/moved
 checkouts show a recovery message instead of guessing another location. The
 updater receives the path as a separate argument and clears the assume-yes
 override, retaining the script's single confirmation before setup changes.
-Ghostty survives the app's restart. This reruns the installation sequence; it
-does not fetch a newer Git revision.
+Ghostty survives the app's restart. Because `update.sh` now pulls first, this
+menu action is a complete update rather than a rebuild of the present revision.
 Bulk Homebrew upgrades remain under Install alongside individual package actions.

@@ -5,6 +5,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/scripts/lib/prompts.sh"
 source "$REPO_ROOT/scripts/lib/config.sh"
 source "$REPO_ROOT/scripts/lib/dependencies.sh"
+source "$REPO_ROOT/scripts/lib/git.sh"
 source "$REPO_ROOT/scripts/lib/hyperkey.sh"
 
 # The macOS system bash (3.2) does not apply `set -e` to a failing [[ ]], and
@@ -45,6 +46,81 @@ for operation in install update uninstall; do
   output="$(cd "$test_dir"; bash "$REPO_ROOT/scripts/$operation.sh" </dev/null)"
   [[ "$output" == *cancelled.* ]]
 done
+
+# update.sh describes the code update it is about to perform, offers --no-pull
+# for rebuilding the current revision, and rejects anything else. Cancellation
+# still happens before the checkout or the network is touched.
+output="$(cd "$test_dir"; printf 'n\n' | bash "$REPO_ROOT/scripts/update.sh")"
+[[ "$output" == *"Fast-forward this checkout"* ]] || fail "update did not announce the code update"
+output="$(cd "$test_dir"; printf 'n\n' | bash "$REPO_ROOT/scripts/update.sh" --no-pull)"
+[[ "$output" == *"does not download newer repository code"* ]] || fail "--no-pull did not say the code stays put"
+[[ "$output" != *Fast-forward* ]] || fail "--no-pull still announced a code update"
+[[ "$output" == *cancelled.* ]] || fail "--no-pull did not honour a declined confirmation"
+if (cd "$test_dir"; bash "$REPO_ROOT/scripts/update.sh" --bogus >/dev/null 2>&1); then
+  fail "update accepted an unknown flag"
+fi
+
+# The combined update question stands in for setup's own: update.sh asks once,
+# pulls, then hands off to install, which must not ask again.
+output="$(REPO_ROOT="$test_dir" CONF_DIR="$test_dir/config" BAK_DIR="$test_dir/backups" \
+  OMACCY_SETUP_CONFIRMED=1 confirm_setup --update </dev/null)"
+[[ -z "$output" ]] || fail "an already-confirmed setup prompted a second time"
+
+# Fast-forwarding the checkout, with git mocked so no repository is touched.
+# Every refusal must stay non-fatal: setup runs from the present revision.
+git_state=clean
+git_fetch_result=0
+git_ff_result=0
+git_head=1111111
+# Each assertion captures output in a command substitution, so the mock cannot
+# carry a moved HEAD across calls; git_ff_target names where a fast-forward
+# lands, and matching git_head is how "already up to date" is expressed.
+git_ff_target=2222222
+checkout_git() {
+  case "$*" in
+    'rev-parse --is-inside-work-tree') [[ "$git_state" != not-a-repo ]] ;;
+    'symbolic-ref -q HEAD') [[ "$git_state" != detached ]] ;;
+    'rev-parse -q --verify @{upstream}') [[ "$git_state" != no-upstream ]] ;;
+    'diff --quiet HEAD') [[ "$git_state" != dirty ]] ;;
+    'fetch --quiet') return "$git_fetch_result" ;;
+    'merge --ff-only --quiet @{upstream}')
+      [[ "$git_ff_result" == 0 ]] || return 1
+      git_head="$git_ff_target" ;;
+    'rev-parse HEAD') echo "$git_head" ;;
+    'rev-parse --short '*) echo "$git_head" ;;
+    'rev-list --count '*) echo 3 ;;
+    *) return 1 ;;
+  esac
+}
+
+for git_state in not-a-repo detached no-upstream dirty; do
+  output="$(update_checkout 2>&1)" || fail "a checkout that cannot be pulled aborted the update"
+  [[ "$output" == *"Skipping the code update"* ]] || fail "$git_state did not skip the code update"
+  [[ "$output" == *"Setup continues"* ]] || fail "$git_state did not say setup still runs"
+  [[ "$output" != *Fetching* ]] || fail "$git_state contacted the remote anyway"
+done
+
+git_state=clean git_fetch_result=1
+output="$(update_checkout 2>&1)" || fail "an unreachable remote aborted the update"
+[[ "$output" == *"could not be reached"* ]] || fail "an unreachable remote was not named as the reason"
+[[ "$output" == *"Setup continues"* ]] || fail "an unreachable remote did not say setup still runs"
+
+git_fetch_result=0 git_ff_result=1
+output="$(update_checkout 2>&1)" || fail "a diverged branch aborted the update"
+[[ "$output" == *"cannot be fast-forwarded"* ]] || fail "a diverged branch was not named as the reason"
+[[ "$output" == *"Reconcile it"* ]] || fail "a diverged branch was not told how to recover"
+[[ "$output" != *Updated* ]] || fail "a diverged branch was reported as updated"
+
+git_ff_result=0
+output="$(update_checkout 2>&1)"
+[[ "$output" == *"Updated the checkout to 2222222"* ]] || fail "a fast-forward did not report the new revision"
+[[ "$output" == *"3 new commits"* ]] || fail "a fast-forward did not report how far it moved"
+
+git_ff_target="$git_head"
+output="$(update_checkout 2>&1)"
+[[ "$output" == *"Already on the latest"* ]] || fail "an unchanged checkout was reported as updated"
+[[ "$output" != *Updated* ]] || fail "an unchanged checkout claimed to have moved"
+unset -f checkout_git
 
 # Starting the keyboard agent, with launchd and the process kill mocked. An
 # update that leaves the app version unchanged never unloads the agent, so a
@@ -193,4 +269,4 @@ restore_target "$test_dir/target" "$CONF_DIR/example" >/dev/null
 [[ ! -L "$test_dir/target" ]] || fail "restore_target left the symlink in place"
 [[ "$(cat "$test_dir/target")" == original ]] || fail "restore_target did not restore the original file"
 
-echo 'PASS: confirmations, cancellation, hyperkey restart, AeroSpace re-enable, config updates, and backup restoration.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, AeroSpace re-enable, config updates, and backup restoration.'

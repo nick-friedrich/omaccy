@@ -40,7 +40,7 @@ enum MenuCatalog {
         MenuEntry(title: "Editors", detail: AppCollection.editors.summary, destination: .editors, collection: .editors,
                   chord: chord(AppCollection.editors.chord, boundKeys)),
         MenuEntry(title: "Install", detail: "Search Homebrew apps and command-line tools", destination: .install),
-        MenuEntry(title: "Omaccy", detail: "Update Omaccy from your local checkout", destination: .omaccy),
+        MenuEntry(title: "Omaccy", detail: "Update Omaccy: pull the checkout and reapply it", destination: .omaccy),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
         MenuEntry(title: "System", detail: "Sleep, restart, or shut down your Mac", destination: .system),
         MenuEntry(title: "Settings", detail: "Pick the theme and font for the bar and launcher", destination: .settings),
@@ -65,7 +65,7 @@ enum MenuCatalog {
                         boundKeys: Set<String> = []) -> [MenuEntry] {
         if page == .install { return [] }
         if page == .omaccy {
-            let entry = MenuEntry(title: "Update Omaccy", detail: "Run update.sh from your local checkout · Opens Ghostty", updatesOmaccy: true)
+            let entry = MenuEntry(title: "Update Omaccy", detail: "Pull the latest code, then rerun setup · Opens Ghostty", updatesOmaccy: true)
             let words = query.split(whereSeparator: \.isWhitespace)
             return words.allSatisfy { (entry.title + " " + entry.detail).localizedCaseInsensitiveContains(String($0)) } ? [entry] : []
         }

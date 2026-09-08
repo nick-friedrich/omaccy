@@ -30,11 +30,23 @@ confirm_setup() {
     echo "Usage: $0 [--update]" >&2
     exit 1
   fi
+  # update.sh asks one combined question covering the code update and this
+  # sequence, then pulls. Setup must not ask a second time for the same run.
+  if [[ "${OMACCY_SETUP_CONFIRMED:-0}" == "1" ]]; then
+    return 0
+  fi
 
   echo "$setup_action Omaccy"
   if [[ "$setup_action" == "Update" ]]; then
-    echo "Rebuild from this local checkout and refresh unchanged default configs; keep customized configs."
-    echo "This does not download newer repository code or upgrade existing Homebrew packages."
+    if [[ "${UPDATE_PULLS_CHECKOUT:-0}" == "1" ]]; then
+      echo "Fast-forward this checkout to the latest commit on its remote branch, then rebuild from it:"
+      echo "refresh unchanged default configs and keep customized ones."
+      echo "A modified checkout, local commits, or an unreachable remote skip the code update and rebuild as-is."
+    else
+      echo "Rebuild from this local checkout and refresh unchanged default configs; keep customized configs."
+      echo "This does not download newer repository code."
+    fi
+    echo "This does not upgrade existing Homebrew packages."
   fi
   echo "This will:"
   echo "  - Install Homebrew if needed, plus missing Ghostty, AeroSpace, SketchyBar, and Herdr dependencies."
