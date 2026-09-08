@@ -172,6 +172,35 @@ hyperkey_service_target() {
   printf 'gui/%s/%s' "$(id -u)" "$HYPERKEY_LABEL"
 }
 
+# Configs and scripts ship continuously from the repository while the app ships
+# only on tags, so a freshly pulled checkout can carry app changes the installed
+# release does not have. Roughly a quarter of this project's commits touch both
+# trees, so a config can land referencing a feature the running binary lacks,
+# which reads as a broken setting rather than as a wait for the next release.
+# Requires git.sh for checkout_git. A local build removes the release stamp, so
+# the absent file correctly reports no skew.
+warn_hyperkey_checkout_skew() {
+  local installed_tag_file="$OMACCY_DIR/hyperkey-release"
+  local installed_tag count plural=s
+
+  [[ -f "$installed_tag_file" ]] || return 0
+  installed_tag="$(cat "$installed_tag_file")"
+  [[ -n "$installed_tag" ]] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+  # Only comparable against a checkout whose history actually holds that tag.
+  checkout_git rev-parse -q --verify "$installed_tag^{commit}" >/dev/null 2>&1 || return 0
+  count="$(checkout_git rev-list --count "$installed_tag..HEAD" -- apps/hyperkey/ 2>/dev/null)" || return 0
+  [[ "$count" =~ ^[0-9]+$ ]] || return 0
+  [[ "$count" -gt 0 ]] || return 0
+  [[ "$count" == 1 ]] && plural=""
+
+  echo ""
+  echo "Note: this checkout has $count app change$plural newer than the installed Omaccy"
+  echo "Hyperkey $installed_tag. Configs from those commits may reference features it does"
+  echo "not have yet; they arrive with the next tagged release."
+  printf 'To build them now: OMACCY_HYPERKEY_BUILD_LOCAL=1 bash %q\n' "$REPO_ROOT/scripts/update.sh"
+}
+
 stop_hyperkey_process() {
   local waited=0
   hyperkey_launchctl bootout "$(hyperkey_service_target)" >/dev/null 2>&1 || true

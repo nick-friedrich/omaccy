@@ -6,6 +6,7 @@ source "$REPO_ROOT/scripts/lib/prompts.sh"
 source "$REPO_ROOT/scripts/lib/dependencies.sh"
 source "$REPO_ROOT/scripts/lib/config.sh"
 source "$REPO_ROOT/scripts/lib/macos.sh"
+source "$REPO_ROOT/scripts/lib/git.sh"
 source "$REPO_ROOT/scripts/lib/hyperkey.sh"
 
 main() {
@@ -76,6 +77,7 @@ main() {
   echo "Omaccy installed: Caps Lock → Command+Control+Option; Hyper+T → Ghostty; AeroSpace tiling and SketchyBar enabled."
   printf 'To uninstall: bash %q\n' "$REPO_ROOT/scripts/uninstall.sh"
   echo "Original config backups: $BAK_DIR"
+  warn_hyperkey_checkout_skew
 }
 
 main "$@"

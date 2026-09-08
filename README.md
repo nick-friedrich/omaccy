@@ -64,6 +64,11 @@ the remote is unreachable, the code update is skipped with a note and setup
 rebuilds from the revision you already have. `--no-pull` skips it deliberately.
 Neither form upgrades already-installed Homebrew packages.
 
+The app itself only ships on tagged releases, so a pulled checkout can be ahead
+of the installed Omaccy Hyperkey. When it is, the update says so and names the
+gap: those changes arrive with the next release, and nothing is broken in the
+meantime.
+
 ### Uninstall
 
 ```bash

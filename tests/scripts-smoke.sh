@@ -169,6 +169,52 @@ stop_hyperkey_process
 [[ "$agent_loaded" == 0 ]] || fail "stopping the agent left it loaded"
 unset -f hyperkey_launchctl pkill
 
+# Skew between the continuously-shipped repository and the tag-shipped app.
+# The warning exists because a config can land referencing a feature the
+# installed binary lacks, which otherwise reads as a broken setting.
+OMACCY_DIR="$test_dir/skew"
+mkdir -p "$OMACCY_DIR"
+skew_count=3
+skew_tag_known=0
+checkout_git() {
+  case "$1" in
+    rev-parse) [[ "$skew_tag_known" == 1 ]] ;;
+    rev-list) echo "$skew_count" ;;
+    *) return 1 ;;
+  esac
+}
+
+# No recorded release: a locally built app clears the stamp, so there is
+# nothing to compare against and nothing to say.
+output="$(warn_hyperkey_checkout_skew 2>&1)" || fail "a missing release stamp reported failure"
+[[ -z "$output" ]] || fail "a locally built app was warned about"
+
+printf 'v0.3.0' > "$OMACCY_DIR/hyperkey-release"
+output="$(warn_hyperkey_checkout_skew 2>&1)" || fail "an unknown tag reported failure"
+[[ -z "$output" ]] || fail "a tag absent from the checkout was compared anyway"
+
+skew_tag_known=1
+output="$(warn_hyperkey_checkout_skew 2>&1)" || fail "reporting skew returned failure"
+[[ "$output" == *"3 app changes newer"* ]] || fail "skew did not report how many app changes are ahead"
+[[ "$output" == *"v0.3.0"* ]] || fail "skew did not name the installed release"
+[[ "$output" == *"next tagged release"* ]] || fail "skew did not say the changes arrive on their own"
+[[ "$output" == *OMACCY_HYPERKEY_BUILD_LOCAL=1* ]] || fail "skew did not offer the local build"
+
+skew_count=1
+output="$(warn_hyperkey_checkout_skew 2>&1)"
+[[ "$output" == *"1 app change newer"* ]] || fail "a single app change was not singular"
+
+# The common case: the checkout matches the installed release, so stay quiet.
+skew_count=0
+output="$(warn_hyperkey_checkout_skew 2>&1)" || fail "an in-sync checkout reported failure"
+[[ -z "$output" ]] || fail "an in-sync checkout was warned about"
+
+# A checkout with no usable git output must not warn on garbage.
+skew_count=not-a-number
+output="$(warn_hyperkey_checkout_skew 2>&1)" || fail "unparseable output reported failure"
+[[ -z "$output" ]] || fail "unparseable commit count produced a warning"
+unset -f checkout_git
+
 # Login-service registration, with brew and the process check mocked so no
 # service is touched. A bootstrap that loses to an already-running daemon must
 # read as the non-problem it is, not as a failed install.
@@ -269,4 +315,4 @@ restore_target "$test_dir/target" "$CONF_DIR/example" >/dev/null
 [[ ! -L "$test_dir/target" ]] || fail "restore_target left the symlink in place"
 [[ "$(cat "$test_dir/target")" == original ]] || fail "restore_target did not restore the original file"
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, AeroSpace re-enable, config updates, and backup restoration.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, release skew, AeroSpace re-enable, config updates, and backup restoration.'

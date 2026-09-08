@@ -80,6 +80,20 @@ the present revision, and returns success. Only `merge --ff-only` is ever run.
 `--no-pull` skips the step deliberately, which is also how the smoke checks
 exercise the rebuild without a network.
 
+Configs and scripts ship continuously from the repository while the app ships
+only on `v*` tags, so a pulled checkout can hold app changes the installed
+release lacks. Around a quarter of this project's commits touch both `config/`
+and `apps/hyperkey/`, so a config can land referencing a feature the running
+binary does not have — which reads as a broken setting rather than a wait.
+`warn_hyperkey_checkout_skew` closes the setup sequence by comparing the tag in
+`~/.omaccy/hyperkey-release` against the checkout's `apps/hyperkey/` history and
+naming the gap. It stays silent whenever it cannot speak accurately: no recorded
+release (a local build removes that stamp, so there is genuinely nothing to
+compare), a tag absent from the checkout, or an uncountable history. The
+warning is a net for the window between a config landing on `main` and the
+release that carries its app half; tagging when a commit touches both trees is
+what keeps that window short.
+
 The update prompt covers both the code update and the setup sequence it feeds,
 so `update.sh` owns the single confirmation and exports `OMACCY_SETUP_CONFIRMED`
 for the install run it hands off to; `confirm_setup` returns early on that
