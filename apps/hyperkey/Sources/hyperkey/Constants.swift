@@ -41,7 +41,7 @@ enum Constants {
     static let escKeyCode: UInt16 = 0x35
 
     /// App version
-    static let version = "0.2.1"
+    static let version = "0.3.1"
 
     /// CGEvent user data field for tagging events injected by the HID seizure path
     static let injectedEventField = CGEventField(rawValue: 43)!
