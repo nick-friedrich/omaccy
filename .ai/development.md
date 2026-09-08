@@ -21,7 +21,9 @@ breaking the behavior it covers and rerunning.
 The smoke checks use temporary directories for config state and only exercise
 cancellation in the real entry points. They do not install dependencies, restart
 services, or modify macOS preferences. AeroSpace stop/start recovery is checked
-with a mocked CLI, including a disabled server and restricted IPC.
+with a mocked CLI, including a disabled server and restricted IPC. The Hyperkey
+agent restart is checked through the `hyperkey_launchctl` seam, covering an
+already-loaded agent and a bootstrap that genuinely fails.
 Full install/uninstall testing changes the
 desktop and should be a deliberate manual integration check.
 

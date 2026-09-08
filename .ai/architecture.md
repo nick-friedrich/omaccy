@@ -92,6 +92,19 @@ reports that case as the non-problem it is — only login-time auto-start is
 affected — and surfaces brew's own output only when the daemon really is not
 running.
 
+The Hyperkey LaunchAgent has the mirror-image problem. An update that finds the
+installed release tag unchanged returns early without unloading the agent, so a
+bare `launchctl bootstrap` met a label that was already loaded and failed with
+"Bootstrap failed: 5: Input/output error" — under errexit that aborted the rest
+of setup, leaving AeroSpace, SketchyBar, and herdr unstarted. `start_hyperkey`
+is therefore a restart: it boots the agent out, waits for launchd to finish the
+teardown rather than racing the next bootstrap, then bootstraps. That is also
+what puts a newly installed binary into service, since bootstrapping over a
+live agent would leave the previous process running. A bootstrap that still
+fails warns with launchd's own output and returns success, so the steps after
+it survive. All launchd calls go through the `hyperkey_launchctl` seam so the
+smoke checks can exercise this without a real domain.
+
 Starting AeroSpace re-enables an already running but disabled server before
 checking workspace readiness. This handles reinstall after uninstall without
 blocking the subsequent SketchyBar service startup. SketchyBar is started through

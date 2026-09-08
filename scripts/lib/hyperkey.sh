@@ -160,12 +160,50 @@ install_hyperkey_app_from_release() {
   echo "Installed Omaccy Hyperkey $tag_name → $APP_DIR"
 }
 
+HYPERKEY_LABEL="com.omaccy.hyperkey"
+
+# The single seam every launchd call goes through, so service handling can be
+# exercised without touching a real domain.
+hyperkey_launchctl() {
+  /bin/launchctl "$@"
+}
+
+hyperkey_service_target() {
+  printf 'gui/%s/%s' "$(id -u)" "$HYPERKEY_LABEL"
+}
+
 stop_hyperkey_process() {
-  /bin/launchctl bootout "gui/$(id -u)/com.omaccy.hyperkey" 2>/dev/null || true
+  local waited=0
+  hyperkey_launchctl bootout "$(hyperkey_service_target)" >/dev/null 2>&1 || true
   pkill -x omaccy-hyperkey 2>/dev/null || true
+  # bootout returns before launchd has finished tearing the job down, and
+  # bootstrapping a label still being removed fails. Wait for it to go, but
+  # never block setup indefinitely on it.
+  while hyperkey_launchctl print "$(hyperkey_service_target)" >/dev/null 2>&1; do
+    [[ "$waited" -lt 50 ]] || break
+    sleep 0.1
+    waited=$((waited + 1))
+  done
 }
 
 start_hyperkey() {
-  /bin/launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT"
-  echo "Started Omaccy Hyperkey. If macOS prompts, approve its Accessibility access."
+  local output=""
+  # Restart, never a bare start. An agent still loaded from a previous install
+  # makes bootstrap fail with "Bootstrap failed: 5: Input/output error", which
+  # under errexit aborted the rest of setup — AeroSpace, SketchyBar, and herdr
+  # never started. Reloading is also what puts a newly installed binary into
+  # service; bootstrapping over a live agent would leave the old one running.
+  stop_hyperkey_process
+  if output="$(hyperkey_launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT" 2>&1)"; then
+    echo "Started Omaccy Hyperkey. If macOS prompts, approve its Accessibility access."
+    return 0
+  fi
+
+  # A real failure is worth reporting loudly, but not at the cost of the setup
+  # steps that follow it.
+  [[ -n "$output" ]] && echo "$output" >&2
+  echo "Warning: could not start Omaccy Hyperkey's launch agent." >&2
+  printf 'Setup continues. Start it by hand with: launchctl bootstrap gui/%s %q\n' \
+    "$(id -u)" "$LAUNCH_AGENT" >&2
+  return 0
 }

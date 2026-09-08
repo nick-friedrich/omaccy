@@ -5,6 +5,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/scripts/lib/prompts.sh"
 source "$REPO_ROOT/scripts/lib/config.sh"
 source "$REPO_ROOT/scripts/lib/dependencies.sh"
+source "$REPO_ROOT/scripts/lib/hyperkey.sh"
 
 # The macOS system bash (3.2) does not apply `set -e` to a failing [[ ]], and
 # its ERR trap does not fire for one either, so a bare conditional is a check
@@ -44,6 +45,53 @@ for operation in install update uninstall; do
   output="$(cd "$test_dir"; bash "$REPO_ROOT/scripts/$operation.sh" </dev/null)"
   [[ "$output" == *cancelled.* ]]
 done
+
+# Starting the keyboard agent, with launchd and the process kill mocked. An
+# update that leaves the app version unchanged never unloads the agent, so a
+# bare bootstrap hits an already-loaded label; the restart must absorb that
+# rather than aborting every setup step that follows it.
+LAUNCH_AGENT="$test_dir/com.omaccy.hyperkey.plist"
+agent_loaded=1
+bootstrap_result=0
+launchctl_trace="$test_dir/launchctl-trace"
+hyperkey_launchctl() {
+  printf '%s\n' "$1" >> "$launchctl_trace"
+  case "$1" in
+    bootout) agent_loaded=0 ;;
+    print) [[ "$agent_loaded" == 1 ]] ;;
+    bootstrap)
+      if [[ "$bootstrap_result" == 0 ]]; then
+        agent_loaded=1
+        return 0
+      fi
+      echo "Bootstrap failed: 5: Input/output error" >&2
+      return 1
+      ;;
+  esac
+}
+pkill() { :; }
+
+: > "$launchctl_trace"
+output="$(start_hyperkey 2>&1)" || fail "starting the agent reported failure"
+[[ "$output" == *"Started Omaccy Hyperkey"* ]] || fail "a started agent did not report success"
+[[ "$output" != *Warning* ]] || fail "a started agent printed a warning"
+grep -q '^bootout$' "$launchctl_trace" || fail "start did not unload the agent first"
+[[ "$(grep -n '^bootout$' "$launchctl_trace" | head -1 | cut -d: -f1)" \
+   -lt "$(grep -n '^bootstrap$' "$launchctl_trace" | head -1 | cut -d: -f1)" ]] \
+  || fail "start bootstrapped before unloading the loaded agent"
+
+# A bootstrap that genuinely fails is reported, but must not abort setup.
+agent_loaded=1 bootstrap_result=1
+output="$(start_hyperkey 2>&1)" || fail "a failed bootstrap aborted the setup sequence"
+[[ "$output" == *"Bootstrap failed: 5"* ]] || fail "a failed bootstrap hid launchd's own output"
+[[ "$output" == *"Warning: could not start"* ]] || fail "a failed bootstrap was not reported"
+[[ "$output" == *"Setup continues"* ]] || fail "a failed bootstrap did not say setup still runs"
+
+# Unloading waits for launchd to finish rather than racing the next bootstrap.
+agent_loaded=1
+stop_hyperkey_process
+[[ "$agent_loaded" == 0 ]] || fail "stopping the agent left it loaded"
+unset -f hyperkey_launchctl pkill
 
 # Login-service registration, with brew and the process check mocked so no
 # service is touched. A bootstrap that loses to an already-running daemon must
@@ -145,4 +193,4 @@ restore_target "$test_dir/target" "$CONF_DIR/example" >/dev/null
 [[ ! -L "$test_dir/target" ]] || fail "restore_target left the symlink in place"
 [[ "$(cat "$test_dir/target")" == original ]] || fail "restore_target did not restore the original file"
 
-echo 'PASS: confirmations, cancellation, AeroSpace re-enable, config updates, and backup restoration.'
+echo 'PASS: confirmations, cancellation, hyperkey restart, AeroSpace re-enable, config updates, and backup restoration.'
