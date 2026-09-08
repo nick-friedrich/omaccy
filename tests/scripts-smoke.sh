@@ -7,6 +7,7 @@ source "$REPO_ROOT/scripts/lib/config.sh"
 source "$REPO_ROOT/scripts/lib/dependencies.sh"
 source "$REPO_ROOT/scripts/lib/git.sh"
 source "$REPO_ROOT/scripts/lib/hyperkey.sh"
+source "$REPO_ROOT/scripts/lib/fonts.sh"
 
 # The macOS system bash (3.2) does not apply `set -e` to a failing [[ ]], and
 # its ERR trap does not fire for one either, so a bare conditional is a check
@@ -215,6 +216,67 @@ output="$(warn_hyperkey_checkout_skew 2>&1)" || fail "unparseable output reporte
 [[ -z "$output" ]] || fail "unparseable commit count produced a warning"
 unset -f checkout_git
 
+# SF Pro, which macOS does not ship and the SketchyBar icons require. Homebrew's
+# cask installs a system-domain pkg and would ask for a password, so setup
+# expands Apple's image into ~/Library/Fonts as the user instead. Nothing here
+# downloads: the checks cover ownership and the never-fatal failure paths.
+OMACCY_DIR="$test_dir/fonts"
+mkdir -p "$OMACCY_DIR"
+sf_pro_home="$test_dir/user-fonts"
+mkdir -p "$sf_pro_home"
+sf_pro_font_dir() { printf '%s' "$sf_pro_home"; }
+
+# A pre-existing SF Pro, in any domain, is left alone and never claimed.
+printf 'font' > "$sf_pro_home/$SF_PRO_FILE"
+sf_pro_installed_path() { printf '%s' "$sf_pro_home/$SF_PRO_FILE"; }
+output="$(ensure_sf_pro_font 2>&1)" || fail "a pre-existing SF Pro reported failure"
+[[ "$output" == *"leave it in place"* ]] || fail "a pre-existing SF Pro was not left alone"
+grep -qx "$SF_PRO_FILE" "$OMACCY_DIR/preinstalled-fonts" || fail "a pre-existing SF Pro was not recorded as pre-existing"
+[[ ! -f "$OMACCY_DIR/installed-fonts" ]] || fail "a pre-existing SF Pro was claimed as Omaccy-installed"
+
+# Uninstall must not touch a font Omaccy did not install.
+output="$(printf 'y\n' | remove_owned_sf_pro_font 2>&1)"
+[[ -f "$sf_pro_home/$SF_PRO_FILE" ]] || fail "uninstall removed a pre-existing SF Pro"
+
+# One Omaccy installed is offered for removal and actually goes.
+record_dep installed-fonts "$SF_PRO_FILE"
+output="$(printf 'n\n' | remove_owned_sf_pro_font 2>&1)"
+[[ "$output" == *"Keeping SF Pro"* ]] || fail "declining removal was not honoured"
+[[ -f "$sf_pro_home/$SF_PRO_FILE" ]] || fail "declining removal deleted the font anyway"
+output="$(printf 'y\n' | remove_owned_sf_pro_font 2>&1)"
+[[ "$output" == *"Removed Omaccy-installed"* ]] || fail "accepting removal was not reported"
+[[ ! -f "$sf_pro_home/$SF_PRO_FILE" ]] || fail "accepting removal left the font behind"
+if grep -qx "$SF_PRO_FILE" "$OMACCY_DIR/installed-fonts" 2>/dev/null; then
+  fail "removal left the ownership marker behind"
+fi
+
+# An unreachable download must cost the nicer icons and nothing else: the bar
+# falls back to Unicode, so this can never abort setup.
+sf_pro_installed_path() { return 1; }
+curl() { return 1; }
+output="$(ensure_sf_pro_font 2>&1)" || fail "an unreachable font download aborted setup"
+[[ "$output" == *"Skipping SF Pro"* ]] || fail "a failed download was not reported"
+[[ "$output" == *"plain Unicode icons"* ]] || fail "a failed download did not say what happens instead"
+if grep -qx "$SF_PRO_FILE" "$OMACCY_DIR/installed-fonts" 2>/dev/null; then
+  fail "a failed download claimed ownership anyway"
+fi
+unset -f curl sf_pro_installed_path sf_pro_font_dir
+
+# The bar's own fallback: every SF Symbol needs a Unicode twin, or a machine
+# without SF Pro draws blank gaps -- the bug this all came from.
+python3 - "$REPO_ROOT/config/sketchybar/lib/icons.sh" <<'ICONS' || fail "every SF Symbol needs a Unicode twin, or a machine without SF Pro draws blank gaps"
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+symbols, fallbacks = text.split("else", 1)
+symbols = symbols.split("if sf_pro_available; then", 1)[1]
+names = lambda t: {m.group(1) for m in re.finditer(r'^\s*(ICON_[A-Z0-9_]+)=', t, re.M)}
+sys.exit(0 if names(symbols) == names(fallbacks) and len(names(symbols)) > 1 else 1)
+ICONS
+for f in "$REPO_ROOT/config/sketchybar/sketchybarrc" "$REPO_ROOT/config/sketchybar/plugins/battery.sh"; do
+  [[ "$(python3 -c "print(sum(1 for c in open('$f',encoding='utf-8').read() if 0xF0000<=ord(c)<=0x10FFFF))")" == 0 ]] \
+    || fail "$(basename "$f") still hardcodes SF Symbols instead of using icons.sh"
+done
+
 # Login-service registration, with brew and the process check mocked so no
 # service is touched. A bootstrap that loses to an already-running daemon must
 # read as the non-problem it is, not as a failed install.
@@ -315,4 +377,4 @@ restore_target "$test_dir/target" "$CONF_DIR/example" >/dev/null
 [[ ! -L "$test_dir/target" ]] || fail "restore_target left the symlink in place"
 [[ "$(cat "$test_dir/target")" == original ]] || fail "restore_target did not restore the original file"
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, release skew, AeroSpace re-enable, config updates, and backup restoration.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, release skew, SF Pro ownership, AeroSpace re-enable, config updates, and backup restoration.'

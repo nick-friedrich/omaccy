@@ -6,6 +6,7 @@ source "$REPO_ROOT/scripts/lib/prompts.sh"
 source "$REPO_ROOT/scripts/lib/dependencies.sh"
 source "$REPO_ROOT/scripts/lib/config.sh"
 source "$REPO_ROOT/scripts/lib/macos.sh"
+source "$REPO_ROOT/scripts/lib/fonts.sh"
 
 stop_owned_caffeinate() {
   local pid_file="$OMACCY_DIR/caffeinate.pid"
@@ -58,6 +59,8 @@ main() {
     "$CONF_DIR/sketchybar/lib/palette.sh"
   restore_target "$HOME/.config/sketchybar/lib/aerospace.sh" \
     "$CONF_DIR/sketchybar/lib/aerospace.sh"
+  restore_target "$HOME/.config/sketchybar/lib/icons.sh" \
+    "$CONF_DIR/sketchybar/lib/icons.sh"
   local sketchybar_plugin
   for sketchybar_plugin in "$CONF_DIR"/sketchybar/plugins/*.sh; do
     [[ -e "$sketchybar_plugin" ]] || continue
@@ -89,6 +92,7 @@ main() {
     "$CONF_DIR/sketchybar/sketchybarrc" \
     "$CONF_DIR/sketchybar/lib/palette.sh" \
     "$CONF_DIR/sketchybar/lib/aerospace.sh" \
+    "$CONF_DIR/sketchybar/lib/icons.sh" \
     "$CONF_DIR/sketchybar/plugins/"*.sh \
     "$CONF_DIR/sketchybar/themes/"*.sh \
     "$OMACCY_DIR/theme" \
@@ -102,6 +106,7 @@ main() {
     "$OMACCY_DIR/sha256/sketchybar/sketchybarrc" \
     "$OMACCY_DIR/sha256/sketchybar/lib/palette.sh" \
     "$OMACCY_DIR/sha256/sketchybar/lib/aerospace.sh" \
+    "$OMACCY_DIR/sha256/sketchybar/lib/icons.sh" \
     "$OMACCY_DIR/sha256/sketchybar/plugins/"*.sh \
     "$OMACCY_DIR/sha256/sketchybar/themes/"*.sh
   rm -f "$OMACCY_DIR/aerospace-disabled" \
@@ -112,6 +117,7 @@ main() {
   remove_owned_cask font-inter "the Inter font"
   remove_owned_cask font-jetbrains-mono "the JetBrains Mono font"
   remove_owned_cask font-lora "the Lora font"
+  remove_owned_sf_pro_font
   remove_owned_formula sketchybar SketchyBar
   # Only stop herdr's service if Omaccy installed herdr: it can host the
   # user's own unrelated agent sessions, and stopping it would kill those too.

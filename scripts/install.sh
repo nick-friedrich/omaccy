@@ -7,6 +7,7 @@ source "$REPO_ROOT/scripts/lib/dependencies.sh"
 source "$REPO_ROOT/scripts/lib/config.sh"
 source "$REPO_ROOT/scripts/lib/macos.sh"
 source "$REPO_ROOT/scripts/lib/git.sh"
+source "$REPO_ROOT/scripts/lib/fonts.sh"
 source "$REPO_ROOT/scripts/lib/hyperkey.sh"
 
 main() {
@@ -19,6 +20,7 @@ main() {
   ensure_cask font-inter
   ensure_cask font-jetbrains-mono
   ensure_cask font-lora
+  ensure_sf_pro_font
   ensure_formula sketchybar FelixKratz/formulae/sketchybar
   ensure_formula herdr
   if grep -qx sketchybar "$OMACCY_DIR/preinstalled-formulas" 2>/dev/null && \
@@ -52,6 +54,8 @@ main() {
     "$HOME/.config/sketchybar/lib/palette.sh"
   ensure_symlink "$REPO_ROOT/config/sketchybar/lib/aerospace.sh" \
     "$HOME/.config/sketchybar/lib/aerospace.sh"
+  ensure_symlink "$REPO_ROOT/config/sketchybar/lib/icons.sh" \
+    "$HOME/.config/sketchybar/lib/icons.sh"
   local sketchybar_theme
   for sketchybar_theme in "$REPO_ROOT"/config/sketchybar/themes/*.sh; do
     ensure_symlink "$sketchybar_theme" \

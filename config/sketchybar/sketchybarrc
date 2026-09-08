@@ -4,12 +4,14 @@
 # left, machine state on the right. Each plugin is a small, independently
 # refreshable shell script so the bar stays useful if one command fails. Colors
 # come from the shared theme palette and text from the font chosen with
-# scripts/font.sh; SF Symbols glyphs keep SF Pro because they only ship there.
+# scripts/font.sh; SF Symbols glyphs keep SF Pro because they only ship there,
+# falling back to plain Unicode when that font is absent (see lib/icons.sh).
 
 CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$CONFIG_DIR/plugins"
 source "$CONFIG_DIR/lib/palette.sh"
 source "$CONFIG_DIR/lib/aerospace.sh"
+source "$CONFIG_DIR/lib/icons.sh"
 
 FONT_FILE="$HOME/.omaccy/font"
 OMACCY_FONT="inter"
@@ -26,7 +28,7 @@ case "$OMACCY_FONT" in
   *) TEXT_FONT="Inter" ;;
 esac
 
-STATUS_ICON_FONT="SF Pro:Semibold:15.0"
+STATUS_ICON_FONT="${ICON_FONT_FAMILY:-$TEXT_FONT}:Semibold:15.0"
 
 sketchybar --bar height=34 \
   position=top \
@@ -127,7 +129,7 @@ sketchybar --add item front_app left \
 
 sketchybar --add item clock right \
   --set clock \
-    icon="􀐫" \
+    icon="$ICON_CLOCK" \
     icon.font="$STATUS_ICON_FONT" \
     icon.color="$TEXT" \
     update_freq=10 \
@@ -135,7 +137,7 @@ sketchybar --add item clock right \
 
 sketchybar --add item battery right \
   --set battery \
-    icon="􀛨" \
+    icon="$ICON_BATTERY" \
     icon.font="$STATUS_ICON_FONT" \
     icon.color="$TEXT" \
     update_freq=30 \
@@ -144,7 +146,7 @@ sketchybar --add item battery right \
 
 sketchybar --add item caffeinate right \
   --set caffeinate \
-    icon="􀸙" \
+    icon="$ICON_CAFFEINATE" \
     icon.font="$STATUS_ICON_FONT" \
     icon.color="$TEXT" \
     label.drawing=off \
@@ -189,7 +191,7 @@ sketchybar --add item caffeinate.off popup.caffeinate \
 
 sketchybar --add item aerospace right \
   --set aerospace \
-    icon="􀓗" \
+    icon="$ICON_TILING" \
     icon.font="$STATUS_ICON_FONT" \
     icon.color="$TEXT" \
     label="Tiling" \

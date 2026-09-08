@@ -18,6 +18,7 @@ uninstall that restores the configs and macOS settings it displaced.
 
 - macOS 13 or newer (Apple Silicon or Intel)
 - Command Line Tools for Xcode (only for development; `swift` must be on PATH)
+- SF Pro — installed automatically, without a password, for the menu bar icons
 - Homebrew — installed automatically if missing
 
 ## Install

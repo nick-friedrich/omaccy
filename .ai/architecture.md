@@ -13,6 +13,7 @@
 | `scripts/lib/paths.sh` | Repository and installed-state paths; no directory creation |
 | `scripts/lib/prompts.sh` | Yes/No handling and descriptions of install, update, and uninstall |
 | `scripts/lib/git.sh` | Best-effort fast-forward of the checkout setup runs from |
+| `scripts/lib/fonts.sh` | Sudo-free SF Pro install, ownership, and removal |
 | `scripts/lib/dependencies.sh` | Homebrew setup, ownership markers, login-service registration, and optional dependency removal |
 | `scripts/lib/config.sh` | Config copying, hash stamps, symlinks, backup/restore, and legacy migration |
 | `scripts/lib/macos.sh` | Menu-bar and Mission Control settings with paired restoration functions |
@@ -173,6 +174,25 @@ unlike System Events UI scripting. A theme choice customizes the canonical
 Ghostty config, so updates preserve it. A custom theme file without a
 `GHOSTTY_THEME` assignment leaves Ghostty's existing theme alone. SF Symbols
 stay on SF Pro because those glyphs only ship there.
+
+macOS does not ship SF Pro as an installable family, so a machine without it
+drew blank gaps where the clock, battery, caffeinate, and tiling icons belong —
+the icons are private-use SF Symbols codepoints that exist in no other font.
+Homebrew's `font-sf-pro` cask installs a system-domain `.pkg` and would put a
+password prompt inside an installer that otherwise never needs one, so
+`scripts/lib/fonts.sh` expands Apple's disk image and copies one file,
+`SF-Pro.ttf`, into `~/Library/Fonts` as the user — the same directory the Inter,
+JetBrains Mono, and Lora casks already write to. That file alone is the variable
+font whose family is literally "SF Pro" with a Semibold named instance, which is
+what the SketchyBar config asks for; the 45 static Display/Text/Rounded faces
+beside it are separate families and would only clutter the font book. SF Pro
+found in any domain is recorded as pre-existing and left alone by uninstall.
+
+The install is never fatal, because `config/sketchybar/lib/icons.sh` gives every
+SF Symbol a plain-Unicode twin and picks the set at startup by looking for
+`SF-Pro.ttf`. A declined, failed, or offline font install therefore costs the
+nicer glyphs and nothing else. Both `sketchybarrc` and `plugins/battery.sh`
+source that file rather than hardcoding glyphs, so the two sets cannot drift.
 
 `HomebrewCatalog.swift` loads the official formula/cask metadata asynchronously and
 ranks package searches for the palette’s Install collection. The controller caches
