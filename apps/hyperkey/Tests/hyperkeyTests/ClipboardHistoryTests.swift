@@ -126,8 +126,11 @@ final class ClipboardMonitorTests: XCTestCase {
     // fixture they cannot touch the fixture's own stored properties -- the
     // monitor and the pasteboard here. The async overrides inherit the class's
     // isolation instead, which is what puts them back on the main actor.
+    //
+    // They deliberately do not call super: XCTestCase's own implementations are
+    // empty, and passing this main actor-isolated, non-Sendable fixture to a
+    // nonisolated superclass method is an error under strict concurrency.
     override func setUp() async throws {
-        try await super.setUp()
         pasteboard = NSPasteboard(name: NSPasteboard.Name("omaccy-test-\(UUID().uuidString)"))
         monitor = ClipboardMonitor(pasteboardName: pasteboard.name)
         monitor.apply(Configuration(escapeOnTap: false, bindings: [:]))
@@ -136,7 +139,6 @@ final class ClipboardMonitorTests: XCTestCase {
     override func tearDown() async throws {
         monitor.stop()
         pasteboard.releaseGlobally()
-        try await super.tearDown()
     }
 
     /// Polls at 0.5s, and the read hops to a background queue and back, so the
