@@ -324,14 +324,17 @@ enum OmaccyAppearance {
             .trimmingCharacters(in: CharacterSet(charactersIn: ",")) == "true"
     }
 
-    /// Writes the theme, and switches off the OS-appearance detection that
-    /// would otherwise make the editor ignore it. Omaccy drives the theme once
-    /// its editor switch is on, and leaving the detection in place means the
-    /// write lands in a setting nothing reads — which is exactly how Cursor
-    /// came to sit on its own theme while its settings.json said otherwise.
+    /// Writes the theme, and pins off the OS-appearance detection that would
+    /// otherwise make the editor ignore it. Omaccy drives the theme once its
+    /// editor switch is on, and leaving the detection in place means the write
+    /// lands in a setting nothing reads — which is exactly how Cursor came to
+    /// sit on its own theme while its settings.json said otherwise.
+    /// The `false` goes in even when the setting reads false already, because
+    /// Cursor distinguishes a written value from an absent one: with no entry
+    /// of its own it treats the theme as unclaimed and is free to adopt the
+    /// system's polarity, which looks exactly like a theme that did not take.
     static func settings(_ contents: String, settingTheme label: String) -> String? {
         guard let written = settings(contents, setting: "workbench.colorTheme", to: label) else { return nil }
-        guard settings(written, followOSAppearance: "window.autoDetectColorScheme") else { return written }
         return settings(written, setting: "window.autoDetectColorScheme", to: "false", quoted: false) ?? written
     }
 

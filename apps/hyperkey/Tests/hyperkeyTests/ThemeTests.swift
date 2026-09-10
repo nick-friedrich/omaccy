@@ -215,10 +215,14 @@ final class ThemeTests: XCTestCase {
         """)
     }
 
-    /// Nothing beyond the theme is touched when the detection is not in the way.
-    func testWritingAThemeLeavesAnUndetectedFileAlone() {
+    /// A file that never mentioned the detection gets it written anyway: an
+    /// absent value is not the same as a false one to Cursor, which reads the
+    /// silence as permission to follow the system's light/dark instead.
+    /// Everything else in the file is still left alone.
+    func testWritingAThemePinsDetectionOffEvenWhenItIsAbsent() {
         let out = OmaccyAppearance.settings("{\n  \"editor.tabSize\": 2\n}\n", settingTheme: "Nord")
-        XCTAssertEqual(out, "{\n  \"workbench.colorTheme\": \"Nord\",\n  \"editor.tabSize\": 2\n}\n")
+        XCTAssertEqual(out, "{\n  \"window.autoDetectColorScheme\": false,\n"
+                       + "  \"workbench.colorTheme\": \"Nord\",\n  \"editor.tabSize\": 2\n}\n")
     }
 
     func testThemeAppearanceParsesFromThemeFile() throws {
