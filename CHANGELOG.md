@@ -10,6 +10,14 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.2` tag is cut.
 
+### Changed
+
+- The Mail and Editors pages show each app's real icon instead of one shared
+  symbol, so Cursor, Zed, and Thunderbird read at a glance the way the Apps
+  page and the desktop agents already do. The icon is read from the app on
+  disk, so a choice that is not installed yet keeps the collection's symbol —
+  which is now also what marks it as missing before you read the row.
+
 ## [0.4.1] - 2026-09-10
 
 ### Added

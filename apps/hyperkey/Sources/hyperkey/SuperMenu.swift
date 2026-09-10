@@ -726,6 +726,13 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             let image: NSImage
             if let id = entry.bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
                 image = NSWorkspace.shared.icon(forFile: url.path)
+            } else if let installed = entry.choice?.installedURL {
+                // Mail and Editors rows name the bundle they install as rather
+                // than a bundle identifier, so their icon comes from the app on
+                // disk. One that is not installed yet has no icon to show and
+                // keeps the collection's symbol, which is also what tells the
+                // two apart at a glance.
+                image = NSWorkspace.shared.icon(forFile: installed.path)
             } else {
                 image = NSImage(systemSymbolName: Self.symbol(for: entry), accessibilityDescription: nil)!
             }
