@@ -98,6 +98,28 @@ Hyper is **Caps Lock** (Command+Control+Option, deliberately without Shift).
 | `Hyper+1…9` | Switch workspace (`+Shift` moves the window there) |
 | `Hyper+T`, `+B`, `+F`, `+R` | Ghostty, Chrome, Finder, Reminders |
 
+Each workspace has a **layout mode**, shown in the menu bar where the tiling
+indicator used to just read "Tiling". Click it to pick a different one:
+
+| Mode | What the workspace does |
+| --- | --- |
+| **Columns** | Every window a full-height column, side by side |
+| **Rows** | Every window full width, stacked top to bottom |
+| **Grid** | Windows squared off — four windows make a 2×2 |
+| **Recursive** | New windows split beside the focused one, building a tree |
+| **Accordion** | One window at a time, the rest collapsed to the edge |
+
+Columns, Rows and Accordion hold themselves: AeroSpace adds a new window beside
+the focused one, so in a flat workspace it simply becomes the next column or
+row and nothing already on screen moves. Grid is rebuilt when a window opens,
+since squaring off is the one shape that cannot maintain itself. Recursive
+enforces nothing at all — pick it when you want the tree left alone.
+
+The mode also makes `Hyper+U` / `Hyper+I` readable: resizing follows the
+workspace's own direction, so in Columns it is always width and in Rows always
+height. Modes are per workspace and survive restarts, in
+`~/.omaccy/workspace-layout/`.
+
 Inside the palette, hold ⌘ to number the first nine rows and press ⌘1–9 to
 run one directly. Escape steps back a page, landing on the row you came from,
 and Escape again closes the palette.

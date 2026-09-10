@@ -1666,7 +1666,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             else if command.contains("--stdin next") { title = "Next occupied workspace" }
             else if command.contains("--stdin prev") { title = "Previous occupied workspace" }
             else if command.hasPrefix("move-node-to-workspace ") {
-                title = "Move window to workspace " + command.dropFirst(23)
+                // Flags sit between the command and the workspace, and reading
+                // from a fixed offset put "--focus-follows-window" in the title.
+                // The row is about where the window lands, which is the last word.
+                title = "Move window to workspace " + (command.split(separator: " ").last ?? "")
             } else if command.hasPrefix("workspace ") { title = "Switch to " + command }
             else if command.hasPrefix("focus ") { title = "Focus window " + command.dropFirst(6) }
             else if command.hasPrefix("move ") { title = "Move window " + command.dropFirst(5) }
