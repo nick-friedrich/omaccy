@@ -360,9 +360,13 @@ final class TableReloadTests: XCTestCase {
         return (table, source)
     }
 
-    override func tearDown() {
+    // The async override inherits the class's isolation; the synchronous one
+    // is nonisolated and cannot reach `sources`. It does not call super for
+    // the reason ClipboardMonitorTests gives: XCTestCase's implementation is
+    // empty, and handing a main actor-isolated, non-Sendable fixture to a
+    // nonisolated superclass method is an error under strict concurrency.
+    override func tearDown() async throws {
         sources.removeAll()
-        super.tearDown()
     }
 
     /// The behaviour the fix exists for: plain `reloadData` really does deselect.
