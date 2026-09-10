@@ -18,6 +18,17 @@ Dated when the `v0.4.2` tag is cut.
   disk, so a choice that is not installed yet keeps the collection's symbol —
   which is now also what marks it as missing before you read the row.
 
+### Fixed
+
+- Cursor picks up every theme, not just some of them. Following the theme
+  wrote `window.autoDetectColorScheme: false` only into an editor that already
+  had that setting turned on, and Cursor reads a file with no entry of its own
+  as permission to follow macOS light/dark instead — so the theme landed in
+  `settings.json` and nothing happened on screen, most visibly when the theme
+  switch flipped the system appearance at the same time. The setting is now
+  written whenever the editor switch is on, which adds one line to
+  `settings.json` for anyone who never had it. VS Code was never affected.
+
 ## [0.4.1] - 2026-09-10
 
 ### Added

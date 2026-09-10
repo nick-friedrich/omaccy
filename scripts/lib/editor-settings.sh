@@ -132,14 +132,19 @@ write_editor_setting() {
   rm -f "$tmp"
 }
 
-# Writes the theme, and switches off the OS-appearance detection that would
+# Writes the theme, and pins off the OS-appearance detection that would
 # otherwise make the editor ignore it. Omaccy drives the theme once its editor
 # switch is on, and leaving the detection in place means the write lands in a
 # setting nothing reads -- which is exactly how Cursor came to sit on its own
 # theme while its settings.json said otherwise.
+# The `false` goes in even when the setting reads false already, because Cursor
+# distinguishes a written value from an absent one: with no entry of its own it
+# treats the theme as unclaimed and is free to adopt the system's polarity,
+# which looks exactly like a theme that did not take. Failing to place it is
+# survivable -- the theme itself is already written -- so it does not fail the
+# whole rewrite, which is also what keeps this identical to the Swift half.
 write_editor_theme() {
   local settings="$1" label="$2"
   write_editor_setting "$settings" "workbench.colorTheme" "$label" || return 1
-  editor_follows_os_appearance "$settings" || return 0
-  write_editor_setting "$settings" "window.autoDetectColorScheme" "false" 0
+  write_editor_setting "$settings" "window.autoDetectColorScheme" "false" 0 || true
 }
