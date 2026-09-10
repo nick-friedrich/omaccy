@@ -1,25 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleExecutable</key>
-    <string>omaccy-hyperkey</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.omaccy.hyperkey</string>
-    <key>CFBundleName</key>
-    <string>Omaccy Hyperkey</string>
-    <key>CFBundleDisplayName</key>
-    <string>Omaccy Hyperkey</string>
-    <key>CFBundleVersion</key>
-    <string>0.4.0</string>
-    <key>CFBundleShortVersionString</key>
-    <string>0.4.0</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
-    <key>LSUIElement</key>
-    <true/>
+	<key>CFBundleDisplayName</key>
+	<string>Omaccy Hyperkey</string>
+	<key>CFBundleExecutable</key>
+	<string>omaccy-hyperkey</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.omaccy.hyperkey</string>
+	<key>CFBundleName</key>
+	<string>Omaccy Hyperkey</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.4.2</string>
+	<key>CFBundleVersion</key>
+	<string>0.4.2</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSUIElement</key>
+	<true/>
 </dict>
 </plist>
