@@ -50,12 +50,14 @@ main() {
     chmod +x "$CONF_DIR/sketchybar/plugins/$(basename "$sketchybar_plugin")"
   done
   chmod +x "$CONF_DIR/sketchybar/sketchybarrc"
-  ensure_symlink "$REPO_ROOT/config/sketchybar/lib/palette.sh" \
-    "$HOME/.config/sketchybar/lib/palette.sh"
-  ensure_symlink "$REPO_ROOT/config/sketchybar/lib/aerospace.sh" \
-    "$HOME/.config/sketchybar/lib/aerospace.sh"
-  ensure_symlink "$REPO_ROOT/config/sketchybar/lib/icons.sh" \
-    "$HOME/.config/sketchybar/lib/icons.sh"
+  # Globbed like the plugins and themes below, rather than named one by one: a
+  # library the bar sources but setup never deployed leaves the plugin that
+  # sources it broken on a user's machine and working in the checkout.
+  local sketchybar_lib
+  for sketchybar_lib in "$REPO_ROOT"/config/sketchybar/lib/*.sh; do
+    ensure_symlink "$sketchybar_lib" \
+      "$HOME/.config/sketchybar/lib/$(basename "$sketchybar_lib")"
+  done
   local sketchybar_theme
   for sketchybar_theme in "$REPO_ROOT"/config/sketchybar/themes/*.sh; do
     ensure_symlink "$sketchybar_theme" \

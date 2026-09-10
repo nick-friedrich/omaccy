@@ -5,6 +5,19 @@ distribution. It produces a universal, Developer ID-signed, notarized, stapled
 app bundle and publishes it as a GitHub release asset that
 `scripts/lib/hyperkey.sh` downloads during setup.
 
+## Before tagging
+
+`CHANGELOG.md` accumulates entries as changes land, under a heading marked
+`- unreleased`. Cutting a release means giving that heading its date and
+release-day link, and opening a new unreleased heading above it for whatever
+comes next. Do that in its own commit before the tag, so the tag points at a
+changelog describing the version it publishes rather than at one still calling
+it unreleased.
+
+The version there is the one the tag will carry. Nothing derives it from the
+changelog -- the workflow stamps the version from the tag -- so a heading that
+disagrees with the tag is a silent inconsistency rather than a build failure.
+
 ## Triggering
 
 Pushing a `v*` tag builds and publishes:
@@ -21,10 +34,14 @@ release; it still submits to Apple's notary service.
 
 ## What the workflow does, and why
 
-The build stamps the version from the tag into `Constants.swift` before
-compiling — that value is compiled in, so stamping only `Info.plist` would ship
-an app that misreports its own version — and into the bundle's `Info.plist`
-when the bundle is assembled. Neither edit is committed.
+The build stamps the version from the tag into the bundle's `Info.plist` when
+the bundle is assembled, and nowhere else: `Constants.version` reads that plist
+at runtime rather than holding a literal, so there is nothing compiled in to
+keep in step. `CFBundleShortVersionString` takes the full string and
+`CFBundleVersion` its release part, which stays a plain version string for the
+system when a manual run derives `0.4.0-3-gabc1234` from `git describe`. The
+edit is not committed; the checkout is fetched at full depth so a manual run
+has the tags that description needs.
 
 It builds with `--arch arm64 --arch x86_64`. The runner is arm64 and a plain
 `swift build -c release` would yield an arm64-only binary, while `Info.plist`

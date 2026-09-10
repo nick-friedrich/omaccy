@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 /// Shared mutable state for hyper mode. Accessed from both EventTap (CGEventTap callback)
 /// and KeyboardMonitor (IOKit HID callback). Both are C function pointers that cannot
@@ -40,8 +41,15 @@ enum Constants {
     /// Virtual keycode for Escape
     static let escKeyCode: UInt16 = 0x35
 
-    /// App version
-    static let version = "0.4.0"
+    /// The running build's version, read from the bundle that carries it, so
+    /// there is one source of truth rather than a literal here that drifts
+    /// from Info.plist. Both install paths stamp that plist: the release
+    /// workflow with the tag it built, a local build with `git describe`, so
+    /// a checkout ahead of the last release says so instead of borrowing its
+    /// number. "dev" covers the bare executable (`swift run`), which has no
+    /// bundle to read.
+    static let version = Bundle.main
+        .object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
 
     /// CGEvent user data field for tagging events injected by the HID seizure path
     static let injectedEventField = CGEventField(rawValue: 43)!

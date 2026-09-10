@@ -36,6 +36,44 @@ install_hyperkey_app() {
   printf '%s' "$REPO_ROOT" > "$OMACCY_DIR/hyperkey-checkout.txt"
 }
 
+# The version a locally built app reports. `git describe` names the release the
+# checkout last passed and how far beyond it the build sits, so an app carrying
+# unreleased Swift changes stops claiming to be that release -- the number the
+# palette and the status item show is then the truth about what is running.
+# Falls back to the checked-in plist wherever git cannot answer.
+hyperkey_source_version() {
+  local described
+  if command -v git >/dev/null 2>&1 \
+    && described="$(checkout_git describe --tags --dirty --always 2>/dev/null)" \
+    && [[ -n "$described" ]]; then
+    printf '%s' "${described#v}"
+    return
+  fi
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+    "$REPO_ROOT/apps/hyperkey/Info.plist" 2>/dev/null
+}
+
+# macOS App Management (Sonoma and later) refuses writes into a signed,
+# notarized app bundle from a process without that privacy permission, and it
+# gives no prompt for a command-line process -- just EPERM. Discovering that
+# after the agent has been stopped and the release stamp cleared leaves
+# Hyperkey dead for a failure that had nothing to do with the build, so the
+# probe runs before anything is torn down.
+ensure_app_bundle_writable() {
+  [[ -d "$APP_DIR" ]] || return 0
+  local probe="$APP_DIR/.omaccy-write-probe"
+  if touch "$probe" 2>/dev/null; then
+    rm -f "$probe"
+    return 0
+  fi
+  echo "Cannot write to $APP_DIR, so the installed app is being left alone." >&2
+  echo "macOS App Management protects a signed app from changes by a process without that permission," >&2
+  echo "and grants it per app, to whichever app this shell is running inside." >&2
+  echo "Either enable that app under System Settings > Privacy & Security > App Management," >&2
+  echo "or move the app to the Trash in Finder and run this again to install a fresh copy." >&2
+  return 1
+}
+
 install_hyperkey_app_from_source() {
   local built_binary="$REPO_ROOT/apps/hyperkey/.build/release/omaccy-hyperkey"
   local installed_binary="$APP_DIR/Contents/MacOS/omaccy-hyperkey"
@@ -43,7 +81,7 @@ install_hyperkey_app_from_source() {
   local mode_stamp="$OMACCY_DIR/hyperkey-signing-mode"
   local built_hash
   local binary_changed=0
-  local identity signing_mode
+  local identity signing_mode version
   local previous_mode=""
 
   echo "Building Omaccy Hyperkey from source (OMACCY_HYPERKEY_BUILD_LOCAL=1)..."
@@ -56,12 +94,24 @@ install_hyperkey_app_from_source() {
     binary_changed=1
   fi
 
+  ensure_app_bundle_writable || return 1
   stop_hyperkey_process
   rm -f "$OMACCY_DIR/hyperkey-release"
 
   mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
   cp "$built_binary" "$installed_binary"
   cp "$REPO_ROOT/apps/hyperkey/Info.plist" "$APP_DIR/Contents/Info.plist"
+  # Before codesign: the signature covers Info.plist, so stamping it afterwards
+  # would invalidate the very grant this path works to keep. CFBundleVersion
+  # takes only the release part, staying a plain version string for the system
+  # while CFBundleShortVersionString carries the full description the app shows.
+  version="$(hyperkey_source_version)"
+  if [[ -n "$version" ]]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" \
+      "$APP_DIR/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${version%%-*}" \
+      "$APP_DIR/Contents/Info.plist"
+  fi
   identity="$(resolve_hyperkey_signing_identity)"
   if [[ -z "$identity" || "$identity" == "-" ]]; then
     signing_mode="adhoc"
@@ -141,6 +191,7 @@ install_hyperkey_app_from_release() {
     exit 1
   fi
 
+  ensure_app_bundle_writable || { rm -rf "$tmp_dir"; return 1; }
   stop_hyperkey_process
   rm -rf "$APP_DIR"
   mkdir -p "$(dirname "$APP_DIR")"

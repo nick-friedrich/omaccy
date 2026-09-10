@@ -7,18 +7,45 @@ source "$REPO_ROOT/scripts/lib/dependencies.sh"
 source "$REPO_ROOT/scripts/lib/config.sh"
 source "$REPO_ROOT/scripts/lib/macos.sh"
 source "$REPO_ROOT/scripts/lib/fonts.sh"
+# Keep-awake state belongs to the bar plugin; uninstall shares its reader so
+# there is one definition of which files hold it and when the recorded PID may
+# be signalled. The library derives its paths from OMACCY_STATE_DIR at source
+# time, so that has to be set first.
+OMACCY_STATE_DIR="$OMACCY_DIR"
+source "$REPO_ROOT/config/sketchybar/lib/caffeinate-state.sh"
 
+# Keep-awake deliberately outlives SketchyBar, so stopping the service does not
+# end it. caffeinate_stop confirms the recorded PID is still caffeinate before
+# signalling it, which matters here: a PID reused since an earlier boot would
+# otherwise have uninstall kill an unrelated process.
 stop_owned_caffeinate() {
-  local pid_file="$OMACCY_DIR/caffeinate.pid"
-  local pid=""
+  caffeinate_stop
+}
 
-  if [[ -f "$pid_file" ]]; then
-    pid="$(cat "$pid_file" 2>/dev/null || true)"
-    if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
-      kill "$pid" 2>/dev/null || true
-    fi
-  fi
-  rm -f "$pid_file" "$OMACCY_DIR/caffeinate.ends-at"
+# Omaccy only ever changed the light/dark appearance if the switch was turned
+# on, and then it recorded what it found first -- so this puts that back, the
+# way the other macOS preferences are restored.
+restore_macos_appearance() {
+  local original="$OMACCY_DIR/appearance.original"
+  [[ -f "$original" ]] || return 0
+  local dark="true"
+  [[ "$(head -n 1 "$original" | tr -d '[:space:]')" == "light" ]] && dark="false"
+  osascript -e "tell application \"System Events\" to tell appearance preferences to set dark mode to $dark" \
+    >/dev/null 2>&1 || echo "Could not restore the macOS appearance; set it yourself in System Settings > Appearance." >&2
+  rm -f "$original"
+}
+
+# VS Code's and Cursor's settings.json are the user's own files, edited in
+# place rather than symlinked, so removing Omaccy must not rewrite them: the
+# theme they are on now may well be one they want to keep, and anything they
+# changed since would be lost. The untouched original is kept instead, and
+# named here so restoring it stays their call.
+report_editor_settings() {
+  local backup
+  for backup in "$OMACCY_DIR/backups"/*-settings.json; do
+    [[ -f "$backup" ]] || continue
+    echo "Left in place: $(basename "${backup%-settings.json}") keeps its current theme; the pre-Omaccy settings are at $backup."
+  done
 }
 
 main() {
@@ -55,12 +82,14 @@ main() {
     "$CONF_DIR/aerospace/aerospace.toml"
   restore_target "$HOME/.config/sketchybar/sketchybarrc" \
     "$CONF_DIR/sketchybar/sketchybarrc"
-  restore_target "$HOME/.config/sketchybar/lib/palette.sh" \
-    "$CONF_DIR/sketchybar/lib/palette.sh"
-  restore_target "$HOME/.config/sketchybar/lib/aerospace.sh" \
-    "$CONF_DIR/sketchybar/lib/aerospace.sh"
-  restore_target "$HOME/.config/sketchybar/lib/icons.sh" \
-    "$CONF_DIR/sketchybar/lib/icons.sh"
+  # Globbed over the installed copies, matching the plugin loop below, so a
+  # library added after this machine was set up is still restored.
+  local sketchybar_lib
+  for sketchybar_lib in "$CONF_DIR"/sketchybar/lib/*.sh; do
+    [[ -e "$sketchybar_lib" ]] || continue
+    restore_target "$HOME/.config/sketchybar/lib/$(basename "$sketchybar_lib")" \
+      "$sketchybar_lib"
+  done
   local sketchybar_plugin
   for sketchybar_plugin in "$CONF_DIR"/sketchybar/plugins/*.sh; do
     [[ -e "$sketchybar_plugin" ]] || continue
@@ -97,6 +126,8 @@ main() {
     "$CONF_DIR/sketchybar/themes/"*.sh \
     "$OMACCY_DIR/theme" \
     "$OMACCY_DIR/font" \
+    "$OMACCY_DIR/editor-theme" \
+    "$OMACCY_DIR/appearance" \
     "$OMACCY_DIR/sha256/launchagents/com.omaccy.hyperkey.plist" \
     "$OMACCY_DIR/sha256/hyperkey/hyperkey.toml" \
     "$OMACCY_DIR/sha256/ghostty/config.ghostty" \
@@ -112,6 +143,8 @@ main() {
   rm -f "$OMACCY_DIR/aerospace-disabled" \
     "$OMACCY_DIR/native-menu-visible"
   rm -rf "$OMACCY_DIR/clipboard"
+  restore_macos_appearance
+  report_editor_settings
 
   remove_owned_cask ghostty Ghostty
   remove_owned_cask aerospace AeroSpace

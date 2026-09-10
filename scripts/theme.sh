@@ -5,13 +5,21 @@ set -euo pipefail
 # in config/sketchybar/themes and are installed into ~/.omaccy/config by the
 # setup scripts; the chosen name is stored in ~/.omaccy/theme.
 #
-# Usage: bash scripts/theme.sh [list | current | set <name>]
+# Usage: bash scripts/theme.sh [list | current | set <name> | editors [on|off]
+#                              | appearance [on|off]]
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 THEME_PREF="$HOME/.omaccy/theme"
 THEMES_REPO="$REPO_ROOT/config/sketchybar/themes"
 THEMES_INSTALLED="$HOME/.omaccy/config/sketchybar/themes"
 GHOSTTY_CONFIG="$HOME/.omaccy/config/ghostty/config.ghostty"
+EDITOR_PREF="$HOME/.omaccy/editor-theme"
+APPEARANCE_PREF="$HOME/.omaccy/appearance"
+BACKUP_DIR="$HOME/.omaccy/backups"
+
+# write_editor_color_theme lives in its own library so the Swift half of the
+# editor theming can be tested against exactly this implementation.
+source "$REPO_ROOT/scripts/lib/editor-settings.sh"
 DEFAULT_THEME="catppuccin"
 
 current_theme() {
@@ -74,6 +82,164 @@ reload_ghostty_if_running() {
   end try' >/dev/null 2>&1 || true
 }
 
+# VS Code and Cursor read workbench.colorTheme out of their own User
+# settings.json and repaint the moment that file changes -- no restart and no
+# reload command, unlike Ghostty above. The palette itself lives in a
+# marketplace extension though (VS Code ships only a handful, of which
+# Solarized Dark is the sole match here), so following a theme can mean
+# installing one first: a network round-trip and a change to someone's editor.
+# That is why the whole thing waits for an explicit opt-in.
+editor_theming_enabled() {
+  [[ -f "$EDITOR_PREF" ]] || return 1
+  [[ "$(head -n 1 "$EDITOR_PREF" | tr -d '[:space:]')" == "on" ]]
+}
+
+# The `code` / `cursor` launchers are on PATH only when the user ran the
+# editor's "Install 'code' command in PATH" step; the copy inside the app
+# bundle is always present, so fall back to it.
+editor_cli() {
+  local name="$1" app="$2" path
+  if path="$(command -v "$name" 2>/dev/null)"; then
+    printf '%s\n' "$path"
+    return 0
+  fi
+  path="/Applications/$app.app/Contents/Resources/app/bin/$name"
+  [[ -x "$path" ]] || return 1
+  printf '%s\n' "$path"
+}
+
+# Installs the theme's extension when it is missing. Failure is reported and
+# survived: the color theme is still written, so the editor picks the palette
+# up as soon as the extension arrives by any other route.
+install_editor_extension() {
+  local cli="$1" app="$2" extension="$3"
+  [[ -n "$extension" ]] || return 0
+  "$cli" --list-extensions 2>/dev/null | grep -qix "$extension" && return 0
+  echo "Installing $extension for $app..."
+  "$cli" --install-extension "$extension" --force >/dev/null 2>&1 && return 0
+  echo "Could not install $extension for $app; $app keeps its current theme until it is." >&2
+  return 1
+}
+
+# Keeps the untouched original once, the way the setup scripts preserve every
+# file they displace.
+backup_editor_settings() {
+  local settings="$1" app_dir="$2" backup="$BACKUP_DIR/$app_dir-settings.json"
+  [[ -f "$backup" ]] && return 0
+  mkdir -p "$BACKUP_DIR"
+  cp "$settings" "$backup"
+}
+
+update_editor_themes() {
+  local name="$1"
+  editor_theming_enabled || return 0
+  local theme_file
+  theme_file="$(theme_file_path "$name")"
+  [[ -f "$theme_file" ]] || return 0
+  local label extension
+  label="$(source "$theme_file" 2>/dev/null; printf '%s' "${VSCODE_THEME:-}")"
+  extension="$(source "$theme_file" 2>/dev/null; printf '%s' "${VSCODE_EXTENSION:-}")"
+  [[ -n "$label" ]] || return 0
+  local entry bin app app_dir cli settings
+  for entry in "code|Visual Studio Code|Code" "cursor|Cursor|Cursor"; do
+    IFS='|' read -r bin app app_dir <<< "$entry"
+    cli="$(editor_cli "$bin" "$app")" || continue
+    settings="$HOME/Library/Application Support/$app_dir/User/settings.json"
+    [[ -f "$settings" ]] || continue
+    install_editor_extension "$cli" "$app" "$extension" || true
+    backup_editor_settings "$settings" "$app_dir"
+    local detected=0
+    editor_follows_os_appearance "$settings" && detected=1
+    write_editor_theme "$settings" "$label" || continue
+    echo "$app will use $label."
+    (( detected )) && echo "Turned off $app's window.autoDetectColorScheme, which was overriding the theme."
+  done
+}
+
+macos_appearance_enabled() {
+  [[ -f "$APPEARANCE_PREF" ]] || return 1
+  [[ "$(head -n 1 "$APPEARANCE_PREF" | tr -d '[:space:]')" == "on" ]]
+}
+
+# Writing AppleInterfaceStyle with defaults(1) does not take effect live --
+# running apps stay on the old appearance until they restart. System Events'
+# appearance preferences is the supported route, and like the Ghostty reload
+# above it is ordinary Apple Events automation rather than UI scripting, so it
+# needs no Accessibility permission -- just a one-time automation prompt.
+set_macos_appearance() {
+  local appearance="$1" dark="true"
+  [[ "$appearance" == "light" ]] && dark="false"
+  if ! osascript -e "tell application \"System Events\" to tell appearance preferences to set dark mode to $dark" >/dev/null 2>&1; then
+    echo "Could not set the macOS appearance. Allow Omaccy to control System Events under System Settings > Privacy & Security > Automation, then try again." >&2
+    return 1
+  fi
+  echo "macOS switched to $appearance appearance."
+}
+
+theme_appearance() {
+  local theme_file
+  theme_file="$(theme_file_path "$1")"
+  [[ -f "$theme_file" ]] || return 1
+  # Reset first: APPEARANCE is a plausible name to already have in the
+  # environment, and a theme file without one must not inherit it.
+  local appearance
+  appearance="$(APPEARANCE=""; source "$theme_file" 2>/dev/null; printf '%s' "${APPEARANCE:-}")"
+  [[ -n "$appearance" ]] || return 1
+  printf '%s\n' "$appearance"
+}
+
+# A theme file with no APPEARANCE gets no guess. Defaulting to dark is how a
+# light palette came to set macOS to Dark: the installed copy of the theme
+# predated the key, and a wrong appearance is worse than none. Custom themes
+# opt in by declaring APPEARANCE themselves.
+update_macos_appearance() {
+  macos_appearance_enabled || return 0
+  local appearance
+  if ! appearance="$(theme_appearance "$1")"; then
+    echo "Note: the installed $1 theme predates the APPEARANCE setting, so macOS keeps its current appearance. Run scripts/update.sh to refresh the installed themes." >&2
+    return 0
+  fi
+  set_macos_appearance "$appearance" || true
+}
+
+# The appearance is a macOS preference Omaccy takes over, so the value it
+# found is kept the way lib/macos.sh keeps the ones it changes -- uninstall
+# puts it back.
+record_original_appearance() {
+  [[ -f "$APPEARANCE_PREF.original" ]] && return 0
+  mkdir -p "$(dirname "$APPEARANCE_PREF")"
+  if [[ "$(defaults read -g AppleInterfaceStyle 2>/dev/null)" == "Dark" ]]; then
+    printf 'dark\n' > "$APPEARANCE_PREF.original"
+  else
+    printf 'light\n' > "$APPEARANCE_PREF.original"
+  fi
+}
+
+set_macos_appearance_following() {
+  local state="$1"
+  mkdir -p "$(dirname "$APPEARANCE_PREF")"
+  [[ "$state" == "on" ]] && record_original_appearance
+  printf '%s\n' "$state" > "$APPEARANCE_PREF"
+  if [[ "$state" == "on" ]]; then
+    echo "macOS light/dark will follow the Omaccy theme."
+    update_macos_appearance "$(current_theme)"
+  else
+    echo "macOS keeps whatever appearance you set."
+  fi
+}
+
+set_editor_theming() {
+  local state="$1"
+  mkdir -p "$(dirname "$EDITOR_PREF")"
+  printf '%s\n' "$state" > "$EDITOR_PREF"
+  if [[ "$state" == "on" ]]; then
+    echo "VS Code and Cursor will follow the Omaccy theme, installing the theme extension when one is missing."
+    update_editor_themes "$(current_theme)"
+  else
+    echo "VS Code and Cursor will keep their own themes."
+  fi
+}
+
 set_theme() {
   local name="$1"
   if [[ ! -f "$THEMES_REPO/$name.sh" && ! -f "$THEMES_INSTALLED/$name.sh" ]]; then
@@ -89,6 +255,8 @@ set_theme() {
   fi
   update_ghostty_theme "$name"
   reload_ghostty_if_running
+  update_macos_appearance "$name"
+  update_editor_themes "$name"
   restart_sketchybar_if_running
   echo "The launcher palette picks up the theme the next time it opens."
 }
@@ -121,8 +289,36 @@ case "${1:-current}" in
     fi
     set_theme "$2"
     ;;
+  appearance)
+    case "${2:-status}" in
+      on|off)
+        set_macos_appearance_following "$2"
+        ;;
+      status)
+        if macos_appearance_enabled; then echo "on"; else echo "off"; fi
+        ;;
+      *)
+        echo "Usage: bash scripts/theme.sh appearance [on | off | status]" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  editors)
+    case "${2:-status}" in
+      on|off)
+        set_editor_theming "$2"
+        ;;
+      status)
+        if editor_theming_enabled; then echo "on"; else echo "off"; fi
+        ;;
+      *)
+        echo "Usage: bash scripts/theme.sh editors [on | off | status]" >&2
+        exit 2
+        ;;
+    esac
+    ;;
   *)
-    echo "Usage: bash scripts/theme.sh [list | current | set <name>]" >&2
+    echo "Usage: bash scripts/theme.sh [list | current | set <name> | editors [on|off] | appearance [on|off]]" >&2
     exit 2
     ;;
 esac

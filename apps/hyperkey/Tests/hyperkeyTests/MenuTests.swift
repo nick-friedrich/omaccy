@@ -169,23 +169,35 @@ final class MenuTests: XCTestCase {
         XCTAssertTrue(entries.contains { $0.title == "Toggle Dock auto-hide" })
         XCTAssertTrue(entries.contains { $0.title == "Previous occupied workspace" })
     }
-    func testOmaccyContainsItsOwnUpdater() {
-        let actions = MenuCatalog.results(query: "", page: .omaccy, apps: [], help: [])
+    func testSettingsUpdaterRunsWithoutAFurtherPage() {
+        let actions = MenuCatalog.results(query: "update", page: .settings, apps: [], help: [])
         XCTAssertEqual(actions.map(\.title), ["Update Omaccy"])
         XCTAssertTrue(actions[0].updatesOmaccy)
         XCTAssertFalse(actions[0].upgradesAll)
-        XCTAssertTrue(MenuCatalog.results(query: "update", page: .omaccy, apps: [], help: []).first?.updatesOmaccy == true)
-        XCTAssertTrue(MenuCatalog.results(query: "homebrew", page: .omaccy, apps: [], help: []).isEmpty)
-        XCTAssertEqual(MenuCatalog.results(query: "update omaccy", page: .home, apps: [], help: []).first?.destination, .omaccy)
+        // Nothing to browse into: the row is the action, not a doorway.
+        XCTAssertNil(actions[0].destination)
+        // A search from Home reaches the same row and fires it in place.
+        let fromHome = MenuCatalog.results(query: "update omaccy", page: .home, apps: [], help: []).first
+        XCTAssertTrue(fromHome?.updatesOmaccy == true)
+        XCTAssertNil(fromHome?.destination)
+    }
+
+    func testUpdaterRowNamesTheRunningVersion() {
+        let updater = MenuCatalog.results(query: "", page: .settings, apps: [], help: [])
+            .first { $0.updatesOmaccy }
+        XCTAssertTrue(updater?.detail.contains(Constants.version) == true)
+        // The version is searchable too, so "0.4.0" finds what is running.
+        XCTAssertTrue(MenuCatalog.results(query: Constants.version, page: .settings, apps: [], help: [])
+            .contains { $0.updatesOmaccy })
     }
 
     func testSettingsPageListsThemeAndFontCollections() {
         let entries = MenuCatalog.results(query: "", page: .settings, apps: [], help: [])
         XCTAssertEqual(entries.map(\.title), ["Theme", "Font", "Clipboard", "Update Omaccy"])
-        XCTAssertEqual(entries.compactMap(\.destination), [.theme, .font, .clipboardSettings, .omaccy])
+        XCTAssertEqual(entries.compactMap(\.destination), [.theme, .font, .clipboardSettings])
         // The updater lives here now rather than on Home, but a search from
         // Home still reaches it, since global search spans Settings too.
-        XCTAssertFalse(MenuCatalog.categories().contains { $0.destination == .omaccy })
+        XCTAssertFalse(MenuCatalog.categories().contains { $0.updatesOmaccy })
         XCTAssertEqual(MenuCatalog.results(query: "font", page: .settings, apps: [], help: []).map(\.title), ["Font"])
         XCTAssertTrue(MenuCatalog.results(query: "nord", page: .settings, apps: [], help: []).isEmpty)
     }
@@ -241,6 +253,33 @@ final class MenuTests: XCTestCase {
         XCTAssertTrue(MenuCatalog.themeEntries(matching: "missing", themes: themes, active: "tokyo-night").isEmpty)
     }
 
+    /// The Theme page opens with the switches for where a theme reaches, ahead
+    /// of the palettes themselves.
+    func testThemePageLeadsWithTheReachSwitches() {
+        let page = MenuCatalog.results(query: "", page: .theme, apps: [], help: [])
+        XCTAssertEqual(page.first?.togglesEditorTheming, true)
+        XCTAssertEqual(page.dropFirst().first?.togglesMacOSAppearance, true)
+        let off = MenuCatalog.themeReachEntries(matching: "", editors: false, appearance: false)
+        XCTAssertEqual(off.count, 2)
+        XCTAssertTrue(off.allSatisfy { !$0.isOn })
+        XCTAssertTrue(off.allSatisfy { $0.detail.hasPrefix("Off · ") })
+        XCTAssertTrue(MenuCatalog.themeReachEntries(matching: "", editors: true, appearance: true)
+            .allSatisfy(\.isOn))
+    }
+
+    /// They answer to what they affect by name, not just to the word "theme".
+    func testReachSwitchesAreSearchableByWhatTheyAffect() {
+        func one(_ query: String) -> MenuEntry? {
+            let hits = MenuCatalog.themeReachEntries(matching: query, editors: false, appearance: false)
+            return hits.count == 1 ? hits[0] : nil
+        }
+        XCTAssertEqual(one("cursor")?.togglesEditorTheming, true)
+        XCTAssertEqual(one("vs code")?.togglesEditorTheming, true)
+        XCTAssertEqual(one("macos")?.togglesMacOSAppearance, true)
+        XCTAssertEqual(one("light")?.togglesMacOSAppearance, true)
+        XCTAssertTrue(MenuCatalog.themeReachEntries(matching: "gruvbox", editors: false, appearance: false).isEmpty)
+    }
+
     /// ⌘1–9 picks a row directly; every other digit chord stays out of the way.
     func testCommandDigitPicksARow() {
         func event(_ characters: String, _ flags: NSEvent.ModifierFlags, keyCode: UInt16 = 18) -> NSEvent {
@@ -283,5 +322,75 @@ final class MenuTests: XCTestCase {
         XCTAssertEqual(entries.first { $0.font == "serif" }?.detail, "Active")
         XCTAssertEqual(MenuCatalog.fontEntries(matching: "jetbrains", active: "serif").map(\.font), ["jetbrains-mono"])
         XCTAssertEqual(MenuCatalog.fontEntries(matching: "active", active: "serif").map(\.font), ["serif"])
+    }
+}
+
+/// `reloadData` drops the selection, which broke every ⌘ chord in the palette:
+/// pressing ⌘ repaints the rows with their ⌘1–9 markers, and the repaint left
+/// no selected row for ⌘↵ (open on Homebrew, set a picker default) or ⌘⌫ to
+/// act on. The repaint has to put the selection back.
+final class TableReloadTests: XCTestCase {
+    private final class Source: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+        var count: Int
+        init(count: Int) { self.count = count }
+        func numberOfRows(in tableView: NSTableView) -> Int { count }
+        func tableView(_ tableView: NSTableView, viewFor column: NSTableColumn?, row: Int) -> NSView? {
+            NSTextField(labelWithString: "row \(row)")
+        }
+    }
+
+    /// `dataSource` and `delegate` are weak, so the source is parked on the
+    /// test case to keep the table answering for the length of the test.
+    private var sources: [Source] = []
+
+    private func makeTable(rows: Int) -> (NSTableView, Source) {
+        let source = Source(count: rows)
+        sources.append(source)
+        let table = NSTableView()
+        table.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier("column")))
+        table.dataSource = source
+        table.delegate = source
+        table.reloadData()
+        return (table, source)
+    }
+
+    override func tearDown() {
+        sources.removeAll()
+        super.tearDown()
+    }
+
+    /// The behaviour the fix exists for: plain `reloadData` really does deselect.
+    func testReloadDataClearsSelection() {
+        let (table, _) = makeTable(rows: 12)
+        table.selectRowIndexes(IndexSet(integer: 4), byExtendingSelection: false)
+        XCTAssertEqual(table.selectedRow, 4)
+        table.reloadData()
+        XCTAssertEqual(table.selectedRow, -1)
+    }
+
+    func testReloadPreservingSelectionKeepsTheSelectedRow() {
+        let (table, _) = makeTable(rows: 12)
+        table.selectRowIndexes(IndexSet(integer: 4), byExtendingSelection: false)
+        table.reloadPreservingSelection()
+        XCTAssertEqual(table.selectedRow, 4)
+    }
+
+    func testReloadPreservingSelectionOnAnEmptyOrUnselectedTable() {
+        let (empty, _) = makeTable(rows: 0)
+        empty.reloadPreservingSelection()
+        XCTAssertEqual(empty.selectedRow, -1)
+
+        let (table, _) = makeTable(rows: 5)
+        table.reloadPreservingSelection()
+        XCTAssertEqual(table.selectedRow, -1)
+    }
+
+    /// A selection past the end of a shrunken table is dropped, not restored.
+    func testReloadPreservingSelectionDropsAnOutOfRangeSelection() {
+        let (table, source) = makeTable(rows: 12)
+        table.selectRowIndexes(IndexSet(integer: 11), byExtendingSelection: false)
+        source.count = 3
+        table.reloadPreservingSelection()
+        XCTAssertEqual(table.selectedRow, -1)
     }
 }

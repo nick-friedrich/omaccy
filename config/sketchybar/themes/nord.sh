@@ -13,3 +13,13 @@ DANGER=0xffbf616a      # red
 
 # Ghostty ships this palette as a built-in theme name.
 GHOSTTY_THEME="Nord"
+
+# Whether this is a light or a dark palette. Drives the macOS appearance when
+# that switch is on, and nothing otherwise.
+APPEARANCE="dark"
+
+# VS Code and Cursor: the marketplace extension shipping this palette, and the
+# theme label it contributes. An empty VSCODE_EXTENSION means VS Code has the
+# label built in, so nothing needs installing.
+VSCODE_EXTENSION="arcticicestudio.nord-visual-studio-code"
+VSCODE_THEME="Nord"

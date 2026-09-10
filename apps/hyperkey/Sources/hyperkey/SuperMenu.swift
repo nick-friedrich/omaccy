@@ -21,6 +21,10 @@ struct MenuEntry: Sendable {
     var chord: String? = nil
     var clip: ClipboardItem? = nil
     var clipboardSetting: ClipboardSetting? = nil
+    /// The Theme page's switch for whether VS Code and Cursor follow along.
+    var togglesEditorTheming = false
+    /// The Theme page's switch for whether macOS light/dark follows along.
+    var togglesMacOSAppearance = false
     /// Current state of a two-state setting row.
     var isOn = false
 }
@@ -39,7 +43,7 @@ struct ClipboardSettingsState: Sendable, Equatable {
 
 enum MenuPage: String, Sendable {
     case home = "Home", apps = "Apps", help = "Help", install = "Install"
-    case omaccy = "Omaccy", system = "System", agents = "Agents"
+    case system = "System", agents = "Agents"
     case mail = "Mail", editors = "Editors"
     case settings = "Settings", theme = "Theme", font = "Font"
     case clipboardSettings = "Clipboard"
@@ -74,8 +78,20 @@ enum MenuCatalog {
         MenuEntry(title: "Font", detail: "UI font for SketchyBar and this launcher", destination: .font),
         MenuEntry(title: "Clipboard", detail: "Turn clipboard history on or off and choose how it is kept",
                   destination: .clipboardSettings),
-        MenuEntry(title: "Update Omaccy", detail: "Pull the checkout and reapply it", destination: .omaccy),
+        updateEntry,
     ]
+
+    /// Settings runs the updater directly: the page it used to open held this
+    /// one row, so the extra hop only restated the row the user just picked.
+    /// The detail names the running version, which is where the question
+    /// "should I update?" is actually asked. It no longer names Ghostty --
+    /// the row now sits in global search, where "ghost" must find the app and
+    /// not the updater; the action hint carries that terminal instead.
+    static var updateEntry: MenuEntry {
+        MenuEntry(title: "Update Omaccy",
+                  detail: "Version \(Constants.version) · Pull the latest code, then rerun setup",
+                  updatesOmaccy: true)
+    }
 
     /// Rows for the clipboard controls. Each carries its own current state, so
     /// the page reads as a set of switches rather than a list of commands.
@@ -95,6 +111,27 @@ enum MenuCatalog {
         ], searchText: { "\($0.title) \($0.detail)" })
     }
 
+    /// Head the Theme page: a theme is a choice, but where it lands is a set
+    /// of switches, and the questions are only worth asking together. State is
+    /// injected by the tests the way `themeEntries` takes its own.
+    static func themeReachEntries(matching query: String, editors: Bool? = nil,
+                                  appearance: Bool? = nil) -> [MenuEntry] {
+        let editorsOn = editors ?? OmaccyAppearance.editorThemingEnabled
+        let appearanceOn = appearance ?? OmaccyAppearance.macOSAppearanceEnabled
+        return matching(query, in: [
+            MenuEntry(title: "Follow in VS Code and Cursor",
+                      detail: editorsOn
+                          ? "On · Both switch with the theme, installing its extension when needed"
+                          : "Off · Both keep whatever theme they are on",
+                      togglesEditorTheming: true, isOn: editorsOn),
+            MenuEntry(title: "Follow in macOS light and dark",
+                      detail: appearanceOn
+                          ? "On · macOS switches appearance to match the palette"
+                          : "Off · macOS keeps whatever appearance you set",
+                      togglesMacOSAppearance: true, isOn: appearanceOn)
+        ], searchText: { "\($0.title) \($0.detail)" })
+    }
+
     static let system = SystemAction.allCases.map {
         MenuEntry(title: $0.title, detail: $0.detail, systemAction: $0)
     }
@@ -106,17 +143,12 @@ enum MenuCatalog {
                         clipboard: ClipboardSettingsState = ClipboardSettingsState(),
                         clipboardItems: [ClipboardItem] = []) -> [MenuEntry] {
         if page == .install { return [] }
-        if page == .omaccy {
-            let entry = MenuEntry(title: "Update Omaccy", detail: "Pull the latest code, then rerun setup · Opens Ghostty", updatesOmaccy: true)
-            let words = query.split(whereSeparator: \.isWhitespace)
-            return words.allSatisfy { (entry.title + " " + entry.detail).localizedCaseInsensitiveContains(String($0)) } ? [entry] : []
-        }
         if page == .settings {
             return matching(query, in: settings) { "\($0.title) \($0.detail)" }
         }
         if page == .clipboardSettings { return clipboardEntries(matching: query, state: clipboard) }
         if page == .clipboard { return clipboardHistoryEntries(matching: query, items: clipboardItems) }
-        if page == .theme { return themeEntries(matching: query) }
+        if page == .theme { return themeReachEntries(matching: query) + themeEntries(matching: query) }
         if page == .font { return fontEntries(matching: query) }
         if page == .agents {
             return agentEntries(matching: query, defaultToken: defaultAgent, chord: chord("A", boundKeys))
@@ -132,7 +164,7 @@ enum MenuCatalog {
             case .apps: return apps
             case .help: return help
             case .system: return system
-            case .install, .omaccy, .settings, .theme, .font, .agents, .mail, .editors,
+            case .install, .settings, .theme, .font, .agents, .mail, .editors,
                  .clipboardSettings, .clipboard: return []
             }
         }
@@ -571,12 +603,15 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         builtFor = PaletteStyle.theme.identity
     }
 
-    /// Repaints the row markers as ⌘ goes down or up. `reloadData` keeps the
-    /// selection and the scroll position, so only the right-hand column moves.
+    /// Repaints the row markers as ⌘ goes down or up, so only the right-hand
+    /// column moves. `reloadData` drops the selection, which has to be put
+    /// back: without that, merely pressing ⌘ deselected the row, and every
+    /// chord the markers advertise -- ⌘↵ to open a package on Homebrew, ⌘↵ to
+    /// set a picker default, ⌘⌫ to delete a clip -- found no row to act on.
     private func setCommandHeld(_ held: Bool) {
         guard commandHeld != held else { return }
         commandHeld = held
-        table.reloadData()
+        table.reloadPreservingSelection()
     }
 
     private func dismiss() {
@@ -634,7 +669,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         guard rows.indices.contains(table.selectedRow) else { actionHint.stringValue = ""; return }
         let entry = rows[table.selectedRow]
         if entry.updatesOmaccy {
-            actionHint.stringValue = "↵  Open updater…"
+            actionHint.stringValue = "↵  Open updater in Ghostty…"
         } else if entry.upgradesAll {
             actionHint.stringValue = !inventoryReady
                 ? (inventoryError ? "Reopen Install to retry" : "Checking installed packages…")
@@ -655,6 +690,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             actionHint.stringValue = setting == .clear
                 ? (entry.detail.hasPrefix("0 ") ? "Nothing recorded" : "↵  Clear now")
                 : entry.isOn ? "↵  Turn off" : "↵  Turn on"
+        } else if entry.togglesEditorTheming || entry.togglesMacOSAppearance {
+            actionHint.stringValue = entry.isOn ? "↵  Turn off" : "↵  Turn on"
         } else if let choice = entry.choice {
             actionHint.stringValue = choice.isInstalled
                 ? (entry.isDefaultChoice ? "↵  Launch  ·  Default" : "↵  Launch  ·  ⌘↵  Set default")
@@ -677,6 +714,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let describesItself = entry.updatesOmaccy || entry.upgradesAll || entry.package != nil
             || entry.destination != nil || entry.systemAction != nil || entry.theme != nil || entry.font != nil
             || entry.agent != nil || entry.choice != nil || entry.clipboardSetting != nil || entry.clip != nil
+            || entry.togglesEditorTheming || entry.togglesMacOSAppearance
         let detail = PaletteStyle.label(describesItself && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let icon: NSView
@@ -776,6 +814,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if let agent = entry.agent { return agent.symbol }
         if let collection = entry.collection { return collection.symbol }
         if let action = entry.systemAction { return action.symbol }
+        if entry.togglesEditorTheming { return "chevron.left.forwardslash.chevron.right" }
+        if entry.togglesMacOSAppearance { return "circle.lefthalf.filled" }
         if entry.theme != nil || entry.destination == .theme { return "paintpalette" }
         if entry.font != nil || entry.destination == .font { return "textformat" }
         if entry.destination == .settings { return "gearshape" }
@@ -794,6 +834,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if let status = entry.package?.status { return status }
         if entry.theme != nil || entry.font != nil { return entry.detail == "Active" ? "✓" : "" }
         if let setting = entry.clipboardSetting { return setting == .clear ? "" : entry.isOn ? "✓" : "" }
+        if entry.togglesEditorTheming || entry.togglesMacOSAppearance { return entry.isOn ? "✓" : "" }
         if entry.clip != nil { return "" }
         if entry.agent != nil || entry.choice != nil { return entry.isDefaultChoice ? "✓" : "" }
         if entry.detail.hasPrefix("Hyper") { return MenuShortcut.symbolic(entry.detail) }
@@ -902,6 +943,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             useClipboardItem(clip, paste: true)
         } else if let setting = entry.clipboardSetting {
             toggleClipboard(setting)
+        } else if entry.togglesEditorTheming {
+            toggleEditorTheming()
+        } else if entry.togglesMacOSAppearance {
+            toggleMacOSAppearance()
         } else if let action = entry.systemAction {
             performSystemAction(action)
         }
@@ -979,6 +1024,23 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
         reloadCatalog(refreshApps: false)
         filter(preservingSelection: true)
+    }
+
+    /// Flips the opt-in and, when turning it on, pushes the theme at the
+    /// editors straight away — so the switch has the same visible effect as
+    /// picking a theme does. Mirrors `set_editor_theming` in scripts/theme.sh.
+    private func toggleEditorTheming() {
+        OmaccyAppearance.setEditorTheming(!OmaccyAppearance.editorThemingEnabled)
+        filter(preservingSelection: true)
+        restoreSelection { $0.togglesEditorTheming }
+    }
+
+    /// Same shape as the editor switch: turning it on brings macOS up to the
+    /// current palette straight away rather than waiting for the next pick.
+    private func toggleMacOSAppearance() {
+        OmaccyAppearance.setMacOSAppearanceFollowing(!OmaccyAppearance.macOSAppearanceEnabled)
+        filter(preservingSelection: true)
+        restoreSelection { $0.togglesMacOSAppearance }
     }
 
     private func applyTheme(named themeName: String) {
@@ -1618,5 +1680,18 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
         var seen = Set<String>()
         return entries.filter { seen.insert($0.title + $0.detail).inserted }
+    }
+}
+
+extension NSTableView {
+    /// `reloadData` clears `selectedRowIndexes`, so a repaint that is only
+    /// meant to redraw cells silently drops the row the user is acting on.
+    /// Row identity here is the index -- callers use this when the row set is
+    /// unchanged and only the cell contents differ.
+    func reloadPreservingSelection() {
+        let selection = selectedRowIndexes
+        reloadData()
+        guard !selection.isEmpty, let last = selection.last, last < numberOfRows else { return }
+        selectRowIndexes(selection, byExtendingSelection: false)
     }
 }

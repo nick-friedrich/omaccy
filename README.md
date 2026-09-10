@@ -123,8 +123,49 @@ bash scripts/theme.sh list && bash scripts/theme.sh set tokyo-night
 bash scripts/font.sh set jetbrains-mono
 ```
 
+Twelve palettes ship: Catppuccin Mocha, Catppuccin Latte, Dracula, Everforest,
+GitHub Dark, Gruvbox Dark, Kanagawa, Nord, One Dark, Rosé Pine, Solarized Dark,
+and Tokyo Night. Latte is the only light one. Each names the matching Ghostty
+built-in theme, so the terminal follows along.
+
 Both are also available under the palette's Settings, which previews changes
 live.
+
+VS Code and Cursor can follow the theme too, but only if you ask them to —
+either from the switch at the top of Settings → Theme, or with:
+
+```bash
+bash scripts/theme.sh editors on
+```
+
+Their `settings.json` is your file, not Omaccy's, so nothing is written until
+that opt-in — after which every theme switch rewrites `workbench.colorTheme`
+in place (your comments and other settings survive) and both editors repaint
+without a restart. Only Solarized Dark ships inside VS Code; the other eleven
+palettes come from a marketplace extension, so the first switch to one installs
+it with `code`/`cursor --install-extension`. The original `settings.json` is
+copied to `~/.omaccy/backups/` before the first edit, and `editors off` stops
+the whole thing.
+
+If an editor has `"window.autoDetectColorScheme": true` — Cursor ships that on
+— it ignores `workbench.colorTheme` outright and follows the OS appearance
+instead, which looks exactly like the theme not applying. Omaccy turns that
+setting off so the theme it writes is the one that shows, and says so when it
+does.
+
+macOS itself can follow the theme too, which is what makes the light palette
+worth having:
+
+```bash
+bash scripts/theme.sh appearance on
+```
+
+Also a switch on Settings → Theme, and also opt-in: picking Catppuccin Latte
+then puts macOS in Light and any dark palette puts it back. It needs a one-time
+"control System Events" automation prompt, and it remembers the appearance it
+found so uninstall can put that back. A theme file that does not declare
+`APPEARANCE` — a custom palette, or one installed before this existed — leaves
+macOS alone rather than guessing.
 
 ### Clipboard history
 
@@ -241,9 +282,11 @@ git tag v0.3.0 && git push origin v0.3.0
 
 `scripts/lib/hyperkey.sh` reads the latest release from the GitHub API, verifies
 the archive against that checksum sidecar, and installs the bundle — so both the
-asset filename pattern and the bare-hex checksum format are load-bearing. Bump
-`Constants.version` and `Info.plist` for development builds; CI stamps the real
-value from the tag.
+asset filename pattern and the bare-hex checksum format are load-bearing. The
+version needs no hand-bumping: CI stamps the tag into the bundle's `Info.plist`,
+a local build stamps `git describe` instead, and the app reads whichever it was
+given — so a build ahead of the last release says `0.4.0-3-gabc1234` rather than
+repeating `0.4.0`.
 
 Running the workflow manually (Actions → Release Hyperkey → Run workflow)
 performs the identical build, signing, and notarization chain but skips

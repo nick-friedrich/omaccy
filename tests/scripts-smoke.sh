@@ -170,6 +170,21 @@ stop_hyperkey_process
 [[ "$agent_loaded" == 0 ]] || fail "stopping the agent left it loaded"
 unset -f hyperkey_launchctl pkill
 
+# The version a locally built app stamps into its bundle, which is what the
+# palette and the status item read back. A checkout past its last release must
+# not keep reporting that release; without git there is nothing better than the
+# checked-in plist to fall back on.
+checkout_git() { printf 'v0.4.0-3-gabc1234'; }
+[[ "$(hyperkey_source_version)" == "0.4.0-3-gabc1234" ]] \
+  || fail "a checkout ahead of its release did not report the distance past it"
+checkout_git() { printf 'v0.4.0'; }
+[[ "$(hyperkey_source_version)" == "0.4.0" ]] || fail "a checkout on its release tag did not report it plainly"
+checkout_git() { return 1; }
+[[ "$(hyperkey_source_version)" == "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+  "$REPO_ROOT/apps/hyperkey/Info.plist")" ]] || fail "an unanswerable git did not fall back to the plist"
+unset -f checkout_git
+
+
 # Skew between the continuously-shipped repository and the tag-shipped app.
 # The warning exists because a config can land referencing a feature the
 # installed binary lacks, which otherwise reads as a broken setting.
@@ -377,4 +392,172 @@ restore_target "$test_dir/target" "$CONF_DIR/example" >/dev/null
 [[ ! -L "$test_dir/target" ]] || fail "restore_target left the symlink in place"
 [[ "$(cat "$test_dir/target")" == original ]] || fail "restore_target did not restore the original file"
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, release skew, SF Pro ownership, AeroSpace re-enable, config updates, and backup restoration.'
+# Keep-awake state. The fake caffeinate stands in for the real one through
+# OMACCY_CAFFEINATE_BIN; it sleeps so the process is genuinely alive, and it is
+# invoked by absolute path so `ps -o command=` shows a path the identity check
+# can match. `ps -o comm=` would report the interpreter for a script, which is
+# why the library reads the full command line instead.
+caffeinate_test_dir="$test_dir/caffeinate"
+mkdir -p "$caffeinate_test_dir"
+fake_caffeinate="$caffeinate_test_dir/caffeinate"
+# Sleeping in short steps rather than one long call so that killing this
+# process, as the process-group test does, does not orphan a child that
+# outlives the run.
+cat > "$fake_caffeinate" <<'FAKE'
+#!/usr/bin/env bash
+while :; do sleep 1; done
+FAKE
+chmod +x "$fake_caffeinate"
+
+OMACCY_STATE_DIR="$caffeinate_test_dir/state"
+OMACCY_CAFFEINATE_BIN="$fake_caffeinate"
+# REPO_ROOT was repointed at a temporary checkout above, so resolve the real
+# one from this file rather than reusing it.
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config/sketchybar/lib/caffeinate-state.sh"
+
+caffeinate_test_cleanup() {
+  pkill -f "$fake_caffeinate" 2>/dev/null || true
+}
+trap 'caffeinate_test_cleanup; rm -rf "$test_dir"' EXIT
+
+caffeinate_start 0
+caffeinate_pid="$(caffeinate_read_file "$CAFFEINATE_PID_FILE")" \
+  || fail "starting keep-awake recorded no pid"
+caffeinate_is_active || fail "a just-started keep-awake did not report as active"
+[[ "$(caffeinate_remaining)" == 0 ]] || fail "an indefinite session did not report an open-ended deadline"
+[[ "$(caffeinate_label "$(caffeinate_remaining)")" == On ]] || fail "an indefinite session was not labelled On"
+
+# The whole point of the change: caffeinate must not sit in the process group
+# of whatever launched it, because launchd ends that entire group when the
+# SketchyBar service is restarted -- which scripts/theme.sh and scripts/font.sh
+# both do for an ordinary theme or font switch.
+caffeinate_pgid="$(ps -o pgid= -p "$caffeinate_pid" | tr -d ' ')"
+shell_pgid="$(ps -o pgid= -p $$ | tr -d ' ')"
+[[ "$caffeinate_pgid" != "$shell_pgid" ]] \
+  || fail "keep-awake shares its launcher's process group and dies with the service"
+[[ "$caffeinate_pgid" == "$caffeinate_pid" ]] \
+  || fail "keep-awake did not lead a process group of its own"
+
+# Losing the process the way a service restart does must not lose the session:
+# the deadline is the state, the pid only a cache of who is serving it.
+kill "$caffeinate_pid" 2>/dev/null || true
+while kill -0 "$caffeinate_pid" 2>/dev/null; do :; done
+if caffeinate_is_active; then
+  echo 'FAIL: a killed keep-awake still reported as active' >&2
+  exit 1
+fi
+caffeinate_ensure_running || fail "keep-awake did not come back after its process was killed"
+caffeinate_revived_pid="$(caffeinate_read_file "$CAFFEINATE_PID_FILE")"
+[[ "$caffeinate_revived_pid" != "$caffeinate_pid" ]] || fail "reviving keep-awake reused the dead pid"
+caffeinate_is_active || fail "the revived keep-awake did not report as active"
+caffeinate_stop
+
+# A recorded pid that has been reused by an unrelated process is not keep-awake.
+# `kill -0` alone would accept it, leaving the bar claiming On while the display
+# sleeps -- and would have uninstall signal a stranger.
+sleep 120 >/dev/null 2>&1 &
+caffeinate_impostor_pid=$!
+disown "$caffeinate_impostor_pid" 2>/dev/null || true
+printf '%s\n' "$caffeinate_impostor_pid" > "$CAFFEINATE_PID_FILE"
+if caffeinate_is_active; then
+  echo 'FAIL: an unrelated process holding a reused pid was accepted as keep-awake' >&2
+  exit 1
+fi
+caffeinate_stop
+kill -0 "$caffeinate_impostor_pid" 2>/dev/null \
+  || fail "stopping keep-awake signalled an unrelated process holding a reused pid"
+kill "$caffeinate_impostor_pid" 2>/dev/null || true
+[[ ! -f "$CAFFEINATE_END_FILE" ]] || fail "stopping keep-awake left its deadline behind"
+
+# Resume is scoped to the current boot. Reviving a session through a service
+# restart is the fix; silently reviving an indefinite one after a reboot is not.
+caffeinate_start 0
+caffeinate_pid="$(caffeinate_read_file "$CAFFEINATE_PID_FILE")"
+kill "$caffeinate_pid" 2>/dev/null || true
+printf '%s\n' "$(( $(caffeinate_boot_id) - 1 ))" > "$CAFFEINATE_BOOT_FILE"
+if caffeinate_remaining >/dev/null; then
+  echo 'FAIL: state recorded under an earlier boot was treated as current' >&2
+  exit 1
+fi
+[[ ! -f "$CAFFEINATE_PID_FILE" ]] || fail "stale state from an earlier boot was not discarded"
+
+# State written before this version has no boot stamp at all, and describes a
+# process that cannot still be ours.
+mkdir -p "$OMACCY_STATE_DIR"
+printf '0\n' > "$CAFFEINATE_END_FILE"
+printf '1\n' > "$CAFFEINATE_PID_FILE"
+if caffeinate_remaining >/dev/null; then
+  echo 'FAIL: pre-upgrade state without a boot stamp was treated as current' >&2
+  exit 1
+fi
+
+# A timed session counts down, and is over once its deadline passes.
+caffeinate_start 3600
+caffeinate_remaining_seconds="$(caffeinate_remaining)" || fail "a timed session reported no time left"
+[[ "$caffeinate_remaining_seconds" -gt 3500 && "$caffeinate_remaining_seconds" -le 3600 ]] \
+  || fail "a one-hour session reported $caffeinate_remaining_seconds seconds left"
+[[ "$(caffeinate_label 3600)" == 1h ]] || fail "an hour was not labelled 1h"
+[[ "$(caffeinate_label 5400)" == "1h 30m" ]] || fail "ninety minutes was not labelled 1h 30m"
+[[ "$(caffeinate_label 1)" == 1m ]] || fail "a partial minute rounded down to a finished session"
+cat "$CAFFEINATE_PID_FILE" > "$caffeinate_test_dir/timed-pid"
+printf '%s\n' "$(( $(date +%s) - 1 ))" > "$CAFFEINATE_END_FILE"
+if caffeinate_remaining >/dev/null; then
+  echo 'FAIL: a session past its deadline still reported time left' >&2
+  exit 1
+fi
+[[ ! -f "$CAFFEINATE_PID_FILE" ]] || fail "an expired session left its state behind"
+if caffeinate_process_alive "$(cat "$caffeinate_test_dir/timed-pid")"; then
+  echo 'FAIL: an expired session left its process running with no pid left to stop it by' >&2
+  exit 1
+fi
+caffeinate_stop
+
+# The plugin is the only caller that reconciles on a timer, so drive it through
+# its real entry points with a recording sketchybar. This is what a SketchyBar
+# restart looks like from the bar's side: the process is gone, the next tick
+# runs, and the item has to come back on rather than report keep-awake as off.
+caffeinate_bar_trace="$caffeinate_test_dir/bar-trace"
+fake_sketchybar="$caffeinate_test_dir/sketchybar"
+cat > "$fake_sketchybar" <<'FAKE'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$OMACCY_BAR_TRACE"
+FAKE
+chmod +x "$fake_sketchybar"
+
+caffeinate_plugin() {
+  OMACCY_BAR_TRACE="$caffeinate_bar_trace" \
+  OMACCY_STATE_DIR="$OMACCY_STATE_DIR" \
+  OMACCY_CAFFEINATE_BIN="$OMACCY_CAFFEINATE_BIN" \
+  OMACCY_SKETCHYBAR_BIN="$fake_sketchybar" \
+    /bin/bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config/sketchybar/plugins/caffeinate.sh" "$@"
+}
+
+: > "$caffeinate_bar_trace"
+caffeinate_plugin start 1800
+grep -q 'label.drawing=on' "$caffeinate_bar_trace" || fail "starting keep-awake did not light the bar item"
+grep -q 'label=30m' "$caffeinate_bar_trace" || fail "a thirty-minute session was not shown as 30m"
+caffeinate_plugin_pid="$(caffeinate_read_file "$CAFFEINATE_PID_FILE")" \
+  || fail "the plugin recorded no pid"
+
+kill "$caffeinate_plugin_pid" 2>/dev/null || true
+while kill -0 "$caffeinate_plugin_pid" 2>/dev/null; do :; done
+: > "$caffeinate_bar_trace"
+caffeinate_plugin update
+grep -q 'label.drawing=on' "$caffeinate_bar_trace" \
+  || fail "a tick after the process died reported keep-awake as off instead of restoring it"
+caffeinate_plugin_revived="$(caffeinate_read_file "$CAFFEINATE_PID_FILE")"
+[[ "$caffeinate_plugin_revived" != "$caffeinate_plugin_pid" ]] \
+  || fail "the plugin did not relaunch keep-awake after its process died"
+caffeinate_process_alive "$caffeinate_plugin_revived" \
+  || fail "the pid the plugin recorded is not a running keep-awake"
+
+: > "$caffeinate_bar_trace"
+caffeinate_plugin stop
+grep -q 'label.drawing=off' "$caffeinate_bar_trace" || fail "stopping keep-awake did not dim the bar item"
+if caffeinate_process_alive "$caffeinate_plugin_revived"; then
+  echo 'FAIL: stopping keep-awake through the plugin left the process running' >&2
+  exit 1
+fi
+[[ ! -f "$CAFFEINATE_END_FILE" ]] || fail "stopping keep-awake through the plugin left its deadline behind"
+
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'

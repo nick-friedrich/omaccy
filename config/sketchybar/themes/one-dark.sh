@@ -13,3 +13,13 @@ DANGER=0xffe06c75      # red
 
 # Ghostty ships this palette as a built-in theme name.
 GHOSTTY_THEME="Atom One Dark"
+
+# Whether this is a light or a dark palette. Drives the macOS appearance when
+# that switch is on, and nothing otherwise.
+APPEARANCE="dark"
+
+# VS Code and Cursor: the marketplace extension shipping this palette, and the
+# theme label it contributes. An empty VSCODE_EXTENSION means VS Code has the
+# label built in, so nothing needs installing.
+VSCODE_EXTENSION="zhuangtongfa.material-theme"
+VSCODE_THEME="One Dark Pro"

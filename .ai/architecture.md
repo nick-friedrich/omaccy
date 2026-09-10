@@ -8,7 +8,7 @@
 | `scripts/update.sh` | One confirmation, then the checkout fast-forward, then the installation sequence |
 | `scripts/uninstall.sh` | Confirmation followed by service shutdown, restoration, and cleanup |
 | `scripts/aerospace-control.sh` | Standalone start/stop/toggle command with IPC readiness handling |
-| `scripts/theme.sh` | Standalone theme switcher; stores the choice in `~/.omaccy/theme` |
+| `scripts/theme.sh` | Standalone theme switcher; stores the choice in `~/.omaccy/theme` and, once opted in, follows it into VS Code and Cursor |
 | `scripts/font.sh` | Standalone font switcher for Ghostty, SketchyBar, and the launcher |
 | `scripts/lib/paths.sh` | Repository and installed-state paths; no directory creation |
 | `scripts/lib/prompts.sh` | Yes/No handling and descriptions of install, update, and uninstall |
@@ -16,6 +16,7 @@
 | `scripts/lib/fonts.sh` | Sudo-free SF Pro install, ownership, and removal |
 | `scripts/lib/dependencies.sh` | Homebrew setup, ownership markers, login-service registration, and optional dependency removal |
 | `scripts/lib/config.sh` | Config copying, hash stamps, symlinks, backup/restore, and legacy migration |
+| `scripts/lib/editor-settings.sh` | The VS Code / Cursor `workbench.colorTheme` rewrite, kept apart so the Swift half can be tested against it |
 | `scripts/lib/macos.sh` | Menu-bar and Mission Control settings with paired restoration functions |
 | `scripts/lib/hyperkey.sh` | Fetches the signed, notarized release build by default (local Swift build under `OMACCY_HYPERKEY_BUILD_LOCAL=1`), plus launch |
 | `tests/scripts-smoke.sh` | Isolated shell lifecycle checks |
@@ -31,6 +32,54 @@
   `config/sketchybar/lib/palette.sh`; the launcher palette rereads them every
   time it opens. Fonts ship as the font-inter, font-jetbrains-mono, and
   font-lora Homebrew casks.
+- `~/.omaccy/editor-theme` holds `on` when VS Code and Cursor follow the theme;
+  absent or `off` means they are left alone, which is the default. The switch
+  heads the palette's Theme page, since a theme is a choice but where it lands
+  is a switch, and `scripts/theme.sh editors on|off` writes the same file. Their
+  `settings.json` is a user-owned file that Omaccy edits in place rather than
+  symlinks, so the opt-in is what authorizes the first write; the untouched
+  original lands in `~/.omaccy/backups/{Code,Cursor}-settings.json`. Only the
+  `workbench.colorTheme` line is rewritten, line-based, because these files are
+  JSONC and a parse-and-reserialize round-trip would drop the user's comments.
+  Each theme file names its editor mapping in `VSCODE_THEME` and
+  `VSCODE_EXTENSION`; an empty extension (Solarized Dark alone) means VS Code
+  has that label built in, and every other palette is installed on demand
+  through `code`/`cursor --install-extension`. The editors watch their own
+  settings file, so unlike Ghostty they need no reload nudge. `theme.sh` and
+  `Appearance.swift` implement this in parallel, the same way they both
+  implement the Ghostty rewrite: the launcher ships as a signed bundle and
+  cannot rely on the checkout being present, so shelling out to `theme.sh`
+  would trade a test-time problem for a runtime dependency on a checkout that
+  may be missing, moved, or at a different revision than the app.
+- `window.autoDetectColorScheme` makes both editors ignore
+  `workbench.colorTheme` and follow the OS appearance instead, so writing the
+  theme alone looks exactly like nothing happening — which is how it looked in
+  Cursor, which ships that setting on. The writer turns it off, so there is one
+  place the theme lives; Omaccy drives it once the editor switch is on.
+- `~/.omaccy/appearance` holds `on` when macOS light/dark follows the theme,
+  and is opt-in for the same reason the editors are: it changes something
+  outside Omaccy, here system-wide. Each theme file declares its own polarity
+  in `APPEARANCE`, and a file without one leaves macOS alone — defaulting to
+  dark is exactly how a light palette once set macOS to Dark, because the
+  installed copy of the theme predated the key. `~/.omaccy/config` holds copies
+  refreshed by `update.sh`, so a key added to a theme file does nothing until
+  that runs; the switcher names that case rather than guessing. Switching uses
+  System Events' appearance preferences because writing `AppleInterfaceStyle`
+  with `defaults` does not take effect in running apps; like the Ghostty reload
+  it is ordinary Apple Events automation, not UI scripting. The appearance
+  found on first opt-in is kept in `~/.omaccy/appearance.original` and restored
+  by uninstall, the way `lib/macos.sh` treats the other macOS preferences.
+- Two implementations of one fiddly rule drift, and this pair did: the Swift
+  half read a trailing comma with `CharacterSet.whitespaces`, which does not
+  cover the carriage return a CRLF file leaves behind, so it wrote a
+  `settings.json` with a comma missing. awk's `[[:space:]]` does cover it, so
+  only one half was wrong. `EditorSettingsParityTests` is the answer to that:
+  every fixture in `Tests/hyperkeyTests/Fixtures/editor-settings/` goes through
+  both implementations and their output has to match byte for byte, and each
+  accepted result has to parse as JSON carrying the requested theme — parity
+  alone would be satisfied by both halves being wrong together. A fixture per
+  shape that has bitten: CRLF, a trailing `//` comment hiding the comma, an
+  insert, an empty object, and a one-line object that both must refuse.
 - `~/.omaccy/clipboard/history.json` holds clipboard history, written at mode
   0600 and only while `clipboard_persist` is on; the default is memory-only, so
   the directory usually does not exist. `ClipboardHistory.swift` documents why:
@@ -80,6 +129,18 @@ stable across releases. Set `OMACCY_HYPERKEY_BUILD_LOCAL=1` to instead build
 from the current checkout's Swift sources — the pre-existing ad-hoc-signed
 path, needed when testing unreleased hyperkey changes, which still resets
 Accessibility state when the built binary's hash changes.
+
+The version has one home: the bundle's `Info.plist`, which `Constants.version`
+reads at runtime rather than carrying a literal of its own. Both install paths
+stamp it -- the release workflow with the tag it built, a local build with
+`hyperkey_source_version`, which is `git describe --tags --dirty` -- so an app
+built from a checkout past the last release reports `0.4.0-3-gabc1234` or
+`0.4.0-dirty` instead of claiming to be `0.4.0`. That matters now that Settings
+shows the number: it is read by the same people the skew warning is for. The
+local stamp goes in before `codesign`, since the signature covers `Info.plist`.
+The checked-in plist is only the fallback for a checkout git cannot describe;
+it needs no hand-bumping between releases, because the tag is the bump. An
+unbundled executable (`swift run`) reports `dev`, having no plist to read.
 
 Update fast-forwards the checkout, then reruns the installation sequence
 (refetching the latest hyperkey release by default, or rebuilding from the
@@ -208,6 +269,28 @@ SF Symbol a plain-Unicode twin and picks the set at startup by looking for
 nicer glyphs and nothing else. Both `sketchybarrc` and `plugins/battery.sh`
 source that file rather than hardcoding glyphs, so the two sets cannot drift.
 
+Keep awake keeps its state in `config/sketchybar/lib/caffeinate-state.sh`, which
+`plugins/caffeinate.sh` and `scripts/uninstall.sh` both source so there is one
+definition of the state files and of when the recorded PID may be signalled.
+What is stored is the deadline the user asked for (`~/.omaccy/caffeinate.ends-at`,
+0 meaning indefinite), stamped with the boot it belongs to
+(`~/.omaccy/caffeinate.boot`); `~/.omaccy/caffeinate.pid` is only a cache of the
+process currently serving that deadline. The distinction is load-bearing, because
+`caffeinate` dies far more often than the intent changes: a child inherits the
+process group of whatever launched it, and `brew services restart sketchybar` --
+which an ordinary theme or font switch performs -- makes launchd take down that
+whole group. `caffeinate_launch` therefore starts it under `set -m`, in a process
+group of its own, and the plugin reconciles on every tick, relaunching for the
+time remaining rather than reporting keep awake as off. The boot stamp scopes
+that resume: surviving a service restart is the point, silently resuming an
+indefinite session after a reboot is not. Liveness is checked by matching the
+caffeinate path in `ps -o command=` rather than by `kill -0`, because PIDs are
+reused across a reboot and a bare existence check would both light the bar for an
+unrelated process and have uninstall signal it. `ps -o comm=` reports the
+interpreter for a script, which is why the full command line is read instead --
+that is also what lets the smoke checks substitute a fake binary through
+`OMACCY_CAFFEINATE_BIN`.
+
 `HomebrewCatalog.swift` loads the official formula/cask metadata asynchronously and
 ranks package searches for the palette’s Install collection. The controller caches
 the catalog in memory for an hour and confirms each install before handing it to
@@ -305,8 +388,13 @@ alongside Ghostty, AeroSpace, and SketchyBar; uninstall only stops and removes
 it when Omaccy itself installed it, since a pre-existing herdr may be hosting
 the user's own unrelated agent sessions in that same default session.
 
-The Omaccy collection offers Update Omaccy, opening `scripts/update.sh` from the
-checkout in Ghostty. Installation records the checkout path at
+Settings offers Update Omaccy, opening `scripts/update.sh` from the checkout in
+Ghostty. It runs from the Settings row itself rather than descending into a
+page whose only content was that same row; the row's detail names the running
+version (`Constants.version`), so what is installed is stated where the
+question of updating is asked. The detail deliberately omits "Ghostty" -- the
+row is reachable from global search, where "ghost" belongs to the app -- and
+the action hint names the terminal instead. Installation records the checkout path at
 `~/.omaccy/hyperkey-checkout.txt`, outside the signed app bundle so the
 downloaded, notarized release build never needs re-signing; uninstall removes
 it alongside the app. Debug builds resolve their source checkout. Missing/moved

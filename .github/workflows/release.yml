@@ -25,6 +25,9 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          # Tags and history: a manual run has no tag to read its version from
+          # and derives one with `git describe` instead.
+          fetch-depth: 0
 
       - name: Check release credentials
         env:
@@ -51,20 +54,14 @@ jobs:
           if [ "${{ github.ref_type }}" = "tag" ]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/hyperkey/Info.plist)"
+            # A manual run publishes nothing, but the app it builds still has
+            # to name itself honestly: the last release plus the distance past
+            # it, the same string a local build stamps.
+            version="$(git describe --tags --always)"
+            version="${version#v}"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Building version $version"
-
-      - name: Stamp version
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          # Constants.version is compiled in, so it has to be stamped before the
-          # build; the bundle's Info.plist is stamped when it is assembled.
-          sed -i '' -E "s/(static let version = \")[^\"]*(\")/\1$VERSION\2/" \
-            apps/hyperkey/Sources/hyperkey/Constants.swift
-          grep -n 'static let version' apps/hyperkey/Sources/hyperkey/Constants.swift
 
       - name: Run Swift package tests
         run: swift test --package-path apps/hyperkey
@@ -84,7 +81,9 @@ jobs:
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           cp apps/hyperkey/.build/apple/Products/Release/omaccy-hyperkey "$APP/Contents/MacOS/omaccy-hyperkey"
           cp apps/hyperkey/Info.plist "$APP/Contents/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
+          # The only place the version is set: the app reads it back out of
+          # this plist at runtime, so nothing has to be stamped into the source.
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${VERSION%%-*}" "$APP/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
           echo "APP_PATH=$APP" >> "$GITHUB_ENV"
 

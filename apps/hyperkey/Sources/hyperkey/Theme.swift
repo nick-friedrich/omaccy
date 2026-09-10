@@ -39,14 +39,49 @@ struct OmaccyTheme {
 
     var identity: String { name + "/" + (fontFamily ?? "system") }
 
+    static func themeFile(named name: String) -> String {
+        "\(NSHomeDirectory())/.omaccy/config/sketchybar/themes/\(name).sh"
+    }
+
     /// Ghostty's built-in theme name matching an installed Omaccy theme
     /// (its file's GHOSTTY_THEME assignment), if any.
     static func ghosttyThemeName(named name: String) -> String? {
-        ghosttyThemeName(fromFile: "\(NSHomeDirectory())/.omaccy/config/sketchybar/themes/\(name).sh")
+        ghosttyThemeName(fromFile: themeFile(named: name))
     }
 
     static func ghosttyThemeName(fromFile path: String) -> String? {
         stringAssignment(named: "GHOSTTY_THEME", from: path)
+    }
+
+    /// The VS Code / Cursor theme label matching an installed Omaccy theme
+    /// (its file's VSCODE_THEME assignment), if any.
+    static func vscodeThemeName(named name: String) -> String? {
+        vscodeThemeName(fromFile: themeFile(named: name))
+    }
+
+    static func vscodeThemeName(fromFile path: String) -> String? {
+        stringAssignment(named: "VSCODE_THEME", from: path)
+    }
+
+    /// The marketplace extension shipping that label. Nil when the theme file
+    /// omits it or leaves it empty, which means VS Code has the label built in
+    /// and nothing needs installing.
+    static func vscodeExtensionID(named name: String) -> String? {
+        vscodeExtensionID(fromFile: themeFile(named: name))
+    }
+
+    static func vscodeExtensionID(fromFile path: String) -> String? {
+        stringAssignment(named: "VSCODE_EXTENSION", from: path)
+    }
+
+    /// "light" or "dark": the palette's own nature, which the macOS appearance
+    /// switch follows.
+    static func appearance(named name: String) -> String? {
+        appearance(fromFile: themeFile(named: name))
+    }
+
+    static func appearance(fromFile path: String) -> String? {
+        stringAssignment(named: "APPEARANCE", from: path)
     }
 
     /// Reads a quoted or bare KEY="value" / KEY=value assignment, ignoring

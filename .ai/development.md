@@ -26,7 +26,12 @@ cannot carry state between calls. They do not install dependencies, restart
 services, or modify macOS preferences. AeroSpace stop/start recovery is checked
 with a mocked CLI, including a disabled server and restricted IPC. The Hyperkey
 agent restart is checked through the `hyperkey_launchctl` seam, covering an
-already-loaded agent and a bootstrap that genuinely fails.
+already-loaded agent and a bootstrap that genuinely fails. Keep awake is checked
+against a fake `caffeinate` supplied through `OMACCY_CAFFEINATE_BIN` and a
+recording `sketchybar`, covering the process group it is launched into, resume
+after its process is killed, a PID reused by an unrelated process, boot scoping,
+and deadline expiry; the fake is invoked by absolute path because the identity
+check reads `ps -o command=`.
 Full install/uninstall testing changes the
 desktop and should be a deliberate manual integration check.
 

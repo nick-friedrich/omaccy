@@ -13,3 +13,13 @@ DANGER=0xffe82424      # samuraiRed
 
 # Ghostty ships this palette as a built-in theme name.
 GHOSTTY_THEME="Kanagawa Wave"
+
+# Whether this is a light or a dark palette. Drives the macOS appearance when
+# that switch is on, and nothing otherwise.
+APPEARANCE="dark"
+
+# VS Code and Cursor: the marketplace extension shipping this palette, and the
+# theme label it contributes. An empty VSCODE_EXTENSION means VS Code has the
+# label built in, so nothing needs installing.
+VSCODE_EXTENSION="metaphore.kanagawa-vscode-color-theme"
+VSCODE_THEME="Kanagawa Wave"

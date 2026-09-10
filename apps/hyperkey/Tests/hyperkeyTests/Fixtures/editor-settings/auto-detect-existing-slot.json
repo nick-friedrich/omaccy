@@ -1,0 +1,5 @@
+{
+  "window.autoDetectColorScheme": true, // follow macOS
+  "workbench.preferredDarkColorTheme": "Default Dark Modern",
+  "editor.tabSize": 2
+}
