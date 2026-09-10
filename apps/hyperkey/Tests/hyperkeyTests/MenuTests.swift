@@ -168,6 +168,11 @@ final class MenuTests: XCTestCase {
         XCTAssertTrue(entries.contains { $0.title == "Grow window" && $0.detail == "Hyper + i" })
         XCTAssertTrue(entries.contains { $0.title == "Toggle Dock auto-hide" })
         XCTAssertTrue(entries.contains { $0.title == "Previous occupied workspace" })
+        // A flag between the command and the workspace used to land in the title.
+        XCTAssertTrue(entries.contains {
+            $0.title == "Move window to workspace 7" && $0.detail == "Hyper + Shift + 7"
+        })
+        XCTAssertFalse(entries.contains { $0.title.contains("--") })
     }
     func testSettingsUpdaterRunsWithoutAFurtherPage() {
         let actions = MenuCatalog.results(query: "update", page: .settings, apps: [], help: [])

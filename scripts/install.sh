@@ -15,6 +15,7 @@ main() {
   mkdir -p "$CONF_DIR" "$BAK_DIR"
 
   migrate_legacy_karabiner_config
+  retire_master_stack_script
   ensure_cask ghostty
   ensure_cask aerospace nikitabobko/tap/aerospace
   ensure_cask font-inter
@@ -32,12 +33,12 @@ main() {
   ensure_absent_with_backup "$HOME/.aerospace.toml"
   ensure_symlink "$REPO_ROOT/config/aerospace/aerospace.toml" \
     "$HOME/.config/aerospace/aerospace.toml"
-  ensure_symlink "$REPO_ROOT/config/aerospace/master-stack.sh" \
-    "$HOME/.config/aerospace/master-stack.sh"
   ensure_symlink "$REPO_ROOT/config/aerospace/dock-toggle.sh" \
     "$HOME/.config/aerospace/dock-toggle.sh"
-  chmod +x "$CONF_DIR/aerospace/master-stack.sh"
+  ensure_symlink "$REPO_ROOT/config/aerospace/layout.sh" \
+    "$HOME/.config/aerospace/layout.sh"
   chmod +x "$CONF_DIR/aerospace/dock-toggle.sh"
+  chmod +x "$CONF_DIR/aerospace/layout.sh"
   disable_mission_control_arrow_shortcuts
   enable_mission_control_grouping
   killall Dock 2>/dev/null || true

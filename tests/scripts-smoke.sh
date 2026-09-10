@@ -392,6 +392,113 @@ restore_target "$test_dir/target" "$CONF_DIR/example" >/dev/null
 [[ ! -L "$test_dir/target" ]] || fail "restore_target left the symlink in place"
 [[ "$(cat "$test_dir/target")" == original ]] || fail "restore_target did not restore the original file"
 
+# The retired master/stack placement. HOME is overridden inside a subshell
+# because the function reads the real ~/.config path the installer wrote to;
+# `set -e` still aborts the run when the subshell fails.
+(
+  HOME="$test_dir/retire-home"
+  OMACCY_DIR="$test_dir/retire-state"
+  CONF_DIR="$OMACCY_DIR/config"
+  mkdir -p "$HOME/.config/aerospace" "$CONF_DIR/aerospace" "$OMACCY_DIR/sha256/aerospace"
+  printf 'placement\n' > "$CONF_DIR/aerospace/master-stack.sh"
+  printf 'sum\n' > "$OMACCY_DIR/sha256/aerospace/master-stack.sh"
+  ln -s "$CONF_DIR/aerospace/master-stack.sh" "$HOME/.config/aerospace/master-stack.sh"
+  retire_master_stack_script >/dev/null
+  [[ ! -L "$HOME/.config/aerospace/master-stack.sh" ]] ||
+    fail "retire_master_stack_script left the symlink AeroSpace would still run"
+  [[ ! -e "$CONF_DIR/aerospace/master-stack.sh" ]] ||
+    fail "retire_master_stack_script left the canonical copy behind"
+  [[ ! -e "$OMACCY_DIR/sha256/aerospace/master-stack.sh" ]] ||
+    fail "retire_master_stack_script left the checksum behind"
+
+  # A real file at that path is the user's, not a link Omaccy made.
+  printf 'mine\n' > "$HOME/.config/aerospace/master-stack.sh"
+  retire_master_stack_script >/dev/null
+  [[ "$(cat "$HOME/.config/aerospace/master-stack.sh")" == mine ]] ||
+    fail "retire_master_stack_script removed a file it did not install"
+
+  # An edited canonical copy is kept rather than discarded with the feature.
+  BAK_DIR="$OMACCY_DIR/backups"
+  printf 'edited\n' > "$CONF_DIR/aerospace/master-stack.sh"
+  retire_master_stack_script >/dev/null
+  [[ ! -e "$CONF_DIR/aerospace/master-stack.sh" ]] ||
+    fail "retire_master_stack_script left an edited canonical copy in place"
+  [[ "$(cat "$BAK_DIR"/master-stack.sh.*)" == edited ]] ||
+    fail "retire_master_stack_script discarded an edited canonical copy"
+)
+
+# Per-workspace layout modes, against a fake aerospace that records what it was
+# asked to do. HOME is overridden because the store is ~/.omaccy/workspace-layout
+# by design -- the bar and the AeroSpace callback both find it without being
+# told where it is. REPO_ROOT is a temporary checkout by this point, so the real
+# one is recomputed here.
+(
+  repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  layout="$repo/config/aerospace/layout.sh"
+  HOME="$test_dir/layout-home"
+  mkdir -p "$HOME"
+  AEROSPACE_LOG="$test_dir/layout-calls.log"
+  export AEROSPACE_LOG
+  fake_aerospace="$test_dir/layout-bin/aerospace"
+  mkdir -p "$(dirname "$fake_aerospace")"
+  cat > "$fake_aerospace" <<'FAKE'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$AEROSPACE_LOG"
+case "$1" in
+  list-workspaces) printf '3\n' ;;
+  list-windows)
+    case "$*" in
+      *--count*) printf '2\n' ;;
+      *workspace-root-container-layout*) printf 'h_tiles\n' ;;
+    esac
+    ;;
+esac
+FAKE
+  chmod +x "$fake_aerospace"
+  export AEROSPACE_BIN="$fake_aerospace"
+
+  [[ "$(bash "$layout" current 3)" == horizontal ]] ||
+    fail "layout.sh did not fall back to the default mode"
+
+  bash "$layout" set vertical 3 >/dev/null ||
+    fail "layout.sh could not set a mode"
+  [[ "$(bash "$layout" current 3)" == vertical ]] ||
+    fail "layout.sh did not read back the mode it stored"
+  [[ "$(bash "$layout" label 3)" == Rows ]] ||
+    fail "layout.sh labelled the vertical mode wrongly"
+  [[ "$(bash "$layout" current 4)" == horizontal ]] ||
+    fail "a mode set on one workspace leaked into another"
+
+  if bash "$layout" set sideways 3 >/dev/null 2>&1; then
+    fail "layout.sh accepted a mode that does not exist"
+  fi
+  [[ "$(bash "$layout" current 3)" == vertical ]] ||
+    fail "a rejected mode still overwrote the stored one"
+
+  printf 'garbage\n' > "$HOME/.omaccy/workspace-layout/3"
+  [[ "$(bash "$layout" current 3)" == horizontal ]] ||
+    fail "a damaged store was not replaced by the default"
+
+  # Recursive is the mode that means "leave the tree alone", so re-asserting it
+  # has to issue nothing at all.
+  bash "$layout" set recursive 3 >/dev/null
+  : > "$AEROSPACE_LOG"
+  bash "$layout" apply 3 >/dev/null
+  if grep -q . "$AEROSPACE_LOG"; then
+    fail "applying the recursive mode drove AeroSpace instead of leaving it alone"
+  fi
+
+  # A flat workspace stays flat by itself, so re-asserting a mode whose root
+  # already matches must not touch the layout either -- that is what keeps this
+  # from overwriting sizes on every new window.
+  bash "$layout" set horizontal 3 >/dev/null
+  : > "$AEROSPACE_LOG"
+  bash "$layout" apply 3 >/dev/null
+  if grep -q '^layout ' "$AEROSPACE_LOG"; then
+    fail "re-asserting an unchanged mode reset the workspace layout"
+  fi
+)
+
 # Keep-awake state. The fake caffeinate stands in for the real one through
 # OMACCY_CAFFEINATE_BIN; it sleeps so the process is genuinely alive, and it is
 # invoked by absolute path so `ps -o command=` shows a path the identity check
@@ -560,4 +667,4 @@ if caffeinate_process_alive "$caffeinate_plugin_revived"; then
 fi
 [[ ! -f "$CAFFEINATE_END_FILE" ]] || fail "stopping keep-awake through the plugin left its deadline behind"
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, master-stack retirement, workspace layout modes, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'

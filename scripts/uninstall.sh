@@ -76,6 +76,10 @@ main() {
     "$CONF_DIR/ghostty/config.ghostty"
   restore_target "$HOME/.config/aerospace/dock-toggle.sh" \
     "$CONF_DIR/aerospace/dock-toggle.sh"
+  restore_target "$HOME/.config/aerospace/layout.sh" \
+    "$CONF_DIR/aerospace/layout.sh"
+  # Retired in 0.4.2 and removed by install.sh, so this only finds anything on
+  # a machine that is being uninstalled without having been updated first.
   restore_target "$HOME/.config/aerospace/master-stack.sh" \
     "$CONF_DIR/aerospace/master-stack.sh"
   restore_target "$HOME/.config/aerospace/aerospace.toml" \
@@ -116,6 +120,7 @@ main() {
     "$CONF_DIR/hyperkey/hyperkey.toml" \
     "$CONF_DIR/ghostty/config.ghostty" \
     "$CONF_DIR/aerospace/dock-toggle.sh" \
+    "$CONF_DIR/aerospace/layout.sh" \
     "$CONF_DIR/aerospace/master-stack.sh" \
     "$CONF_DIR/aerospace/aerospace.toml" \
     "$CONF_DIR/sketchybar/sketchybarrc" \
@@ -132,6 +137,7 @@ main() {
     "$OMACCY_DIR/sha256/hyperkey/hyperkey.toml" \
     "$OMACCY_DIR/sha256/ghostty/config.ghostty" \
     "$OMACCY_DIR/sha256/aerospace/dock-toggle.sh" \
+    "$OMACCY_DIR/sha256/aerospace/layout.sh" \
     "$OMACCY_DIR/sha256/aerospace/master-stack.sh" \
     "$OMACCY_DIR/sha256/aerospace/aerospace.toml" \
     "$OMACCY_DIR/sha256/sketchybar/sketchybarrc" \
@@ -142,7 +148,7 @@ main() {
     "$OMACCY_DIR/sha256/sketchybar/themes/"*.sh
   rm -f "$OMACCY_DIR/aerospace-disabled" \
     "$OMACCY_DIR/native-menu-visible"
-  rm -rf "$OMACCY_DIR/clipboard"
+  rm -rf "$OMACCY_DIR/clipboard" "$OMACCY_DIR/workspace-layout"
   restore_macos_appearance
   report_editor_settings
 

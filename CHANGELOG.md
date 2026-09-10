@@ -10,13 +10,46 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.2` tag is cut.
 
+### Added
+
+- Every workspace has a layout mode, and the menu bar's tiling indicator now
+  names it instead of always reading "Tiling". Click it to switch: **Columns**
+  (full-height columns side by side), **Rows** (full width, stacked),
+  **Grid** (squared off — four windows make a 2×2), **Recursive** (new windows
+  split beside the focused one, which is what Omaccy did before), and
+  **Accordion** (one window at a time). The choice is per workspace and
+  survives restarts, in `~/.omaccy/workspace-layout/`.
+- Columns, Rows and Accordion hold themselves without moving anything you have
+  already arranged: AeroSpace puts a new window beside the focused one, so in a
+  flat workspace it simply becomes the next column or row. Only Grid is rebuilt
+  when a window opens, because squaring off is the one shape that cannot
+  maintain itself — switch that workspace to Recursive if you would rather it
+  stopped.
+- Resizing reads sensibly again as a side effect. `Hyper+U` / `Hyper+I` resize
+  along the workspace's own direction, so in Columns it is always width and in
+  Rows always height, instead of depending on a tree you cannot see.
+
 ### Changed
 
+- The Help page no longer prints `--focus-follows-window` in the middle of
+  "Move window to workspace 3". The workspace was read from a fixed offset,
+  which the flag sat in front of.
 - The Mail and Editors pages show each app's real icon instead of one shared
   symbol, so Cursor, Zed, and Thunderbird read at a glance the way the Apps
   page and the desktop agents already do. The icon is read from the app on
   disk, so a choice that is not installed yet keeps the collection's symbol —
   which is now also what marks it as missing before you read the row.
+
+### Removed
+
+- The master/stack window placement is gone: every new window went to the
+  bottom of a right-hand stack, which overwrote any arrangement made by hand
+  as soon as the next window opened. New windows now open beside the focused
+  one, and a workspace's layout mode is how it gets its shape instead. Updating
+  removes `~/.config/aerospace/master-stack.sh` and the copy under
+  `~/.omaccy/config`. A file you have put at that path yourself is left alone,
+  and a canonical copy you had edited moves to `~/.omaccy/backups/` rather
+  than being deleted with the feature.
 
 ### Fixed
 

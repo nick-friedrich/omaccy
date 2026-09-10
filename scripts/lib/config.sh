@@ -86,6 +86,30 @@ migrate_legacy_karabiner_config() {
   fi
 }
 
+# The master/stack window placement retired in 0.4.2. Its script is gone from
+# the checkout, so the symlink an earlier install left in ~/.config would dangle
+# and AeroSpace would run nothing on every new window; the canonical copy and
+# its checksum go with it. Only a link Omaccy made is touched -- a file the user
+# has put there since is left alone, the way restore_target treats one, and a
+# canonical copy that was edited is kept in the backups directory rather than
+# deleted, since retiring a feature is no reason to discard someone's work.
+retire_master_stack_script() {
+  local rel="aerospace/master-stack.sh"
+  local target="$HOME/.config/$rel"
+  local canonical="$CONF_DIR/$rel"
+
+  if [[ -L "$target" && "$(readlink "$target")" == "$canonical" ]]; then
+    rm "$target"
+    echo "Removed the retired master/stack window placement."
+  fi
+  if [[ -f "$canonical" ]] && ! config_is_pristine "$rel"; then
+    mkdir -p "$BAK_DIR"
+    mv "$canonical" "$BAK_DIR/master-stack.sh.$(date +%Y%m%d-%H%M%S)"
+    echo "Kept your edited master-stack.sh → $BAK_DIR"
+  fi
+  rm -f "$canonical" "$OMACCY_DIR/sha256/$rel"
+}
+
 restore_target() {
   local target="$1"
   local canonical="$2"

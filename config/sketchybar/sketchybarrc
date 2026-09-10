@@ -189,6 +189,10 @@ sketchybar --add item caffeinate.off popup.caffeinate \
     background.drawing=off \
     click_script="$PLUGIN_DIR/caffeinate.sh stop"
 
+# Reports the focused workspace's layout mode, and opens a popup to change it.
+# Subscribed to the workspace event so the label follows you between
+# workspaces rather than waiting for the next poll; the poll stays because
+# tiling can also be switched off from outside the bar.
 sketchybar --add item aerospace right \
   --set aerospace \
     icon="$ICON_TILING" \
@@ -197,6 +201,59 @@ sketchybar --add item aerospace right \
     label="Tiling" \
     update_freq=5 \
     script="$PLUGIN_DIR/aerospace-state.sh" \
+    click_script="$PLUGIN_DIR/aerospace-state.sh click" \
+    popup.align=right \
+    popup.background.color="$ITEM_BG" \
+    popup.background.corner_radius=7 \
+    popup.background.border_width=1 \
+    popup.background.border_color="$BORDER" \
+  --subscribe aerospace aerospace_workspace_change
+
+# One row per mode. The glyphs are plain Geometric Shapes rather than SF
+# Symbols, like the caffeinate popup's, so they draw whether or not SF Pro
+# made it onto the machine -- and each is a small picture of the arrangement
+# it applies.
+sketchybar --add item aerospace.horizontal popup.aerospace \
+  --set aerospace.horizontal \
+    icon="▥" \
+    label="Columns" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/aerospace-state.sh set horizontal"
+
+sketchybar --add item aerospace.vertical popup.aerospace \
+  --set aerospace.vertical \
+    icon="▤" \
+    label="Rows" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/aerospace-state.sh set vertical"
+
+sketchybar --add item aerospace.grid popup.aerospace \
+  --set aerospace.grid \
+    icon="▦" \
+    label="Grid" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/aerospace-state.sh set grid"
+
+sketchybar --add item aerospace.recursive popup.aerospace \
+  --set aerospace.recursive \
+    icon="◧" \
+    label="Recursive" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/aerospace-state.sh set recursive"
+
+sketchybar --add item aerospace.accordion popup.aerospace \
+  --set aerospace.accordion \
+    icon="▬" \
+    label="Accordion" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/aerospace-state.sh set accordion"
+
+sketchybar --add item aerospace.toggle popup.aerospace \
+  --set aerospace.toggle \
+    icon="×" \
+    icon.color="$DANGER" \
+    label="Turn tiling off" \
+    background.drawing=off \
     click_script="$PLUGIN_DIR/aerospace-state.sh toggle"
 
 sketchybar --trigger aerospace_workspace_change
