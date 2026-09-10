@@ -329,6 +329,12 @@ final class MenuTests: XCTestCase {
 /// pressing ⌘ repaints the rows with their ⌘1–9 markers, and the repaint left
 /// no selected row for ⌘↵ (open on Homebrew, set a picker default) or ⌘⌫ to
 /// act on. The repaint has to put the selection back.
+// Every line here drives NSTableView, which is main-actor isolated. Swift
+// 6.3 lets a nonisolated test reach it; the Xcode the release workflow runs
+// does not, and the whole class failed to compile there while passing
+// locally. Isolating the class is how ClipboardHistoryTests answers the same
+// mismatch.
+@MainActor
 final class TableReloadTests: XCTestCase {
     private final class Source: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         var count: Int
