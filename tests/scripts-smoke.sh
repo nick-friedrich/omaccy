@@ -427,7 +427,7 @@ restore_target "$test_dir/target" "$CONF_DIR/example" >/dev/null
     fail "retire_master_stack_script discarded an edited canonical copy"
 )
 
-# Per-workspace layout modes, against a fake aerospace that records what it was
+# Per-workspace layout modes, the calendar popup, against a fake aerospace that records what it was
 # asked to do. HOME is overridden because the store is ~/.omaccy/workspace-layout
 # by design -- the bar and the AeroSpace callback both find it without being
 # told where it is. REPO_ROOT is a temporary checkout by this point, so the real
@@ -497,6 +497,73 @@ FAKE
   if grep -q '^layout ' "$AEROSPACE_LOG"; then
     fail "re-asserting an unchanged mode reset the workspace layout"
   fi
+)
+
+# The calendar popup, against a sketchybar that records one argument per line.
+# HOME is temporary so the palette falls back to its Catppuccin defaults and the
+# accent color is known; today and the first weekday are pinned so the grid is.
+(
+  repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  HOME="$test_dir/calendar-home"
+  mkdir -p "$HOME"
+  trace="$test_dir/calendar-trace"
+  recorder="$test_dir/calendar-bin/sketchybar"
+  mkdir -p "$(dirname "$recorder")"
+  cat > "$recorder" <<'FAKE'
+#!/usr/bin/env bash
+for argument in "$@"; do printf '%s\n' "$argument"; done >> "$CALENDAR_TRACE"
+FAKE
+  chmod +x "$recorder"
+  calendar() {
+    : > "$trace"
+    CALENDAR_TRACE="$trace" OMACCY_SKETCHYBAR_BIN="$recorder" \
+      OMACCY_STATE_DIR="$test_dir/calendar-state" \
+      OMACCY_CALENDAR_TODAY="$1" OMACCY_FIRST_WEEKDAY="$2" \
+      /bin/bash "$repo/config/sketchybar/plugins/calendar.sh" "$3"
+  }
+
+  # September 2026 starts on a Tuesday and has five weeks.
+  calendar 2026-09-11 1 click
+  grep -Fxq 'label=September 2026' "$trace" || fail "the calendar did not name the month"
+  grep -Fxq 'label= Mo  Tu  We  Th  Fr  Sa  Su ' "$trace" ||
+    fail "a Monday-first calendar did not start its week on Monday"
+  grep -Fxq 'label=      1   2   3   4   5   6 ' "$trace" ||
+    fail "the first of the month was not placed under its weekday"
+  grep -Fxq 'label=  7   8   9  10 [11] 12  13 ' "$trace" ||
+    fail "today was not bracketed in place"
+  [[ "$(awk 'found { print; exit } index($0, "[11]") { found = 1 }' "$trace")" == "label.color=0xff89b4fa" ]] ||
+    fail "the week holding today was not drawn in the accent color"
+  grep -Fxq 'label= 28  29  30 ' "$trace" || fail "the month's last days were dropped"
+  [[ "$(awk '$0 == "clock.week6" { getline; print; exit }' "$trace")" == "drawing=off" ]] ||
+    fail "an unused sixth week row was left showing"
+  grep -Fxq 'popup.drawing=toggle' "$trace" || fail "clicking the date did not open the popup"
+  # SketchyBar sizes a label without its leading whitespace but still draws it,
+  # so a week starting mid-row is clipped unless its width is fixed. The trace
+  # cannot show that, so check the bar config keeps the width on both the
+  # weekday row and the week rows.
+  [[ "$(grep -cF 'label.width="$CALENDAR_WIDTH"' "$repo/config/sketchybar/sketchybarrc")" -ge 2 ]] ||
+    fail "the calendar grid rows lost their fixed width, so short weeks are clipped"
+
+  # February 2026 begins on a Sunday, so a Sunday-first grid has no blanks.
+  calendar 2026-02-01 7 click
+  grep -Fxq 'label= Su  Mo  Tu  We  Th  Fr  Sa ' "$trace" ||
+    fail "a Sunday-first calendar did not start its week on Sunday"
+  grep -Fxq 'label=[ 1]  2   3   4   5   6   7 ' "$trace" ||
+    fail "a month starting on the first weekday gained leading blanks"
+
+  # Paging crosses the year, and clicking the date again starts from today.
+  calendar 2026-12-31 1 click
+  calendar 2026-12-31 1 next
+  grep -Fxq 'label=January 2027' "$trace" || fail "next month did not cross into the new year"
+  if grep -q '\[' "$trace"; then
+    fail "today was bracketed in a month it does not fall in"
+  fi
+  calendar 2026-12-31 1 click
+  grep -Fxq 'label=December 2026' "$trace" || fail "reopening the calendar kept the paged month"
+
+  printf 'sideways\n' > "$test_dir/calendar-state/calendar-offset"
+  calendar 2026-12-31 1 next
+  grep -Fxq 'label=January 2027' "$trace" || fail "a damaged page offset was not read as today"
 )
 
 # Keep-awake state. The fake caffeinate stands in for the real one through
@@ -667,4 +734,4 @@ if caffeinate_process_alive "$caffeinate_plugin_revived"; then
 fi
 [[ ! -f "$CAFFEINATE_END_FILE" ]] || fail "stopping keep-awake through the plugin left its deadline behind"
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, master-stack retirement, workspace layout modes, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, master-stack retirement, workspace layout modes, the calendar popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'

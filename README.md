@@ -120,6 +120,12 @@ workspace's own direction, so in Columns it is always width and in Rows always
 height. Modes are per workspace and survive restarts, in
 `~/.omaccy/workspace-layout/`.
 
+Click the date in the menu bar for a month calendar. Today is bracketed and its
+week drawn in the theme's accent color; the rows underneath page a month back
+or forward, clicking the month name returns to today, and **Open Calendar**
+hands over to Calendar.app. The week starts on the day set under System
+Settings → General → Language & Region, or your region's usual one.
+
 Inside the palette, hold ⌘ to number the first nine rows and press ⌘1–9 to
 run one directly. Escape steps back a page, landing on the row you came from,
 and Escape again closes the palette.
