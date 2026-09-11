@@ -74,6 +74,16 @@ struct OmaccyTheme {
         stringAssignment(named: "VSCODE_EXTENSION", from: path)
     }
 
+    /// herdr's built-in theme name matching an installed Omaccy theme (its
+    /// file's HERDR_THEME assignment), if any.
+    static func herdrThemeName(named name: String) -> String? {
+        herdrThemeName(fromFile: themeFile(named: name))
+    }
+
+    static func herdrThemeName(fromFile path: String) -> String? {
+        stringAssignment(named: "HERDR_THEME", from: path)
+    }
+
     /// "light" or "dark": the palette's own nature, which the macOS appearance
     /// switch follows.
     static func appearance(named name: String) -> String? {

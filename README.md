@@ -10,6 +10,7 @@ best-of-breed tools with a thin glue layer of configs and one native app.
 | **SketchyBar** | Menu-bar replacement, skinned to match the active theme |
 | **Ghostty** | Default terminal, themed alongside the bar and the palette |
 | **herdr** | Persistent multiplexer that keeps terminal coding agents alive |
+| **Neovim** (optional) | AstroNvim-based editor config; setup asks before touching `~/.config/nvim` |
 
 Everything is installed from a checkout of this repository, with a clean
 uninstall that restores the configs and macOS settings it displaced.
@@ -41,7 +42,12 @@ the system changes before that confirmation. It then:
 - backs up any configs it displaces into a timestamped directory under
   `~/.omaccy/backups/`, then symlinks Omaccy's own;
 - hides the native menu bar, disables the conflicting Mission Control arrow
-  shortcuts, enables window grouping, and starts AeroSpace and SketchyBar.
+  shortcuts, enables window grouping, and starts AeroSpace and SketchyBar;
+- asks once, separately, whether to set up **Neovim**: Neovim and ripgrep plus
+  an AstroNvim config (AstroNvim v6's template) linked at `~/.config/nvim`.
+  Your current config — a folder or a link into your dotfiles — is moved to
+  `~/.omaccy/backups/` and restored on uninstall. The answer is kept in
+  `~/.omaccy/neovim`; delete it to be asked again.
 
 macOS will ask to grant **Accessibility** access to Omaccy Hyperkey on first
 launch; the keyboard engine does not work until you approve it.
@@ -132,6 +138,12 @@ Log Out — the last three ask first, with the same dialog macOS shows — and
 **Hide SketchyBar**, which hands the top of the screen back to the macOS menu
 bar until `Hyper+M` brings the bar back.
 
+Click the app name next to it for that app's own menus — File, Edit, View and
+the rest, which the bar otherwise covers. Choosing one opens the real menu.
+This needs SketchyBar to have **Accessibility** access (System Settings →
+Privacy & Security → Accessibility); until it does, the popup has a single row
+that takes you there.
+
 Click the battery for its details and power settings: charge and time left,
 Low Power Mode (which opens Battery settings, since changing it needs an
 administrator password), keep-awake for 30 minutes, an hour, two hours or
@@ -168,6 +180,19 @@ Twelve palettes ship: Catppuccin Mocha, Catppuccin Latte, Dracula, Everforest,
 GitHub Dark, Gruvbox Dark, Kanagawa, Nord, One Dark, Rosé Pine, Solarized Dark,
 and Tokyo Night. Latte is the only light one. Each names the matching Ghostty
 built-in theme, so the terminal follows along.
+
+If you set up Neovim, it follows too: each theme names a matching colorscheme
+(`NVIM_COLORSCHEME` in the theme file), and every open nvim repaints the moment
+you switch — no restart. All twelve colorschemes download the first time nvim
+starts, so switching never waits on one.
+
+herdr follows as well. Each theme names one of herdr's built-in themes
+(Everforest and GitHub Dark, which herdr has none of, use its `terminal` theme,
+drawn in Ghostty's colors), and a switch rewrites just the theme name in
+`~/.config/herdr/config.toml` and reloads the running session, agents and all.
+Your original config is copied to `~/.omaccy/backups/herdr-config.toml` first.
+With herdr's own `auto_switch` on, herdr picks its light or dark theme itself
+instead.
 
 Both are also available under the palette's Settings, which previews changes
 live.
@@ -277,11 +302,14 @@ apps/hyperkey/.build/debug/omaccy-hyperkey --preview-menu
 ```
 
 `install.sh` never builds the Swift app — it downloads the published release. To
-install the app from your working tree instead:
+install your working tree as it stands, app included, without pulling:
 
 ```bash
-OMACCY_HYPERKEY_BUILD_LOCAL=1 bash scripts/install.sh
+bash scripts/update.sh --dev
 ```
+
+That is short for `OMACCY_HYPERKEY_BUILD_LOCAL=1 bash scripts/update.sh
+--no-pull`; the variable also works with `install.sh`.
 
 That build is signed with a Developer ID Application certificate when your
 keychain holds one, and ad-hoc signed otherwise. Prefer Developer ID locally if

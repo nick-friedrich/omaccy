@@ -14,16 +14,21 @@ source "$REPO_ROOT/scripts/lib/git.sh"
 # has parsed in full before the pull, and main ends in an exec that replaces
 # this process with a fresh read of install.sh.
 main() {
+  local arg
   UPDATE_PULLS_CHECKOUT=1
-  case "${1:-}" in
-    --no-pull) UPDATE_PULLS_CHECKOUT=0 ;;
-    "") ;;
-    *) echo "Usage: $0 [--no-pull]" >&2; exit 1 ;;
-  esac
-  if [[ "$#" -gt 1 ]]; then
-    echo "Usage: $0 [--no-pull]" >&2
-    exit 1
-  fi
+  for arg in "$@"; do
+    case "$arg" in
+      --no-pull) UPDATE_PULLS_CHECKOUT=0 ;;
+      # Installs the checkout exactly as it stands, Hyperkey app included:
+      # no pull, and the app built from source instead of the published
+      # release. Short for OMACCY_HYPERKEY_BUILD_LOCAL=1 with --no-pull.
+      --dev)
+        UPDATE_PULLS_CHECKOUT=0
+        export OMACCY_HYPERKEY_BUILD_LOCAL=1
+        ;;
+      *) echo "Usage: $0 [--no-pull | --dev]" >&2; exit 1 ;;
+    esac
+  done
 
   # One confirmation covers both the code update and the setup sequence it
   # feeds, so install must not ask again for the same run.

@@ -57,8 +57,20 @@ output="$(cd "$test_dir"; printf 'n\n' | bash "$REPO_ROOT/scripts/update.sh" --n
 [[ "$output" == *"does not download newer repository code"* ]] || fail "--no-pull did not say the code stays put"
 [[ "$output" != *Fast-forward* ]] || fail "--no-pull still announced a code update"
 [[ "$output" == *cancelled.* ]] || fail "--no-pull did not honour a declined confirmation"
+# --dev installs the checkout as it stands: no pull, and the Hyperkey app built
+# from source rather than fetched, the same as OMACCY_HYPERKEY_BUILD_LOCAL=1.
+output="$(cd "$test_dir"; printf 'n\n' | bash "$REPO_ROOT/scripts/update.sh" --dev)"
+[[ "$output" == *"does not download newer repository code"* ]] || fail "--dev did not say the code stays put"
+[[ "$output" != *Fast-forward* ]] || fail "--dev still announced a code update"
+[[ "$output" == *"Build Omaccy Hyperkey from this checkout"* ]] || fail "--dev did not say it builds the app locally"
+[[ "$output" == *cancelled.* ]] || fail "--dev did not honour a declined confirmation"
+output="$(cd "$test_dir"; printf 'n\n' | bash "$REPO_ROOT/scripts/update.sh" --no-pull)"
+[[ "$output" != *"Build Omaccy Hyperkey from this checkout"* ]] || fail "--no-pull announced a local app build"
 if (cd "$test_dir"; bash "$REPO_ROOT/scripts/update.sh" --bogus >/dev/null 2>&1); then
   fail "update accepted an unknown flag"
+fi
+if (cd "$test_dir"; bash "$REPO_ROOT/scripts/update.sh" --dev --bogus >/dev/null 2>&1); then
+  fail "update accepted an unknown flag after --dev"
 fi
 
 # The combined update question stands in for setup's own: update.sh asks once,
@@ -214,7 +226,7 @@ output="$(warn_hyperkey_checkout_skew 2>&1)" || fail "reporting skew returned fa
 [[ "$output" == *"3 app changes newer"* ]] || fail "skew did not report how many app changes are ahead"
 [[ "$output" == *"v0.3.0"* ]] || fail "skew did not name the installed release"
 [[ "$output" == *"next tagged release"* ]] || fail "skew did not say the changes arrive on their own"
-[[ "$output" == *OMACCY_HYPERKEY_BUILD_LOCAL=1* ]] || fail "skew did not offer the local build"
+[[ "$output" == *"update.sh --dev"* ]] || fail "skew did not offer the local build"
 
 skew_count=1
 output="$(warn_hyperkey_checkout_skew 2>&1)"
@@ -391,6 +403,114 @@ ensure_symlink "$REPO_ROOT/config/example" "$test_dir/target" >/dev/null
 restore_target "$test_dir/target" "$CONF_DIR/example" >/dev/null
 [[ ! -L "$test_dir/target" ]] || fail "restore_target left the symlink in place"
 [[ "$(cat "$test_dir/target")" == original ]] || fail "restore_target did not restore the original file"
+
+# Directory configs (Neovim's) get one link to the canonical directory, with
+# each file stamped on its own. The target starts as a link into someone's
+# dotfiles repository, which must be moved aside untouched and come back.
+mkdir -p "$REPO_ROOT/config/tool/lua" "$test_dir/dotfiles/tool"
+printf 'init-v1\n' > "$REPO_ROOT/config/tool/init.lua"
+printf 'plug-v1\n' > "$REPO_ROOT/config/tool/lua/plugins.lua"
+printf 'mine\n' > "$test_dir/dotfiles/tool/init.lua"
+ln -s "$test_dir/dotfiles/tool" "$test_dir/tool-link"
+ensure_dir_symlink "$REPO_ROOT/config/tool" "$test_dir/tool-link" >/dev/null
+[[ "$(readlink "$test_dir/tool-link")" == "$CONF_DIR/tool" ]] || fail "ensure_dir_symlink did not link the canonical directory"
+[[ "$(cat "$test_dir/tool-link/lua/plugins.lua")" == plug-v1 ]] || fail "ensure_dir_symlink did not install nested defaults"
+[[ "$(cat "$test_dir/dotfiles/tool/init.lua")" == mine ]] || fail "ensure_dir_symlink wrote through the displaced dotfiles link"
+printf 'init-v2\n' > "$REPO_ROOT/config/tool/init.lua"
+printf 'plug-v2\n' > "$REPO_ROOT/config/tool/lua/plugins.lua"
+printf 'edited\n' > "$CONF_DIR/tool/lua/plugins.lua"
+printf 'lock\n' > "$CONF_DIR/tool/lazy-lock.json"
+ensure_dir_symlink "$REPO_ROOT/config/tool" "$test_dir/tool-link" >/dev/null
+[[ "$(cat "$CONF_DIR/tool/init.lua")" == init-v2 ]] || fail "an untouched file in a directory config was not refreshed"
+[[ "$(cat "$CONF_DIR/tool/lua/plugins.lua")" == edited ]] || fail "an edited file in a directory config was overwritten"
+[[ "$(cat "$CONF_DIR/tool/lazy-lock.json")" == lock ]] || fail "a generated file in a directory config was disturbed"
+restore_target "$test_dir/tool-link" "$CONF_DIR/tool" >/dev/null
+[[ "$(readlink "$test_dir/tool-link")" == "$test_dir/dotfiles/tool" ]] || fail "restore_target did not bring back the displaced dotfiles link"
+
+# A real directory, not a link, is backed up and restored whole.
+mkdir -p "$test_dir/tool-dir"
+printf 'own\n' > "$test_dir/tool-dir/init.lua"
+ensure_dir_symlink "$REPO_ROOT/config/tool" "$test_dir/tool-dir" >/dev/null
+[[ -L "$test_dir/tool-dir" ]] || fail "ensure_dir_symlink did not replace a real directory with the link"
+restore_target "$test_dir/tool-dir" "$CONF_DIR/tool" >/dev/null
+[[ ! -L "$test_dir/tool-dir" && "$(cat "$test_dir/tool-dir/init.lua")" == own ]] ||
+  fail "restore_target did not restore a displaced directory"
+
+# A shipped directory missing from the checkout must not move the user's aside.
+if ensure_dir_symlink "$REPO_ROOT/config/missing" "$test_dir/tool-dir" >/dev/null 2>&1; then
+  fail "ensure_dir_symlink accepted a missing shipped directory"
+fi
+[[ ! -L "$test_dir/tool-dir" && -f "$test_dir/tool-dir/init.lua" ]] ||
+  fail "a missing shipped directory still displaced the target"
+
+# Removing the canonical directory keeps it when anything in it was edited,
+# and deletes it when only defaults and generated files remain.
+remove_canonical_dir tool lazy-lock.json >/dev/null
+[[ ! -e "$CONF_DIR/tool" ]] || fail "remove_canonical_dir left an edited directory in place"
+[[ "$(cat "$BAK_DIR"/omaccy-tool.*/lua/plugins.lua)" == edited ]] || fail "remove_canonical_dir discarded an edited directory"
+[[ ! -e "$OMACCY_DIR/sha256/tool" ]] || fail "remove_canonical_dir left the checksums behind"
+rm -rf "$BAK_DIR"/omaccy-tool.*
+ensure_dir_symlink "$REPO_ROOT/config/tool" "$test_dir/tool-link" >/dev/null
+printf 'lock\n' > "$CONF_DIR/tool/lazy-lock.json"
+remove_canonical_dir tool lazy-lock.json >/dev/null
+[[ ! -e "$CONF_DIR/tool" ]] || fail "remove_canonical_dir left a pristine directory behind"
+if ls -d "$BAK_DIR"/omaccy-tool.* >/dev/null 2>&1; then
+  fail "remove_canonical_dir kept a directory holding only defaults and generated files"
+fi
+
+# The optional Neovim setup. Homebrew is mocked; the shipped config, the link,
+# and uninstall run for real against a temporary HOME. REPO_ROOT is a temporary
+# checkout by this point, so the real one is recomputed here.
+(
+  repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  source "$repo/scripts/lib/neovim.sh"
+  REPO_ROOT="$repo"
+  HOME="$test_dir/nvim-home"
+  OMACCY_DIR="$test_dir/nvim-state"
+  CONF_DIR="$OMACCY_DIR/config"
+  BAK_DIR="$OMACCY_DIR/backups"
+  mkdir -p "$HOME/.config/nvim" "$BAK_DIR"
+  printf 'own\n' > "$HOME/.config/nvim/init.lua"
+  calls="$test_dir/nvim-calls"
+  : > "$calls"
+  ensure_formula() { printf 'formula %s\n' "$1" >> "$calls"; }
+
+  # Declining is remembered, so an update does not ask again, and installs nothing.
+  output="$(printf 'n\n' | decide_neovim_setup)"
+  [[ "$output" == *"[y/N]"* ]] || fail "the Neovim setup was not asked about"
+  [[ "$output" == *"Moves your current ~/.config/nvim"* ]] || fail "the Neovim question did not say the existing config moves"
+  [[ "$(cat "$OMACCY_DIR/neovim")" == off ]] || fail "declining Neovim was not remembered"
+  output="$(decide_neovim_setup </dev/null)"
+  [[ -z "$output" ]] || fail "a remembered Neovim answer was asked again"
+  install_neovim >/dev/null
+  [[ ! -s "$calls" ]] || fail "a declined Neovim setup still installed something"
+  [[ ! -L "$HOME/.config/nvim" ]] || fail "a declined Neovim setup still linked the config"
+
+  # An unattended run never opts in, and leaves the question for the user.
+  rm "$OMACCY_DIR/neovim"
+  output="$(OMACCY_ASSUME_YES=1 decide_neovim_setup </dev/null)"
+  [[ "$output" == *"Skipping the optional Neovim setup"* ]] || fail "OMACCY_ASSUME_YES did not say it skipped Neovim"
+  [[ "$output" != *"[y/N]"* ]] || fail "OMACCY_ASSUME_YES answered the Neovim question"
+  [[ ! -e "$OMACCY_DIR/neovim" ]] || fail "OMACCY_ASSUME_YES recorded a Neovim answer"
+
+  # Accepting installs Neovim and puts Omaccy's config at ~/.config/nvim.
+  printf 'y\n' | decide_neovim_setup >/dev/null
+  install_neovim >/dev/null
+  grep -qx 'formula neovim' "$calls" || fail "an accepted Neovim setup did not install Neovim"
+  grep -qx 'formula ripgrep' "$calls" || fail "an accepted Neovim setup did not install ripgrep"
+  [[ "$(readlink "$HOME/.config/nvim")" == "$CONF_DIR/nvim" ]] || fail "~/.config/nvim was not linked to Omaccy's config"
+  cmp -s "$HOME/.config/nvim/lua/lazy_setup.lua" "$repo/config/nvim/lua/lazy_setup.lua" ||
+    fail "the linked Neovim config is not the shipped one"
+  [[ -f "$HOME/.config/nvim/.stylua.toml" ]] || fail "the Neovim config lost its dotfiles"
+
+  # Uninstall brings the user's config back and clears Omaccy's state.
+  printf 'lock\n' > "$CONF_DIR/nvim/lazy-lock.json"
+  uninstall_neovim_config >/dev/null
+  [[ ! -L "$HOME/.config/nvim" && "$(cat "$HOME/.config/nvim/init.lua")" == own ]] ||
+    fail "uninstall did not restore the user's Neovim config"
+  [[ ! -e "$CONF_DIR/nvim" ]] || fail "uninstall left an unedited Neovim config behind"
+  [[ ! -e "$OMACCY_DIR/neovim" ]] || fail "uninstall left the Neovim answer behind"
+)
 
 # The retired master/stack placement. HOME is overridden inside a subshell
 # because the function reads the real ~/.config path the installer wrote to;
@@ -621,6 +741,85 @@ FAKE
   if apple_menu nonsense 2>/dev/null; then
     fail "the Apple menu accepted an action it does not have"
   fi
+)
+
+# The front app's menus, with osascript replaced by one that answers the way
+# System Events does -- or refuses, as it does before SketchyBar has
+# Accessibility -- so no test reads or opens a real app's menus.
+(
+  repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  plugin="$repo/config/sketchybar/plugins/front-app.sh"
+  calls="$test_dir/front-app-calls"
+  bin="$test_dir/front-app-bin"
+  denied="$test_dir/front-app-denied"
+  mkdir -p "$bin"
+  for tool in sketchybar open; do
+    cat > "$bin/$tool" <<FAKE
+#!/usr/bin/env bash
+printf '%s %s\n' "$tool" "\$*" >> "$calls"
+FAKE
+    chmod +x "$bin/$tool"
+  done
+  # Reading the menus is a script on stdin; opening one is a script in -e.
+  cat > "$bin/osascript" <<FAKE
+#!/usr/bin/env bash
+if [[ \$# -gt 0 ]]; then
+  printf 'osascript %s\n' "\$*" >> "$calls"
+  exit 0
+fi
+cat > /dev/null
+[[ -f "$denied" ]] && exit 1
+printf '4242\nApple\nGhostty\nFile\n\nmissing value\nEdit\nWindow\n'
+FAKE
+  chmod +x "$bin/osascript"
+  front_app() {
+    : > "$calls"
+    OMACCY_SKETCHYBAR_BIN="$bin/sketchybar" OMACCY_OPEN_BIN="$bin/open" \
+      OMACCY_OSASCRIPT_BIN="$bin/osascript" \
+      /bin/bash "$plugin" "$@"
+  }
+
+  front_app click
+  grep -Fq "front_app.menu.1 label=Ghostty drawing=on click_script='$plugin' open 4242 2 " "$calls" ||
+    fail "the app's own menu was not the first row"
+  # Untitled items are skipped, but each row still opens the menu at its own
+  # position in the bar, not at its row number.
+  grep -Fq "front_app.menu.3 label=Edit drawing=on click_script='$plugin' open 4242 6 " "$calls" ||
+    fail "a menu after an untitled one opened the wrong menu"
+  grep -Fq 'front_app.menu.5 drawing=off' "$calls" || fail "rows past the app's last menu stayed visible"
+  grep -Fq 'front_app.menu.16 drawing=off' "$calls" || fail "the last popup row was not hidden"
+  if grep -Eq 'label=(Apple|missing value)' "$calls"; then
+    fail "the Apple menu or an untitled item was listed"
+  fi
+  grep -Fxq 'sketchybar --set front_app popup.drawing=toggle' "$calls" ||
+    fail "clicking the app name did not open its menus"
+
+  front_app open 4242 6
+  grep -Fq 'click menu bar item 6 of menu bar 1 of (first application process whose unix id is 4242)' "$calls" ||
+    fail "choosing a menu did not open it in the app it was read from"
+  grep -Fxq 'sketchybar --set front_app popup.drawing=off' "$calls" ||
+    fail "choosing a menu left the popup open"
+
+  if front_app open '4242) to quit' 6 2>/dev/null || grep -q '^osascript' "$calls"; then
+    fail "a row that is not a pid and a position reached AppleScript"
+  fi
+
+  : > "$denied"
+  front_app click
+  grep -Fq "front_app.menu.1 label=Allow SketchyBar in Accessibility… drawing=on click_script='$plugin' accessibility " "$calls" ||
+    fail "without Accessibility the popup did not say what to allow"
+  grep -Fq 'front_app.menu.2 drawing=off' "$calls" || fail "without Accessibility other rows stayed visible"
+  rm -f "$denied"
+
+  front_app accessibility
+  grep -Fxq 'open x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility' "$calls" ||
+    fail "the Accessibility row did not open Privacy & Security"
+
+  : > "$calls"
+  INFO=Safari OMACCY_SKETCHYBAR_BIN="$bin/sketchybar" OMACCY_OSASCRIPT_BIN="$bin/osascript" \
+    /bin/bash "$plugin"
+  grep -Fxq 'sketchybar --set front_app label=Safari popup.drawing=off' "$calls" ||
+    fail "switching apps did not rename the item and close the last app's menus"
 )
 
 # The battery popup, with pmset replaced by a script that answers the way pmset
@@ -858,4 +1057,58 @@ if caffeinate_process_alive "$caffeinate_plugin_revived"; then
 fi
 [[ ! -f "$CAFFEINATE_END_FILE" ]] || fail "stopping keep-awake through the plugin left its deadline behind"
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, master-stack retirement, workspace layout modes, the calendar popup, the Apple menu, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'
+# Neovim follows the theme on its own by watching ~/.omaccy, so check that
+# every shipped theme names a colorscheme, and that a running nvim repaints
+# when the theme changes. Built-in colorschemes stand in for the plugins, so
+# nothing downloads; the repaint check is skipped where nvim is not installed.
+nvim_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+for theme_file in "$nvim_repo"/config/sketchybar/themes/*.sh; do
+  grep -Eq '^NVIM_COLORSCHEME="[^"]+"' "$theme_file" ||
+    fail "$(basename "$theme_file") names no Neovim colorscheme"
+done
+
+# herdr follows the theme through the name in its config.toml, so every shipped
+# theme has to name one herdr actually has. `herdr config check` reads the
+# config under $HOME, so a scratch home keeps the real one out of it.
+for theme_file in "$nvim_repo"/config/sketchybar/themes/*.sh; do
+  herdr_theme="$(sed -n 's/^HERDR_THEME="\([^"]*\)".*/\1/p' "$theme_file")"
+  [[ -n "$herdr_theme" ]] || fail "$(basename "$theme_file") names no herdr theme"
+  if command -v herdr >/dev/null 2>&1; then
+    mkdir -p "$test_dir/herdr-home/.config/herdr"
+    printf '[theme]\nname = "%s"\n' "$herdr_theme" > "$test_dir/herdr-home/.config/herdr/config.toml"
+    [[ "$(HOME="$test_dir/herdr-home" herdr config check 2>&1)" == "config: ok" ]] ||
+      fail "herdr has no built-in theme named $herdr_theme ($(basename "$theme_file"))"
+  fi
+done
+if command -v nvim >/dev/null 2>&1; then
+  nvim_home="$test_dir/nvim-omaccy"
+  mkdir -p "$nvim_home/config/sketchybar/themes"
+  printf 'NVIM_COLORSCHEME="desert"\nAPPEARANCE="dark"\n' > "$nvim_home/config/sketchybar/themes/first.sh"
+  printf 'NVIM_COLORSCHEME="morning"\nAPPEARANCE="light"\n' > "$nvim_home/config/sketchybar/themes/second.sh"
+  printf 'first\n' > "$nvim_home/theme"
+  cat > "$test_dir/nvim-theme.lua" <<'LUA'
+vim.opt.rtp:prepend(vim.env.OMACCY_TEST_NVIM_CONFIG)
+local theme = require "omaccy.theme"
+theme.apply()
+if vim.g.colors_name ~= "desert" or vim.o.background ~= "dark" then
+  io.stderr:write "FAIL: nvim did not start in the theme's colorscheme\n"
+  os.exit(1)
+end
+theme.watch()
+local file = assert(io.open(vim.env.OMACCY_DIR .. "/theme", "w"))
+file:write "second\n"
+file:close()
+local repainted = vim.wait(5000, function()
+  return vim.g.colors_name == "morning" and vim.o.background == "light"
+end, 20)
+if not repainted then
+  io.stderr:write "FAIL: a running nvim did not repaint when the theme changed\n"
+  os.exit(1)
+end
+LUA
+  OMACCY_DIR="$nvim_home" OMACCY_TEST_NVIM_CONFIG="$nvim_repo/config/nvim" \
+    nvim --headless -u NONE -i NONE -l "$test_dir/nvim-theme.lua" ||
+    fail "Neovim did not follow the theme"
+fi
+
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, directory configs, the Neovim opt-in, master-stack retirement, workspace layout modes, the calendar popup, the Apple menu, the front-app menus, Neovim theme following, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'

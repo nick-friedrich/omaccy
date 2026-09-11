@@ -17,6 +17,8 @@
 | `scripts/lib/dependencies.sh` | Homebrew setup, ownership markers, login-service registration, and optional dependency removal |
 | `scripts/lib/config.sh` | Config copying, hash stamps, symlinks, backup/restore, and legacy migration |
 | `scripts/lib/editor-settings.sh` | The VS Code / Cursor `workbench.colorTheme` rewrite, kept apart so the Swift half can be tested against it |
+| `scripts/lib/herdr-settings.sh` | The herdr `[theme]` name rewrite, kept apart for the same reason |
+| `scripts/lib/neovim.sh` | The optional Neovim question, its dependencies, the AstroNvim config link, and removal |
 | `scripts/lib/macos.sh` | Menu-bar and Mission Control settings with paired restoration functions |
 | `scripts/lib/hyperkey.sh` | Fetches the signed, notarized release build by default (local Swift build under `OMACCY_HYPERKEY_BUILD_LOCAL=1`), plus launch |
 | `tests/scripts-smoke.sh` | Isolated shell lifecycle checks |
@@ -96,6 +98,20 @@
   through undecorated.
 - `~/.omaccy/sha256/` records shipped content so updates can refresh unchanged
   defaults while retaining customized files.
+- `~/.omaccy/neovim` holds `on` or `off`, the answer to the one optional setup
+  question. Neovim is opt-in because an editor config is where people keep
+  their own work, and `OMACCY_ASSUME_YES` never answers it. Accepting links
+  `~/.config/nvim` to `~/.omaccy/config/nvim/` through `ensure_dir_symlink`:
+  one link for the directory, while each file inside is copied and stamped on
+  its own, so updates refresh untouched defaults and keep edits, and files
+  added later (the user's own, lazy.nvim's `lazy-lock.json`) are never stamped.
+  The displaced `~/.config/nvim` is often a link into a dotfiles repository, so
+  it is moved into the backups as a link — nothing is written through it —
+  which is also why `restore_target` finds directory backups as well as file
+  and link backups. Uninstall deletes the canonical directory only while every
+  file in it is still an untouched default; otherwise it is kept whole as
+  `backups/omaccy-nvim.<timestamp>`, a name `restore_target` never matches.
+  Plugin data under `~/.local/share/nvim` belongs to Neovim and is left alone.
 - Dependency markers distinguish packages installed by Omaccy from packages
   already present. `*.original` files preserve macOS preference values.
 - `~/.omaccy/hyperkey-signing-mode` records whether the installed app was
@@ -250,6 +266,32 @@ Ghostty config, so updates preserve it. A custom theme file without a
 `GHOSTTY_THEME` assignment leaves Ghostty's existing theme alone. SF Symbols
 stay on SF Pro because those glyphs only ship there.
 
+`NVIM_COLORSCHEME` names the matching Neovim colorscheme. Neovim is the one
+app that follows the theme without `theme.sh` touching it: the nvim config's
+`lua/omaccy/theme.lua` reads the name and `APPEARANCE` straight from the
+installed theme file at startup, and watches `~/.omaccy` with a libuv fs_event
+so every running nvim repaints within a moment of `~/.omaccy/theme` changing,
+whichever of `theme.sh` or the launcher wrote it. It watches the directory,
+because a watch on the file follows its inode and would miss a replacement.
+`lua/plugins/omaccy-theme.lua` lists one lazily loaded plugin per shipped
+colorscheme; a theme naming a colorscheme none of them provides gets
+`astrodark` and a warning.
+
+`HERDR_THEME` names one of herdr's built-in themes (`herdr config check` lists
+them); Everforest and GitHub Dark have none, so they use herdr's `terminal`
+theme, which draws with the colors Ghostty already follows. herdr's
+`~/.config/herdr/config.toml` is the user's file, written by herdr's own
+onboarding, so both `theme.sh` and `OmaccyAppearance` rewrite only `name` under
+`[theme]`, keep the original once in `~/.omaccy/backups/herdr-config.toml`,
+leave a missing file missing, and write through a symlink rather than
+replacing it. Then `herdr server reload-config` reaches the running session
+without disturbing its agents. The rewrite lives twice, in
+`scripts/lib/herdr-settings.sh` and `OmaccyAppearance.herdrConfig`, and
+`HerdrConfigTests` holds both to the same bytes. `auto_switch` makes herdr
+choose between its own `dark_name` and `light_name` instead, so with it on the
+name Omaccy writes is not the one shown. Uninstall leaves the config as it is
+and names the backup, as it does for the editors.
+
 macOS does not ship SF Pro as an installable family, so a machine without it
 drew blank gaps where the clock, battery, caffeinate, and tiling icons belong —
 the icons are private-use SF Symbols codepoints that exist in no other font.
@@ -311,6 +353,17 @@ a command takes it through an `OMACCY_*_BIN` override (`OMACCY_SKETCHYBAR_BIN`,
 `OMACCY_OPEN_BIN`, `OMACCY_PMSET_BIN`, `OMACCY_OSASCRIPT_BIN`,
 `OMACCY_MENU_TOGGLE`), which is how the smoke checks drive them against
 recorders without ever sleeping or restarting the machine they run on.
+
+The app name's popup is `plugins/front-app.sh`. It reads the frontmost app's
+pid and menu titles from System Events in one call and fills a fixed set of
+hidden rows that `sketchybarrc` adds (the count is `MENU_ROWS` in both). Each
+row's click script carries the pid and the menu's index in the menu bar, not
+its title, so it opens the menu of the app it was read from and no title is
+ever interpolated into a shell command or AppleScript. Opening sends
+`click menu bar item` inside `ignoring application responses`, because the
+press does not return until the menu closes. This is UI scripting, so it needs
+Accessibility for SketchyBar; when the read fails the popup shows one row that
+opens that pane instead. `front_app_switched` closes the popup.
 
 `HomebrewCatalog.swift` loads the official formula/cask metadata asynchronously and
 ranks package searches for the palette’s Install collection. The controller caches

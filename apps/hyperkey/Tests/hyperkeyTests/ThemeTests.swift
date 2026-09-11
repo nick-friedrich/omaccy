@@ -62,6 +62,15 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(OmaccyTheme.ghosttyThemeName(fromFile: path), "Nord")
     }
 
+    func testHerdrThemeNameParsesFromThemeFile() throws {
+        let path = try writeThemeFile("""
+        GHOSTTY_THEME="Everforest Dark Hard"
+        HERDR_THEME="terminal"
+        """)
+        XCTAssertEqual(OmaccyTheme.herdrThemeName(fromFile: path), "terminal")
+        XCTAssertNil(OmaccyTheme.herdrThemeName(fromFile: try writeThemeFile("BAR_BG=0xff2e3440\n")))
+    }
+
     func testGhosttyThemeNameMissingWhenAbsent() throws {
         let path = try writeThemeFile("BAR_BG=0xff2e3440\n")
         XCTAssertNil(OmaccyTheme.ghosttyThemeName(fromFile: path))

@@ -66,11 +66,15 @@ Script-only changes do not require rebuilding the Swift app.
 
 `install.sh` fetches the latest Developer ID-signed, notarized release by
 default; it never rebuilds the Swift app unless `OMACCY_HYPERKEY_BUILD_LOCAL=1`
-is set. To build and install the current checkout instead:
+is set. To build and install the current checkout instead, without pulling:
 
 ```sh
-OMACCY_HYPERKEY_BUILD_LOCAL=1 bash scripts/install.sh
+bash scripts/update.sh --dev
 ```
+
+`--dev` sets `OMACCY_HYPERKEY_BUILD_LOCAL=1` and implies `--no-pull`, so
+uncommitted work is what gets installed. The variable alone also works with
+`install.sh`.
 
 That build is signed with a Developer ID Application identity when the keychain
 holds one, and ad-hoc signed otherwise. Signing locally with Developer ID is

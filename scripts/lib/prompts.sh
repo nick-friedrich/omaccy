@@ -48,6 +48,9 @@ confirm_setup() {
     fi
     echo "This does not upgrade existing Homebrew packages."
   fi
+  if [[ "${OMACCY_HYPERKEY_BUILD_LOCAL:-0}" == "1" ]]; then
+    echo "Build Omaccy Hyperkey from this checkout instead of downloading the published release."
+  fi
   echo "This will:"
   echo "  - Install Homebrew if needed, plus missing Ghostty, AeroSpace, SketchyBar, and Herdr dependencies."
   echo "  - Install/rebuild Omaccy Hyperkey, configure launch at login, and map Caps Lock to Command+Control+Option."
@@ -56,6 +59,7 @@ confirm_setup() {
   echo "  - Hide the native menu bar, disable conflicting Mission Control arrow shortcuts,"
   echo "    enable window grouping, and restart the Dock and menu-bar services."
   echo "  - Possibly require Accessibility access again if the app binary changes."
+  echo "  - Ask once, separately, whether to set up Neovim with Omaccy's AstroNvim config."
   echo "Config backups: $BAK_DIR (timestamped originals, restored on uninstall)."
   echo "Editable Omaccy configs: $CONF_DIR (customizations are preserved during updates)."
   printf 'To uninstall later: bash %q\n' "$REPO_ROOT/scripts/uninstall.sh"
@@ -74,6 +78,7 @@ confirm_uninstall() {
   echo "Pre-existing dependencies and Homebrew will remain installed."
   echo "Original configs will be restored from $BAK_DIR where their paths are still managed by Omaccy."
   echo "Omaccy's editable configs in $CONF_DIR will be removed; copy any customizations you want to keep."
+  echo "An edited Neovim config is the exception: it is kept in $BAK_DIR."
   if ! ask_confirmation "Proceed with uninstall?"; then
     echo "Uninstall cancelled."
     exit 0

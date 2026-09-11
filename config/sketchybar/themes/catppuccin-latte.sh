@@ -25,3 +25,11 @@ APPEARANCE="light"
 # label built in, so nothing needs installing.
 VSCODE_EXTENSION="Catppuccin.catppuccin-vsc"
 VSCODE_THEME="Catppuccin Latte"
+
+# Neovim: the colorscheme config/nvim/lua/plugins/omaccy-theme.lua installs
+# for this palette. Running nvim instances switch to it as the theme changes.
+NVIM_COLORSCHEME="catppuccin-latte"
+
+# herdr: the built-in theme its UI uses for this palette. "terminal" takes
+# the terminal's own colors, for palettes herdr has no theme of its own for.
+HERDR_THEME="catppuccin-latte"

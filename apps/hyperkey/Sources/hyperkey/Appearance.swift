@@ -52,6 +52,7 @@ enum OmaccyAppearance {
         reloadGhosttyIfRunning()
         updateMacOSAppearance(to: name)
         updateEditorThemes(to: name)
+        updateHerdrTheme(to: name)
         reloadSketchybarIfRunning()
         return true
     }
@@ -147,6 +148,97 @@ enum OmaccyAppearance {
         guard trimmed.hasPrefix("theme") else { return false }
         guard let next = trimmed.dropFirst("theme".count).first else { return false }
         return next == "=" || next == " " || next == "\t"
+    }
+
+    /// herdr's config.toml is the user's own file — herdr writes it during
+    /// its onboarding — so only `name` under `[theme]` is rewritten, the
+    /// original is kept once in the backups, and a missing file stays
+    /// missing. herdr rereads it on `herdr server reload-config`, which
+    /// reaches the running session without disturbing the agents in it. The
+    /// write goes to a link's target, so a config linked in from a dotfiles
+    /// repository stays a link. Mirrors `update_herdr_theme` in
+    /// scripts/theme.sh.
+    private static func updateHerdrTheme(to name: String) {
+        guard let herdrTheme = OmaccyTheme.herdrThemeName(named: name) else { return }
+        let path = ((NSHomeDirectory() + "/.config/herdr/config.toml") as NSString).resolvingSymlinksInPath
+        guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { return }
+        let updated = herdrConfig(raw, settingTheme: herdrTheme)
+        guard updated != raw else { return }
+        let backup = stateDirectory + "/backups/herdr-config.toml"
+        if !FileManager.default.fileExists(atPath: backup) {
+            try? FileManager.default.createDirectory(atPath: stateDirectory + "/backups",
+                                                     withIntermediateDirectories: true)
+            try? raw.write(toFile: backup, atomically: true, encoding: .utf8)
+        }
+        guard (try? updated.write(toFile: path, atomically: true, encoding: .utf8)) != nil else { return }
+        reloadHerdrIfRunning()
+    }
+
+    /// Talks to the running server over its socket, so with no server it
+    /// fails fast rather than starting one.
+    private static func reloadHerdrIfRunning() {
+        let candidates = ["/opt/homebrew/bin/herdr", "/usr/local/bin/herdr"]
+        guard let path = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            return
+        }
+        DispatchQueue.global(qos: .utility).async {
+            _ = HotkeyBindings.run(URL(fileURLWithPath: path), arguments: ["server", "reload-config"], timeout: 10)
+        }
+    }
+
+    /// Sets `name` under `[theme]` and leaves every other line as it was: the
+    /// name line replaced where the table has one, added under the header
+    /// where it has none, and a `[theme]` table appended where the file has
+    /// none. Always ends in a newline. Line-based for the same reason as
+    /// `settings(_:settingTheme:)` — reserializing TOML would drop the user's
+    /// comments — and implemented in awk too, in scripts/lib/herdr-settings.sh,
+    /// which HerdrConfigTests holds to the same bytes.
+    static func herdrConfig(_ contents: String, settingTheme theme: String) -> String {
+        var lines = contents.components(separatedBy: "\n")
+        if lines.last == "" { lines.removeLast() }
+        let entry = "name = \"\(theme)\""
+        var inTheme = false
+        var themeHeader: Int?
+        var replaced = false
+        for (index, line) in lines.enumerated() {
+            let code = line.drop(while: isBlank)
+            if code.hasPrefix("[") {
+                inTheme = isHerdrThemeHeader(code)
+                if inTheme && themeHeader == nil { themeHeader = index }
+            } else if inTheme && !replaced && isHerdrNameAssignment(code) {
+                lines[index] = String(line.prefix(while: isBlank)) + entry + carriageReturn(of: line)
+                replaced = true
+            }
+        }
+        if let themeHeader {
+            if !replaced { lines.insert(entry, at: themeHeader + 1) }
+        } else {
+            if !lines.isEmpty { lines.append("") }
+            lines.append(contentsOf: ["[theme]", entry])
+        }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    private static func isBlank(_ character: Character) -> Bool {
+        character == " " || character == "\t"
+    }
+
+    /// `[theme]`, optionally padded and followed by a comment — not
+    /// `[theme.custom]`, whose own `name` is something else.
+    private static func isHerdrThemeHeader(_ code: Substring) -> Bool {
+        var rest = code.dropFirst().drop(while: isBlank)
+        guard rest.hasPrefix("theme") else { return false }
+        rest = rest.dropFirst("theme".count).drop(while: isBlank)
+        guard rest.hasPrefix("]") else { return false }
+        rest = rest.dropFirst().drop(while: isBlank)
+        if rest.hasPrefix("#") { return true }
+        if rest.hasSuffix("\r") { rest = rest.dropLast() }
+        return rest.isEmpty
+    }
+
+    private static func isHerdrNameAssignment(_ code: Substring) -> Bool {
+        guard code.hasPrefix("name") else { return false }
+        return code.dropFirst("name".count).drop(while: isBlank).hasPrefix("=")
     }
 
     private struct Editor {

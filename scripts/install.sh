@@ -9,10 +9,13 @@ source "$REPO_ROOT/scripts/lib/macos.sh"
 source "$REPO_ROOT/scripts/lib/git.sh"
 source "$REPO_ROOT/scripts/lib/fonts.sh"
 source "$REPO_ROOT/scripts/lib/hyperkey.sh"
+source "$REPO_ROOT/scripts/lib/neovim.sh"
 
 main() {
   confirm_setup "$@"
   mkdir -p "$CONF_DIR" "$BAK_DIR"
+  # Asked up front so the rest of setup runs without stopping for input.
+  decide_neovim_setup
 
   migrate_legacy_karabiner_config
   retire_master_stack_script
@@ -30,6 +33,7 @@ main() {
   fi
   ensure_symlink "$REPO_ROOT/config/ghostty/config.ghostty" \
     "$HOME/Library/Application Support/com.mitchellh.ghostty/config.ghostty"
+  install_neovim
   ensure_absent_with_backup "$HOME/.aerospace.toml"
   ensure_symlink "$REPO_ROOT/config/aerospace/aerospace.toml" \
     "$HOME/.config/aerospace/aerospace.toml"

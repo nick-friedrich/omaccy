@@ -20,6 +20,9 @@ BACKUP_DIR="$HOME/.omaccy/backups"
 # write_editor_color_theme lives in its own library so the Swift half of the
 # editor theming can be tested against exactly this implementation.
 source "$REPO_ROOT/scripts/lib/editor-settings.sh"
+# The same arrangement for herdr's [theme] name rewrite.
+source "$REPO_ROOT/scripts/lib/herdr-settings.sh"
+HERDR_CONFIG="$HOME/.config/herdr/config.toml"
 DEFAULT_THEME="catppuccin"
 
 current_theme() {
@@ -156,6 +159,35 @@ update_editor_themes() {
   done
 }
 
+# herdr's config.toml is the user's own file -- herdr writes it during its
+# onboarding -- so only `name` under [theme] is rewritten, the original is kept
+# once in the backups, and a missing file stays missing. Writing with `>` goes
+# through a symlink, so a config linked in from a dotfiles repository stays a
+# link. `herdr server reload-config` reaches the running session over its
+# socket without disturbing the agents in it, and fails fast when there is no
+# session. Mirrors updateHerdrTheme in the launcher's Appearance.swift.
+update_herdr_theme() {
+  local name="$1" theme_file herdr_theme current updated
+  [[ -f "$HERDR_CONFIG" ]] || return 0
+  theme_file="$(theme_file_path "$name")"
+  [[ -f "$theme_file" ]] || return 0
+  herdr_theme="$(source "$theme_file" 2>/dev/null; printf '%s' "${HERDR_THEME:-}")"
+  [[ -n "$herdr_theme" ]] || return 0
+  # The trailing x keeps command substitution from eating final newlines.
+  current="$(cat "$HERDR_CONFIG"; printf x)"
+  updated="$(herdr_config_with_theme "$HERDR_CONFIG" "$herdr_theme"; printf x)" || return 0
+  [[ "$updated" != "$current" ]] || return 0
+  if [[ ! -f "$BACKUP_DIR/herdr-config.toml" ]]; then
+    mkdir -p "$BACKUP_DIR"
+    printf '%s' "${current%x}" > "$BACKUP_DIR/herdr-config.toml"
+  fi
+  printf '%s' "${updated%x}" > "$HERDR_CONFIG"
+  echo "herdr will use the $herdr_theme theme."
+  if command -v herdr >/dev/null 2>&1; then
+    herdr server reload-config >/dev/null 2>&1 || true
+  fi
+}
+
 macos_appearance_enabled() {
   [[ -f "$APPEARANCE_PREF" ]] || return 1
   [[ "$(head -n 1 "$APPEARANCE_PREF" | tr -d '[:space:]')" == "on" ]]
@@ -257,6 +289,7 @@ set_theme() {
   reload_ghostty_if_running
   update_macos_appearance "$name"
   update_editor_themes "$name"
+  update_herdr_theme "$name"
   restart_sketchybar_if_running
   echo "The launcher palette picks up the theme the next time it opens."
 }

@@ -17,15 +17,14 @@ config_is_pristine() {
   [[ "$(cat "$stamp_file")" == "$(shasum -a 256 "$CONF_DIR/$rel" | awk '{print $1}')" ]]
 }
 
-# Copy a repository default into ~/.omaccy/config and link the consumer's path.
+# Copy a repository default into ~/.omaccy/config.
 # Preserve customized canonical files when refreshing shipped defaults.
-ensure_symlink() {
+install_canonical() {
   local repo_path="$1"
-  local target_path="$2"
   local rel="${repo_path#"$REPO_ROOT/config/"}"
   local canonical="$CONF_DIR/$rel"
 
-  mkdir -p "$(dirname "$canonical")" "$(dirname "$target_path")"
+  mkdir -p "$(dirname "$canonical")"
 
   if [[ ! -e "$canonical" && ! -L "$canonical" ]]; then
     cp "$repo_path" "$canonical"
@@ -45,6 +44,14 @@ ensure_symlink() {
   else
     echo "Canonical config customized by user → $canonical (left as-is)"
   fi
+}
+
+# Link the consumer's path to a canonical config, backing up what was there.
+link_canonical() {
+  local canonical="$1"
+  local target_path="$2"
+
+  mkdir -p "$(dirname "$target_path")"
 
   if [[ -L "$target_path" && "$(readlink "$target_path")" == "$canonical" ]]; then
     echo "Already symlinked → $target_path"
@@ -58,6 +65,68 @@ ensure_symlink() {
   fi
   ln -s "$canonical" "$target_path"
   echo "Symlinked $target_path → $canonical"
+}
+
+ensure_symlink() {
+  local repo_path="$1"
+  local target_path="$2"
+  install_canonical "$repo_path"
+  link_canonical "$CONF_DIR/${repo_path#"$REPO_ROOT/config/"}" "$target_path"
+}
+
+# A tool that reads a whole directory (Neovim) gets one link to the canonical
+# directory. Its files are still copied and stamped one by one, so an update
+# refreshes the untouched ones and keeps edited ones, and files added later --
+# the user's own, or lazy-lock.json -- are never stamped and never replaced.
+ensure_dir_symlink() {
+  local repo_dir="$1"
+  local target_path="$2"
+  local file
+  # find failing inside the process substitution would not stop the loop, and
+  # the link below would then displace the user's config for an empty one.
+  if [[ ! -d "$repo_dir" ]]; then
+    echo "ERROR: $repo_dir is missing; leaving $target_path as it is." >&2
+    return 1
+  fi
+  while IFS= read -r file; do
+    install_canonical "$file"
+  done < <(find "$repo_dir" -type f | sort)
+  link_canonical "$CONF_DIR/${repo_dir#"$REPO_ROOT/config/"}" "$target_path"
+}
+
+# Uninstall's counterpart to ensure_dir_symlink. A config directory can hold
+# real work, so it is deleted only while every file in it is an untouched
+# default; otherwise it is kept whole in the backups directory, under an
+# omaccy- prefix so restore_target never mistakes it for the user's original.
+# Further arguments name generated files that do not count as edits.
+remove_canonical_dir() {
+  local rel="$1"
+  shift
+  local dir="$CONF_DIR/$rel"
+  local file name generated edited=0
+
+  if [[ -d "$dir" ]]; then
+    while IFS= read -r file; do
+      name="$(basename "$file")"
+      for generated in "$@"; do
+        [[ "$name" == "$generated" ]] && continue 2
+      done
+      if ! config_is_pristine "${file#"$CONF_DIR/"}"; then
+        edited=1
+        break
+      fi
+    done < <(find "$dir" -type f)
+
+    if [[ "$edited" == 1 ]]; then
+      mkdir -p "$BAK_DIR"
+      local kept="$BAK_DIR/omaccy-$(printf '%s' "$rel" | tr / -).$(date +%Y%m%d-%H%M%S)"
+      mv "$dir" "$kept"
+      echo "Kept your edited $rel config → $kept"
+    else
+      rm -rf "$dir"
+    fi
+  fi
+  rm -rf "$OMACCY_DIR/sha256/$rel"
 }
 
 # AeroSpace rejects startup if both its legacy and XDG config paths exist.
@@ -110,6 +179,14 @@ retire_master_stack_script() {
   rm -f "$canonical" "$OMACCY_DIR/sha256/$rel"
 }
 
+# The most recent backup of a target. Directories count: a displaced config can
+# be one (~/.config/nvim), not only a file or a link into someone's dotfiles.
+latest_backup() {
+  local target="$1"
+  find "$BAK_DIR" -mindepth 1 -maxdepth 1 \( -type f -o -type l -o -type d \) \
+    -name "$(basename "$target").*" -print 2>/dev/null | sort | tail -n 1
+}
+
 restore_target() {
   local target="$1"
   local canonical="$2"
@@ -121,7 +198,7 @@ restore_target() {
   fi
 
   rm "$target"
-  backup="$(find "$BAK_DIR" -maxdepth 1 \( -type f -o -type l \) -name "$(basename "$target").*" -print 2>/dev/null | sort | tail -n 1)"
+  backup="$(latest_backup "$target")"
   if [[ -n "$backup" ]]; then
     mv "$backup" "$target"
     echo "Restored original config → $target"
@@ -139,7 +216,7 @@ restore_displaced_target() {
     return
   fi
 
-  backup="$(find "$BAK_DIR" -maxdepth 1 \( -type f -o -type l \) -name "$(basename "$target").*" -print 2>/dev/null | sort | tail -n 1)"
+  backup="$(latest_backup "$target")"
   if [[ -n "$backup" ]]; then
     mv "$backup" "$target"
     echo "Restored original config → $target"

@@ -23,3 +23,11 @@ APPEARANCE="dark"
 # label built in, so nothing needs installing.
 VSCODE_EXTENSION="zhuangtongfa.material-theme"
 VSCODE_THEME="One Dark Pro"
+
+# Neovim: the colorscheme config/nvim/lua/plugins/omaccy-theme.lua installs
+# for this palette. Running nvim instances switch to it as the theme changes.
+NVIM_COLORSCHEME="onedark"
+
+# herdr: the built-in theme its UI uses for this palette. "terminal" takes
+# the terminal's own colors, for palettes herdr has no theme of its own for.
+HERDR_THEME="one-dark"

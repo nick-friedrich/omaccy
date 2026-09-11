@@ -10,6 +10,42 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.3` tag is cut.
 
+### Added
+
+- `bash scripts/update.sh --dev` installs your checkout exactly as it stands,
+  building the Omaccy Hyperkey app from source instead of downloading the
+  release and without pulling first. It replaces
+  `OMACCY_HYPERKEY_BUILD_LOCAL=1 bash scripts/update.sh`, which still works.
+- Neovim follows the Omaccy theme, and changes with it immediately: every
+  open nvim repaints when you switch themes, from `scripts/theme.sh` or the
+  launcher, with no restart. Each theme has a matching colorscheme, all
+  downloaded the first time nvim starts after this update so switching never
+  waits. Custom themes choose theirs with `NVIM_COLORSCHEME` in the theme
+  file.
+- herdr follows the Omaccy theme too. Switching themes rewrites the theme
+  name in your `~/.config/herdr/config.toml` and reloads the running session
+  without touching its agents; the rest of the file is left as it was, and
+  the original is copied to `~/.omaccy/backups/herdr-config.toml` the first
+  time. Everforest and GitHub Dark use herdr's `terminal` theme, drawn in
+  Ghostty's colors, since herdr has no theme of its own for them. If you have
+  herdr's `auto_switch` on, herdr keeps choosing between its light and dark
+  themes itself.
+- Click the app name in the menu bar for that app's menus — File, Edit, View
+  and the rest, which SketchyBar otherwise covers up. Choose one and macOS
+  opens it as if you had clicked it in its own menu bar. Reading another app's
+  menus needs Accessibility access for SketchyBar; until you grant it, the
+  popup's only row opens that page of Privacy & Security.
+- Optional Neovim. Setup asks once whether to install Neovim and ripgrep and
+  use Omaccy's AstroNvim config, and remembers the answer in
+  `~/.omaccy/neovim`, so updates do not ask again (delete that file to be
+  asked again). Saying yes moves your current `~/.config/nvim` into
+  `~/.omaccy/backups/` — a link into a dotfiles repository is moved as a
+  link, so the repository is not touched — and uninstall puts it back.
+  Plugins download the first time you start `nvim`. The config you edit is in
+  `~/.omaccy/config/nvim/`; if you changed anything there, uninstall keeps a
+  copy in the backups directory. `OMACCY_ASSUME_YES=1` does not answer this
+  question for you.
+
 ## [0.4.2] - 2026-09-11
 
 ### Added

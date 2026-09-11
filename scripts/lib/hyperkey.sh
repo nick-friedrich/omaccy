@@ -249,7 +249,7 @@ warn_hyperkey_checkout_skew() {
   echo "Note: this checkout has $count app change$plural newer than the installed Omaccy"
   echo "Hyperkey $installed_tag. Configs from those commits may reference features it does"
   echo "not have yet; they arrive with the next tagged release."
-  printf 'To build them now: OMACCY_HYPERKEY_BUILD_LOCAL=1 bash %q\n' "$REPO_ROOT/scripts/update.sh"
+  printf 'To build them now: bash %q --dev\n' "$REPO_ROOT/scripts/update.sh"
 }
 
 stop_hyperkey_process() {
