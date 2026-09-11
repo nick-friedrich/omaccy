@@ -45,8 +45,10 @@ herdr_config_with_theme() {
     { lines[NR] = $0 }
     END {
       name_entry = "name = \"" theme "\""
-      wanted["accent"] = accent
-      wanted["panel_bg"] = panel_bg
+      # A value with a quote in it could only come from a misread theme file,
+      # and would write broken TOML, so it counts as no color at all.
+      wanted["accent"] = index(accent, "\"") ? "" : accent
+      wanted["panel_bg"] = index(panel_bg, "\"") ? "" : panel_bg
       keys[1] = "accent"
       keys[2] = "panel_bg"
 

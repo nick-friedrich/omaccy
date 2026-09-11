@@ -87,7 +87,11 @@ struct OmaccyTheme {
     /// The accent and panel background written under herdr's
     /// `[theme.custom]`, for palettes that sit on its `terminal` theme.
     static func herdrAccent(named name: String) -> String? {
-        stringAssignment(named: "HERDR_ACCENT", from: themeFile(named: name))
+        herdrAccent(fromFile: themeFile(named: name))
+    }
+
+    static func herdrAccent(fromFile path: String) -> String? {
+        stringAssignment(named: "HERDR_ACCENT", from: path)
     }
 
     static func herdrPanelBackground(named name: String) -> String? {
@@ -113,9 +117,7 @@ struct OmaccyTheme {
     private static func stringAssignment(named key: String, from path: String) -> String? {
         guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
         for rawLine in raw.components(separatedBy: .newlines) {
-            let withoutComment = rawLine.split(separator: "#", maxSplits: 1,
-                                               omittingEmptySubsequences: false).first.map(String.init) ?? rawLine
-            let parts = withoutComment.split(separator: "=", maxSplits: 1)
+            let parts = strippingComment(rawLine).split(separator: "=", maxSplits: 1)
             guard parts.count == 2, parts[0].trimmingCharacters(in: .whitespaces) == key else { continue }
             var value = parts[1].trimmingCharacters(in: .whitespaces)
             if value.hasPrefix("\""), value.hasSuffix("\""), value.count >= 2 {
@@ -124,6 +126,26 @@ struct OmaccyTheme {
             return value.isEmpty ? nil : value
         }
         return nil
+    }
+
+    /// The part of a theme-file line before its comment. As in the shell that
+    /// sources these files, `#` starts a comment only outside quotes and at
+    /// the start of a word, so `HERDR_ACCENT="#83c092"` keeps its color —
+    /// cutting at the first `#` once turned it into a lone quote.
+    static func strippingComment(_ line: String) -> String {
+        var inQuotes = false
+        var previous: Character = " "
+        var kept = ""
+        for character in line {
+            if character == "\"" {
+                inQuotes.toggle()
+            } else if character == "#" && !inQuotes && previous.isWhitespace {
+                break
+            }
+            kept.append(character)
+            previous = character
+        }
+        return kept
     }
 
     static func load() -> OmaccyTheme {

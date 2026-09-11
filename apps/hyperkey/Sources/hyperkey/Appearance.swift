@@ -206,9 +206,15 @@ enum OmaccyAppearance {
         var lines = contents.components(separatedBy: "\n")
         if lines.last == "" { lines.removeLast() }
         let nameEntry = "name = \"\(theme)\""
+        // A value with a quote in it could only come from a misread theme file,
+        // and would write broken TOML, so it counts as no color at all.
+        func usable(_ color: String?) -> String? {
+            guard let color, !color.isEmpty, !color.contains("\"") else { return nil }
+            return color
+        }
         let wanted: [(key: String, value: String?)] = [
-            ("accent", accent?.isEmpty == false ? accent : nil),
-            ("panel_bg", panelBackground?.isEmpty == false ? panelBackground : nil)
+            ("accent", usable(accent)),
+            ("panel_bg", usable(panelBackground))
         ]
         func customEntry(_ key: String, _ value: String) -> String { "\(key) = \"\(value)\" # omaccy" }
 

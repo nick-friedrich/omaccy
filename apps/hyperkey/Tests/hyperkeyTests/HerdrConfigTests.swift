@@ -89,6 +89,16 @@ final class HerdrConfigTests: XCTestCase {
              theme: "catppuccin",
              before: "[theme]\nname = \"terminal\"\n[theme.custom.dark]\naccent = \"#83c092\" # omaccy\n",
              after: "[theme]\nname = \"catppuccin\"\n[theme.custom.dark]\naccent = \"#83c092\" # omaccy\n"),
+        Case("a color with a quote in it is left out rather than written",
+             theme: "terminal", accent: "\"", panel: "#1e2326",
+             before: "[theme]\nname = \"catppuccin\"\n",
+             after: "[theme]\nname = \"terminal\"\n\n[theme.custom]\npanel_bg = \"#1e2326\" # omaccy\n"),
+        Case("repairs the colors a misread theme file once wrote",
+             theme: "terminal", accent: "#83c092", panel: "#1e2326",
+             before: "[theme]\nname = \"terminal\"\n\n[theme.custom]\naccent = \"\"\" # omaccy\n"
+                + "panel_bg = \"\"\" # omaccy\n",
+             after: "[theme]\nname = \"terminal\"\n\n[theme.custom]\naccent = \"#83c092\" # omaccy\n"
+                + "panel_bg = \"#1e2326\" # omaccy\n"),
         Case("keeps carriage returns on colors too",
              theme: "terminal", accent: "#2f81f7",
              before: "[theme]\r\nname = \"terminal\"\r\n[theme.custom]\r\naccent = \"#83c092\" # omaccy\r\n",

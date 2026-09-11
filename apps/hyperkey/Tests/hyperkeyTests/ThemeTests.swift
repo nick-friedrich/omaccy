@@ -71,6 +71,20 @@ final class ThemeTests: XCTestCase {
         XCTAssertNil(OmaccyTheme.herdrThemeName(fromFile: try writeThemeFile("BAR_BG=0xff2e3440\n")))
     }
 
+    /// A `#` inside quotes is part of the value, not a comment: reading
+    /// `"#83c092"` as a lone quote once wrote broken colors into herdr's
+    /// config. A comment after the value is still dropped.
+    func testQuotedHashIsPartOfTheValue() throws {
+        let path = try writeThemeFile("""
+        HERDR_ACCENT="#83c092"   # Omaccy's aqua
+        HERDR_PANEL_BG="#1e2326"
+        APPEARANCE="dark" # the palette's nature
+        """)
+        XCTAssertEqual(OmaccyTheme.herdrAccent(fromFile: path), "#83c092")
+        XCTAssertEqual(OmaccyTheme.herdrPanelBackground(fromFile: path), "#1e2326")
+        XCTAssertEqual(OmaccyTheme.appearance(fromFile: path), "dark")
+    }
+
     func testGhosttyThemeNameMissingWhenAbsent() throws {
         let path = try writeThemeFile("BAR_BG=0xff2e3440\n")
         XCTAssertNil(OmaccyTheme.ghosttyThemeName(fromFile: path))
