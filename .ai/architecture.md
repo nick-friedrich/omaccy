@@ -291,6 +291,27 @@ interpreter for a script, which is why the full command line is read instead --
 that is also what lets the smoke checks substitute a fake binary through
 `OMACCY_CAFFEINATE_BIN`.
 
+Keep awake only occupies the bar while it is on: `plugins/caffeinate.sh` sets
+the item's `drawing` along with its label on every tick, and clicking the item
+stops it. Its durations are rows in the battery popup, which
+`plugins/battery.sh` fills in when it opens -- charge and time left from
+`pmset -g batt`, Low Power Mode from `pmset -g`, and whether the turn-off row
+shows from `caffeinate_remaining` -- so `caffeinate.sh` closes that popup, not
+one of its own. Low Power Mode is only reported there, never set: `pmset`
+needs root to change it, and the row opens Battery settings instead.
+
+The Apple logo's popup is `plugins/apple-menu.sh`. Restart, Shut Down and Log
+Out go to loginwindow as the dialog-showing Apple events (`rrst`, `rsdn`,
+`logo` in AERegistry.h) so macOS asks the way its own menu does; the palette's
+System page sends the unconfirmed events and confirms in its own UI instead.
+Omaccy Settings opens `omaccy://settings`, a URL scheme the Hyperkey app
+registers in `Info.plist` and resolves with `SuperMenuController.Section.linked(by:)`
+-- the only way into the palette from outside the app. Every plugin that runs
+a command takes it through an `OMACCY_*_BIN` override (`OMACCY_SKETCHYBAR_BIN`,
+`OMACCY_OPEN_BIN`, `OMACCY_PMSET_BIN`, `OMACCY_OSASCRIPT_BIN`,
+`OMACCY_MENU_TOGGLE`), which is how the smoke checks drive them against
+recorders without ever sleeping or restarting the machine they run on.
+
 `HomebrewCatalog.swift` loads the official formula/cask metadata asynchronously and
 ranks package searches for the palette’s Install collection. The controller caches
 the catalog in memory for an hour and confirms each install before handing it to

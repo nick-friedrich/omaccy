@@ -196,6 +196,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    // MARK: - Links
+
+    /// omaccy://<page> opens the launcher on that page; the menu bar's Apple
+    /// menu opens omaccy://settings. macOS delivers the link to the running
+    /// app rather than starting another one.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let section = urls.lazy.compactMap({ SuperMenuController.Section.linked(by: $0) }).first else {
+            return
+        }
+        SuperMenuController.shared.toggle(section: section)
+    }
+
     // MARK: - Actions
 
     @objc private func showHelp() {

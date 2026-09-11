@@ -31,12 +31,27 @@ Dated when the `v0.4.2` tag is cut.
   Calendar hands over to Calendar.app. The week starts on the first weekday
   set in System Settings, falling back to your region's — Monday for most of
   Europe, Sunday in the US.
+- The Apple logo at the left of the bar opens a menu: System Settings, Omaccy
+  Settings, Sleep, Restart, Shut Down and Log Out — the last three with the
+  confirmation macOS itself shows — and Hide SketchyBar, the same as Hyper+M.
+  Omaccy Settings opens the launcher's Settings page through a new
+  `omaccy://settings` link, so it needs the Hyperkey app from this release;
+  with an older one installed that row does nothing.
+- Clicking the battery opens its details and power settings: charge and time
+  left, Low Power Mode, keep-awake for set times or until turned off, turning
+  the display off now, and Battery Settings. Low Power Mode opens Battery
+  settings rather than switching directly, because changing it needs an
+  administrator password.
 - Resizing reads sensibly again as a side effect. `Hyper+U` / `Hyper+I` resize
   along the workspace's own direction, so in Columns it is always width and in
   Rows always height, instead of depending on a tree you cannot see.
 
 ### Changed
 
+- Keep-awake no longer takes a place in the bar while it is off. It appears,
+  with the time left, only while it is on, and clicking it turns it off.
+  Starting it moved into the battery popup, which also gained "until turned
+  off"; the right-click popup it used to have is gone.
 - The Help page no longer prints `--focus-follows-window` in the middle of
   "Move window to workspace 3". The workspace was read from a fixed offset,
   which the flag sat in front of.

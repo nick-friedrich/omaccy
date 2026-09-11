@@ -174,6 +174,19 @@ final class MenuTests: XCTestCase {
         })
         XCTAssertFalse(entries.contains { $0.title.contains("--") })
     }
+    /// omaccy:// links name a page by their host, which is how the menu bar's
+    /// Apple menu opens Settings. Any other scheme is ignored rather than
+    /// falling back to Help the way an unknown preview name does.
+    func testLinksOpenThePageTheyName() throws {
+        let settings = try XCTUnwrap(URL(string: "omaccy://settings"))
+        XCTAssertEqual(SuperMenuController.Section.linked(by: settings)?.page, .settings)
+        let system = try XCTUnwrap(URL(string: "omaccy://System"))
+        XCTAssertEqual(SuperMenuController.Section.linked(by: system)?.page, .system)
+        let web = try XCTUnwrap(URL(string: "https://settings"))
+        XCTAssertNil(SuperMenuController.Section.linked(by: web))
+        XCTAssertEqual(SuperMenuController.Section.named("settings").page, .settings)
+    }
+
     func testSettingsUpdaterRunsWithoutAFurtherPage() {
         let actions = MenuCatalog.results(query: "update", page: .settings, apps: [], help: [])
         XCTAssertEqual(actions.map(\.title), ["Update Omaccy"])

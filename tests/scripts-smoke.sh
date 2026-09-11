@@ -427,7 +427,7 @@ restore_target "$test_dir/target" "$CONF_DIR/example" >/dev/null
     fail "retire_master_stack_script discarded an edited canonical copy"
 )
 
-# Per-workspace layout modes, the calendar popup, against a fake aerospace that records what it was
+# Per-workspace layout modes, against a fake aerospace that records what it was
 # asked to do. HOME is overridden because the store is ~/.omaccy/workspace-layout
 # by design -- the bar and the AeroSpace callback both find it without being
 # told where it is. REPO_ROOT is a temporary checkout by this point, so the real
@@ -564,6 +564,124 @@ FAKE
   printf 'sideways\n' > "$test_dir/calendar-state/calendar-offset"
   calendar 2026-12-31 1 next
   grep -Fxq 'label=January 2027' "$trace" || fail "a damaged page offset was not read as today"
+)
+
+# The Apple menu, against recording stand-ins for every command it would run,
+# so no test ever sleeps, restarts or logs out the machine it runs on.
+(
+  repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  calls="$test_dir/apple-menu-calls"
+  bin="$test_dir/apple-menu-bin"
+  mkdir -p "$bin"
+  for tool in sketchybar open osascript pmset menu-toggle; do
+    cat > "$bin/$tool" <<FAKE
+#!/usr/bin/env bash
+printf '%s %s\n' "$tool" "\$*" >> "$calls"
+FAKE
+    chmod +x "$bin/$tool"
+  done
+  apple_menu() {
+    : > "$calls"
+    OMACCY_SKETCHYBAR_BIN="$bin/sketchybar" OMACCY_OPEN_BIN="$bin/open" \
+      OMACCY_OSASCRIPT_BIN="$bin/osascript" OMACCY_PMSET_BIN="$bin/pmset" \
+      OMACCY_MENU_TOGGLE="$bin/menu-toggle" \
+      /bin/bash "$repo/config/sketchybar/plugins/apple-menu.sh" "$1"
+  }
+
+  apple_menu click
+  grep -Fxq 'sketchybar --set native_menu popup.drawing=toggle' "$calls" ||
+    fail "clicking the Apple logo did not open its menu"
+
+  apple_menu omaccy-settings
+  grep -Fxq 'open omaccy://settings' "$calls" ||
+    fail "Omaccy Settings did not open the launcher's Settings page"
+  grep -Fxq 'sketchybar --set native_menu popup.drawing=off' "$calls" ||
+    fail "choosing a row left the Apple menu open"
+
+  apple_menu system-settings
+  grep -Fxq 'open -b com.apple.systempreferences' "$calls" || fail "System Settings did not open"
+
+  apple_menu sleep
+  grep -Fxq 'pmset sleepnow' "$calls" || fail "Sleep did not put the Mac to sleep"
+
+  # Each of these has to ask first, with the dialog macOS itself shows. The
+  # unconfirmed events (rest, shut, rlgo) must never be what goes out.
+  for pair in restart:rrst shutdown:rsdn logout:logo; do
+    apple_menu "${pair%%:*}"
+    grep -q "loginwindow.*aevt${pair##*:}" "$calls" ||
+      fail "${pair%%:*} did not ask loginwindow with its confirmation dialog"
+    if grep -Eq 'aevt(rest|shut|rlgo)' "$calls"; then
+      fail "${pair%%:*} sent the event that skips the confirmation"
+    fi
+  done
+
+  apple_menu hide-bar
+  grep -q '^menu-toggle' "$calls" || fail "Hide SketchyBar did not hand over to the macOS menu bar"
+
+  if apple_menu nonsense 2>/dev/null; then
+    fail "the Apple menu accepted an action it does not have"
+  fi
+)
+
+# The battery popup, with pmset replaced by a script that answers the way pmset
+# does, so every charge state can be shown and nothing actually sleeps.
+(
+  repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  HOME="$test_dir/battery-home"
+  mkdir -p "$HOME"
+  calls="$test_dir/battery-calls"
+  bin="$test_dir/battery-bin"
+  mkdir -p "$bin"
+  cat > "$bin/pmset" <<'FAKE'
+#!/usr/bin/env bash
+printf 'pmset %s\n' "$*" >> "$BATTERY_CALLS"
+case "$*" in
+  "-g batt")
+    printf "Now drawing from '%s'\n -InternalBattery-0 (id=1)\t%s present: true\n" \
+      "$BATTERY_SOURCE" "$BATTERY_LINE"
+    ;;
+  "-g") printf ' lowpowermode         %s\n' "$BATTERY_LOW_POWER" ;;
+esac
+FAKE
+  for tool in sketchybar open; do
+    cat > "$bin/$tool" <<FAKE
+#!/usr/bin/env bash
+printf '%s %s\n' "$tool" "\$*" >> "$calls"
+FAKE
+  done
+  chmod +x "$bin"/*
+  battery() {
+    : > "$calls"
+    BATTERY_CALLS="$calls" BATTERY_SOURCE="$2" BATTERY_LINE="$3" BATTERY_LOW_POWER="$4" \
+      OMACCY_SKETCHYBAR_BIN="$bin/sketchybar" OMACCY_PMSET_BIN="$bin/pmset" \
+      OMACCY_OPEN_BIN="$bin/open" OMACCY_STATE_DIR="$test_dir/battery-state" \
+      /bin/bash "$repo/config/sketchybar/plugins/battery.sh" "$1"
+  }
+
+  battery click 'Battery Power' '100%; discharging; 8:17 remaining' 0
+  grep -qF 'battery.status label=100% · 8:17 remaining' "$calls" ||
+    fail "the battery popup did not say how long the charge will last"
+  grep -qF 'battery.lowpower label=Low Power Mode · Off' "$calls" ||
+    fail "the battery popup misread Low Power Mode as on"
+  grep -qF 'caffeinate.off drawing=off' "$calls" ||
+    fail "the battery popup offered to turn off a keep-awake that is not running"
+  grep -qF -- '--set battery popup.drawing=toggle' "$calls" ||
+    fail "clicking the battery did not open its popup"
+
+  battery click 'AC Power' '64%; charging; 1:02 remaining' 1
+  grep -qF 'label=64% · Charging · 1:02 until full' "$calls" ||
+    fail "a charging battery was not described as charging"
+  grep -qF 'label=Low Power Mode · On' "$calls" || fail "the battery popup missed Low Power Mode being on"
+
+  battery click 'AC Power' '100%; charged; 0:00 remaining' 0
+  grep -qF 'label=100% · Fully charged' "$calls" || fail "a full battery was not described as charged"
+
+  battery display-sleep 'Battery Power' '100%; discharging; 8:17 remaining' 0
+  grep -Fxq 'pmset displaysleepnow' "$calls" || fail "turning the display off did not reach pmset"
+
+  battery settings 'Battery Power' '100%; discharging; 8:17 remaining' 0
+  grep -Fxq 'open x-apple.systempreferences:com.apple.Battery-Settings.extension' "$calls" ||
+    fail "Battery Settings did not open the Battery pane"
 )
 
 # Keep-awake state. The fake caffeinate stands in for the real one through
@@ -710,6 +828,10 @@ caffeinate_plugin() {
 caffeinate_plugin start 1800
 grep -q 'label.drawing=on' "$caffeinate_bar_trace" || fail "starting keep-awake did not light the bar item"
 grep -q 'label=30m' "$caffeinate_bar_trace" || fail "a thirty-minute session was not shown as 30m"
+grep -qE '(^| )drawing=on( |$)' "$caffeinate_bar_trace" \
+  || fail "starting keep-awake did not put its item back in the bar"
+grep -qF -- '--set battery popup.drawing=off' "$caffeinate_bar_trace" \
+  || fail "starting keep-awake from the battery popup left the popup open"
 caffeinate_plugin_pid="$(caffeinate_read_file "$CAFFEINATE_PID_FILE")" \
   || fail "the plugin recorded no pid"
 
@@ -728,10 +850,12 @@ caffeinate_process_alive "$caffeinate_plugin_revived" \
 : > "$caffeinate_bar_trace"
 caffeinate_plugin stop
 grep -q 'label.drawing=off' "$caffeinate_bar_trace" || fail "stopping keep-awake did not dim the bar item"
+grep -qE '(^| )drawing=off( |$)' "$caffeinate_bar_trace" \
+  || fail "stopping keep-awake left its item in the bar"
 if caffeinate_process_alive "$caffeinate_plugin_revived"; then
   echo 'FAIL: stopping keep-awake through the plugin left the process running' >&2
   exit 1
 fi
 [[ ! -f "$CAFFEINATE_END_FILE" ]] || fail "stopping keep-awake through the plugin left its deadline behind"
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, master-stack retirement, workspace layout modes, the calendar popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, master-stack retirement, workspace layout modes, the calendar popup, the Apple menu, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'

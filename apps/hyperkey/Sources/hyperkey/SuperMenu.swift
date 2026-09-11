@@ -328,15 +328,18 @@ private final class PalettePanel: NSPanel {
 @MainActor
 final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate,
                                  NSTableViewDataSource, NSTableViewDelegate {
-    enum Section { case apps, help, agents, clipboard, collection(AppCollection)
+    enum Section { case apps, help, agents, clipboard, settings, system, collection(AppCollection)
 
-        /// Resolves a preview page name; anything unrecognized opens Help,
-        /// the section previews have always started on.
+        /// Resolves a page name from a preview flag or an omaccy:// link;
+        /// anything unrecognized opens Help, the section previews have always
+        /// started on.
         static func named(_ name: String?) -> Section {
             switch name?.lowercased() {
             case "home", "apps": return .apps
             case "agents": return .agents
             case "clipboard": return .clipboard
+            case "settings": return .settings
+            case "system": return .system
             default:
                 if let collection = AppCollection.allCases.first(where: { $0.rawValue == name?.lowercased() }) {
                     return .collection(collection)
@@ -351,8 +354,19 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             case .help: return .help
             case .agents: return .agents
             case .clipboard: return .clipboard
+            case .settings: return .settings
+            case .system: return .system
             case let .collection(collection): return collection.page
             }
+        }
+
+        /// The page an omaccy:// link names by its host, so omaccy://settings
+        /// opens Settings -- which is how the menu bar's Apple menu reaches it.
+        /// Nil for any other scheme: a stray URL is ignored rather than
+        /// falling back to Help the way an unknown preview name does.
+        static func linked(by url: URL) -> Section? {
+            guard url.scheme?.lowercased() == "omaccy" else { return nil }
+            return named(url.host)
         }
     }
     static let shared = SuperMenuController()
