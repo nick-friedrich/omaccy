@@ -147,7 +147,8 @@ main() {
     "$OMACCY_DIR/sha256/sketchybar/plugins/"*.sh \
     "$OMACCY_DIR/sha256/sketchybar/themes/"*.sh
   rm -f "$OMACCY_DIR/aerospace-disabled" \
-    "$OMACCY_DIR/native-menu-visible"
+    "$OMACCY_DIR/native-menu-visible" \
+    "$OMACCY_DIR/calendar-offset"
   rm -rf "$OMACCY_DIR/clipboard" "$OMACCY_DIR/workspace-layout"
   restore_macos_appearance
   report_editor_settings

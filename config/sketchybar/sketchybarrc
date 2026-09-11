@@ -133,7 +133,70 @@ sketchybar --add item clock right \
     icon.font="$STATUS_ICON_FONT" \
     icon.color="$TEXT" \
     update_freq=10 \
-    script="$PLUGIN_DIR/clock.sh"
+    script="$PLUGIN_DIR/clock.sh" \
+    click_script="$PLUGIN_DIR/calendar.sh click" \
+    popup.align=right \
+    popup.background.color="$ITEM_BG" \
+    popup.background.corner_radius=7 \
+    popup.background.border_width=1 \
+    popup.background.border_color="$BORDER"
+
+# The calendar popup. calendar.sh fills these in when the date is clicked; the
+# grid rows are monospaced because seven columns only line up when every cell
+# is the same width. Six week rows is the most a month can span.
+CALENDAR_FONT="JetBrains Mono:Medium:13.0"
+# SketchyBar sizes a label without its leading whitespace but still draws it,
+# so a week starting mid-row lost as much off its end as it had blanks at its
+# front -- the first week of September stopped at the 4th. No-break spaces are
+# dropped the same way. Every grid row gets the width of a full week instead:
+# 28 cells of the font above, measured at about 210 points, plus slack.
+CALENDAR_WIDTH=216
+
+sketchybar --add item clock.header popup.clock \
+  --set clock.header \
+    icon.drawing=off \
+    label.font="$TEXT_FONT:Bold:13.0" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/calendar.sh today"
+
+sketchybar --add item clock.weekdays popup.clock \
+  --set clock.weekdays \
+    icon.drawing=off \
+    label.font="$CALENDAR_FONT" \
+    label.width="$CALENDAR_WIDTH" \
+    label.color="$MUTED" \
+    background.drawing=off
+
+for _calendar_week in 1 2 3 4 5 6; do
+  sketchybar --add item "clock.week$_calendar_week" popup.clock \
+    --set "clock.week$_calendar_week" \
+      icon.drawing=off \
+      label.font="$CALENDAR_FONT" \
+      label.width="$CALENDAR_WIDTH" \
+      background.drawing=off
+done
+unset _calendar_week
+
+sketchybar --add item clock.prev popup.clock \
+  --set clock.prev \
+    icon="‹" \
+    label="Previous month" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/calendar.sh prev"
+
+sketchybar --add item clock.next popup.clock \
+  --set clock.next \
+    icon="›" \
+    label="Next month" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/calendar.sh next"
+
+sketchybar --add item clock.open popup.clock \
+  --set clock.open \
+    icon="↗" \
+    label="Open Calendar" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/calendar.sh open"
 
 sketchybar --add item battery right \
   --set battery \

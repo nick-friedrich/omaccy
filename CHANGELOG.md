@@ -25,6 +25,12 @@ Dated when the `v0.4.2` tag is cut.
   when a window opens, because squaring off is the one shape that cannot
   maintain itself — switch that workspace to Recursive if you would rather it
   stopped.
+- Clicking the date in the menu bar opens a month calendar. Today is
+  bracketed and its week drawn in the accent color, rows underneath page back
+  and forward a month, clicking the month name returns to today, and Open
+  Calendar hands over to Calendar.app. The week starts on the first weekday
+  set in System Settings, falling back to your region's — Monday for most of
+  Europe, Sunday in the US.
 - Resizing reads sensibly again as a side effect. `Hyper+U` / `Hyper+I` resize
   along the workspace's own direction, so in Columns it is always width and in
   Rows always height, instead of depending on a tree you cannot see.
