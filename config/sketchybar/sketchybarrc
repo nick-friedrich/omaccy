@@ -66,7 +66,65 @@ sketchybar --add item native_menu left \
     icon.font.size=17 \
     label.drawing=off \
     background.drawing=off \
-    click_script="$PLUGIN_DIR/menu-toggle.sh"
+    click_script="$PLUGIN_DIR/apple-menu.sh click" \
+    popup.align=left \
+    popup.background.color="$ITEM_BG" \
+    popup.background.corner_radius=7 \
+    popup.background.border_width=1 \
+    popup.background.border_color="$BORDER"
+
+# The Apple menu. Plain glyphs rather than SF Symbols, like the other popups,
+# so the rows draw whether or not SF Pro is installed. An ellipsis marks the
+# rows that ask before they act, as it does in the real menu.
+sketchybar --add item native_menu.system_settings popup.native_menu \
+  --set native_menu.system_settings \
+    icon="⚙" \
+    label="System Settings…" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/apple-menu.sh system-settings"
+
+sketchybar --add item native_menu.omaccy_settings popup.native_menu \
+  --set native_menu.omaccy_settings \
+    icon="⇪" \
+    label="Omaccy Settings…" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/apple-menu.sh omaccy-settings"
+
+sketchybar --add item native_menu.sleep popup.native_menu \
+  --set native_menu.sleep \
+    icon="☾" \
+    label="Sleep" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/apple-menu.sh sleep"
+
+sketchybar --add item native_menu.restart popup.native_menu \
+  --set native_menu.restart \
+    icon="↻" \
+    label="Restart…" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/apple-menu.sh restart"
+
+sketchybar --add item native_menu.shutdown popup.native_menu \
+  --set native_menu.shutdown \
+    icon="⏻" \
+    label="Shut Down…" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/apple-menu.sh shutdown"
+
+sketchybar --add item native_menu.logout popup.native_menu \
+  --set native_menu.logout \
+    icon="⇥" \
+    label="Log Out…" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/apple-menu.sh logout"
+
+sketchybar --add item native_menu.hide_bar popup.native_menu \
+  --set native_menu.hide_bar \
+    icon="×" \
+    icon.color="$MUTED" \
+    label="Hide SketchyBar" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/apple-menu.sh hide-bar"
 
 # Every reload (a fresh launch or `sketchybar --reload`, which a theme/font
 # change now triggers) re-runs this whole script, so --add recreates these
@@ -205,52 +263,95 @@ sketchybar --add item battery right \
     icon.color="$TEXT" \
     update_freq=30 \
     script="$PLUGIN_DIR/battery.sh" \
+    click_script="$PLUGIN_DIR/battery.sh click" \
+    popup.align=right \
+    popup.background.color="$ITEM_BG" \
+    popup.background.corner_radius=7 \
+    popup.background.border_width=1 \
+    popup.background.border_color="$BORDER" \
   --subscribe battery system_woke power_source_change
 
+# Keep-awake is only in the bar while it is on -- caffeinate.sh draws it then
+# and hides it otherwise -- and clicking it turns it off. Starting it, and the
+# rest of the power settings, live in the battery popup below. Added hidden so
+# a reload does not flash it on before the first tick decides.
 sketchybar --add item caffeinate right \
   --set caffeinate \
     icon="$ICON_CAFFEINATE" \
     icon.font="$STATUS_ICON_FONT" \
     icon.color="$TEXT" \
     label.drawing=off \
+    drawing=off \
     update_freq=15 \
     script="$PLUGIN_DIR/caffeinate.sh" \
     click_script="$PLUGIN_DIR/caffeinate.sh click" \
-    popup.align=right \
-    popup.background.color="$ITEM_BG" \
-    popup.background.corner_radius=7 \
-    popup.background.border_width=1 \
-    popup.background.border_color="$BORDER" \
   --subscribe caffeinate system_woke
 
-sketchybar --add item caffeinate.30m popup.caffeinate \
+# The battery popup. battery.sh fills in the first two rows, and whether the
+# turn-off row shows, each time it opens.
+sketchybar --add item battery.status popup.battery \
+  --set battery.status \
+    icon.drawing=off \
+    label.font="$TEXT_FONT:Bold:13.0" \
+    background.drawing=off
+
+sketchybar --add item battery.lowpower popup.battery \
+  --set battery.lowpower \
+    icon="◐" \
+    label="Low Power Mode" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/battery.sh settings"
+
+sketchybar --add item caffeinate.30m popup.battery \
   --set caffeinate.30m \
     icon="◷" \
-    label="30 minutes" \
+    label="Keep awake for 30 minutes" \
     background.drawing=off \
     click_script="$PLUGIN_DIR/caffeinate.sh start 1800"
 
-sketchybar --add item caffeinate.1h popup.caffeinate \
+sketchybar --add item caffeinate.1h popup.battery \
   --set caffeinate.1h \
     icon="◷" \
-    label="1 hour" \
+    label="Keep awake for 1 hour" \
     background.drawing=off \
     click_script="$PLUGIN_DIR/caffeinate.sh start 3600"
 
-sketchybar --add item caffeinate.2h popup.caffeinate \
+sketchybar --add item caffeinate.2h popup.battery \
   --set caffeinate.2h \
     icon="◷" \
-    label="2 hours" \
+    label="Keep awake for 2 hours" \
     background.drawing=off \
     click_script="$PLUGIN_DIR/caffeinate.sh start 7200"
 
-sketchybar --add item caffeinate.off popup.caffeinate \
+sketchybar --add item caffeinate.forever popup.battery \
+  --set caffeinate.forever \
+    icon="∞" \
+    label="Keep awake until turned off" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/caffeinate.sh start 0"
+
+sketchybar --add item caffeinate.off popup.battery \
   --set caffeinate.off \
     icon="×" \
     icon.color="$DANGER" \
-    label="Turn off" \
+    label="Turn off keep awake" \
+    drawing=off \
     background.drawing=off \
     click_script="$PLUGIN_DIR/caffeinate.sh stop"
+
+sketchybar --add item battery.display popup.battery \
+  --set battery.display \
+    icon="▭" \
+    label="Turn display off now" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/battery.sh display-sleep"
+
+sketchybar --add item battery.settings popup.battery \
+  --set battery.settings \
+    icon="⚙" \
+    label="Battery Settings…" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/battery.sh settings"
 
 # Reports the focused workspace's layout mode, and opens a popup to change it.
 # Subscribed to the workspace event so the label follows you between

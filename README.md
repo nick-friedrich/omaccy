@@ -126,6 +126,19 @@ or forward, clicking the month name returns to today, and **Open Calendar**
 hands over to Calendar.app. The week starts on the day set under System
 Settings → General → Language & Region, or your region's usual one.
 
+The Apple logo at the left of the bar opens a menu like the one it stands in
+for: System Settings, Omaccy's own Settings page, Sleep, Restart, Shut Down and
+Log Out — the last three ask first, with the same dialog macOS shows — and
+**Hide SketchyBar**, which hands the top of the screen back to the macOS menu
+bar until `Hyper+M` brings the bar back.
+
+Click the battery for its details and power settings: charge and time left,
+Low Power Mode (which opens Battery settings, since changing it needs an
+administrator password), keep-awake for 30 minutes, an hour, two hours or
+until you turn it off, and turning the display off right away. While
+keep-awake is on it has its own item in the bar showing the time left; click
+it to turn keep-awake off.
+
 Inside the palette, hold ⌘ to number the first nine rows and press ⌘1–9 to
 run one directly. Escape steps back a page, landing on the row you came from,
 and Escape again closes the palette.
