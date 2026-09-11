@@ -12,6 +12,25 @@ Dated when the `v0.4.3` tag is cut.
 
 ### Added
 
+- Optional zsh setup. When your login shell is zsh, setup asks once whether
+  to add a Starship prompt in the Omaccy theme's colors — the Apple logo,
+  user@host, the folder, its git branch and status, and on the right how long
+  the last command took and the language versions of the project you are
+  in — plus zsh-autosuggestions,
+  zsh-syntax-highlighting, fzf and zoxide, and remembers the answer in
+  `~/.omaccy/zsh`. Your `~/.zshrc` is not replaced: a marked block is added at
+  its end, which uninstall removes again (the original is also copied to
+  `~/.omaccy/backups/omaccy-zshrc.original`). If your `.zshrc` is a link into
+  a dotfiles repository, setup asks before adding the lines there (and
+  uninstall takes them out again); say no and it prints them for you to add.
+  If your `.zshrc` sets up its own prompt — oh-my-posh, Powerlevel10k, an
+  oh-my-zsh theme — setup asks whether to use Omaccy's Starship instead,
+  without changing your `.zshrc`; otherwise your prompt stays. A plugin you
+  already load is not loaded twice. If you already said yes to zsh, the next
+  update asks these two questions once.
+  The prompt follows theme switches on the next prompt in every open terminal.
+  Omaccy never changes your login shell, and `OMACCY_ASSUME_YES=1` does not
+  answer this question.
 - `bash scripts/update.sh --dev` installs your checkout exactly as it stands,
   building the Omaccy Hyperkey app from source instead of downloading the
   release and without pulling first. It replaces

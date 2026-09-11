@@ -8,6 +8,7 @@ source "$REPO_ROOT/scripts/lib/config.sh"
 source "$REPO_ROOT/scripts/lib/macos.sh"
 source "$REPO_ROOT/scripts/lib/fonts.sh"
 source "$REPO_ROOT/scripts/lib/neovim.sh"
+source "$REPO_ROOT/scripts/lib/zsh.sh"
 # Keep-awake state belongs to the bar plugin; uninstall shares its reader so
 # there is one definition of which files hold it and when the recorded PID may
 # be signalled. The library derives its paths from OMACCY_STATE_DIR at source
@@ -113,6 +114,7 @@ main() {
   done
   restore_displaced_target "$HOME/.aerospace.toml"
   uninstall_neovim_config
+  uninstall_zsh_setup
   if command -v aerospace >/dev/null 2>&1 && aerospace list-workspaces --all >/dev/null 2>&1; then
     aerospace reload-config --no-gui || true
   fi
@@ -174,6 +176,11 @@ main() {
   remove_owned_formula herdr Herdr
   remove_owned_formula neovim Neovim
   remove_owned_formula ripgrep ripgrep
+  remove_owned_formula starship Starship
+  remove_owned_formula zoxide zoxide
+  remove_owned_formula fzf fzf
+  remove_owned_formula zsh-autosuggestions zsh-autosuggestions
+  remove_owned_formula zsh-syntax-highlighting zsh-syntax-highlighting
   if [[ -f "$OMACCY_DIR/sketchybar-service-was-running" ]] && command -v sketchybar >/dev/null 2>&1; then
     brew services start sketchybar || true
     rm -f "$OMACCY_DIR/sketchybar-service-was-running"

@@ -512,6 +512,234 @@ fi
   [[ ! -e "$OMACCY_DIR/neovim" ]] || fail "uninstall left the Neovim answer behind"
 )
 
+# The optional zsh setup, against a temporary HOME with Homebrew and the login
+# shell stood in for. ~/.zshrc is only ever appended to, a linked one is never
+# written through, and uninstall takes back exactly what was added.
+(
+  repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  source "$repo/scripts/lib/zsh.sh"
+  REPO_ROOT="$repo"
+  HOME="$test_dir/zsh-home"
+  OMACCY_DIR="$test_dir/zsh-state"
+  CONF_DIR="$OMACCY_DIR/config"
+  BAK_DIR="$OMACCY_DIR/backups"
+  unset ZDOTDIR
+  mkdir -p "$HOME" "$BAK_DIR"
+  calls="$test_dir/zsh-calls"
+  : > "$calls"
+  ensure_formula() { printf 'formula %s\n' "$1" >> "$calls"; }
+
+  # Someone on bash is told why, and never asked.
+  login_shell() { printf '/bin/bash\n'; }
+  output="$(decide_zsh_setup </dev/null)"
+  [[ "$output" == *"login shell is /bin/bash"* ]] || fail "a bash user was not told why the zsh setup was skipped"
+  [[ "$output" != *"[y/N]"* ]] || fail "a bash user was asked about the zsh setup"
+  [[ ! -e "$OMACCY_DIR/zsh" ]] || fail "a bash user had a zsh answer recorded"
+
+  login_shell() { printf '/bin/zsh\n'; }
+  output="$(OMACCY_ASSUME_YES=1 decide_zsh_setup </dev/null)"
+  [[ "$output" == *"Skipping the optional zsh setup"* && "$output" != *"[y/N]"* ]] ||
+    fail "OMACCY_ASSUME_YES answered the zsh question"
+  [[ ! -e "$OMACCY_DIR/zsh" ]] || fail "OMACCY_ASSUME_YES recorded a zsh answer"
+
+  # Declining is remembered and installs nothing.
+  output="$(printf 'n\n' | decide_zsh_setup)"
+  [[ "$output" == *"[y/N]"* ]] || fail "the zsh setup was not asked about"
+  [[ "$(cat "$OMACCY_DIR/zsh")" == off ]] || fail "declining the zsh setup was not remembered"
+  [[ -z "$(decide_zsh_setup </dev/null)" ]] || fail "a remembered zsh answer was asked again"
+  install_zsh_setup >/dev/null
+  [[ ! -s "$calls" && ! -e "$HOME/.zshrc" ]] || fail "a declined zsh setup still changed something"
+  rm "$OMACCY_DIR/zsh"
+
+  # Accepting appends one block, once, after the user's own lines.
+  printf 'export FOO=1\n# mine\n' > "$HOME/.zshrc"
+  cp "$HOME/.zshrc" "$test_dir/zshrc-before"
+  printf 'y\n' | decide_zsh_setup >/dev/null
+  install_zsh_setup >/dev/null
+  install_zsh_setup >/dev/null
+  for formula in starship zoxide fzf zsh-autosuggestions zsh-syntax-highlighting; do
+    grep -qx "formula $formula" "$calls" || fail "the zsh setup did not install $formula"
+  done
+  [[ "$(grep -cxF '# >>> omaccy >>>' "$HOME/.zshrc")" == 1 ]] || fail "an update added the zsh block a second time"
+  [[ "$(head -n 2 "$HOME/.zshrc")" == "$(cat "$test_dir/zshrc-before")" ]] || fail "the user's own ~/.zshrc lines changed"
+  cmp -s "$BAK_DIR/omaccy-zshrc.original" "$test_dir/zshrc-before" || fail "~/.zshrc was not backed up before its first edit"
+  [[ -f "$CONF_DIR/zsh/omaccy.zsh" && -f "$CONF_DIR/zsh/starship.toml" ]] || fail "the zsh configs were not installed"
+  [[ ! -e "$OMACCY_DIR/zsh-prompt" && ! -e "$OMACCY_DIR/zshrc-link" ]] ||
+    fail "a plain ~/.zshrc with the stock prompt was asked a follow-up question"
+  if command -v zsh >/dev/null 2>&1; then
+    zsh -n "$HOME/.zshrc" || fail "~/.zshrc with Omaccy's block does not parse"
+    zsh -n "$CONF_DIR/zsh/omaccy.zsh" || fail "omaccy.zsh does not parse"
+  fi
+  uninstall_zsh_setup >/dev/null
+  cmp -s "$HOME/.zshrc" "$test_dir/zshrc-before" || fail "uninstall did not put ~/.zshrc back as it was"
+  [[ ! -e "$CONF_DIR/zsh" && ! -e "$OMACCY_DIR/zsh" ]] || fail "uninstall left the zsh setup's state behind"
+
+  # A ~/.zshrc linked into dotfiles is asked about first. Saying no, it is
+  # never written through and the lines are shown instead.
+  mkdir -p "$test_dir/dotfiles"
+  printf 'mine\n' > "$test_dir/dotfiles/zshrc"
+  rm "$HOME/.zshrc"
+  ln -s "$test_dir/dotfiles/zshrc" "$HOME/.zshrc"
+  output="$(printf 'y\nn\n' | decide_zsh_setup)"
+  [[ "$output" == *"Add Omaccy's lines to $test_dir/dotfiles/zshrc?"* ]] ||
+    fail "a linked ~/.zshrc was not asked about by where it points: $output"
+  [[ "$(cat "$OMACCY_DIR/zshrc-link")" == print ]] || fail "declining to write through the link was not remembered"
+  output="$(install_zsh_setup)"
+  [[ "$(cat "$test_dir/dotfiles/zshrc")" == mine ]] || fail "the zsh setup wrote through a linked ~/.zshrc it was told not to"
+  [[ "$output" == *'source "$HOME/.omaccy/config/zsh/omaccy.zsh"'* ]] || fail "the lines for a linked ~/.zshrc were not shown"
+  uninstall_zsh_setup >/dev/null
+  [[ -L "$HOME/.zshrc" && "$(cat "$test_dir/dotfiles/zshrc")" == mine ]] || fail "uninstall disturbed a linked ~/.zshrc"
+
+  # Saying yes adds the lines to the linked file itself, the link stays a
+  # link, and uninstall takes them back out of that file.
+  printf 'y\ny\n' | decide_zsh_setup >/dev/null
+  install_zsh_setup >/dev/null
+  [[ -L "$HOME/.zshrc" && "$(readlink "$HOME/.zshrc")" == "$test_dir/dotfiles/zshrc" ]] ||
+    fail "writing through the link replaced it"
+  grep -qxF '# >>> omaccy >>>' "$test_dir/dotfiles/zshrc" || fail "an allowed write did not reach the linked file"
+  uninstall_zsh_setup >/dev/null
+  [[ -L "$HOME/.zshrc" && "$(cat "$test_dir/dotfiles/zshrc")" == mine ]] ||
+    fail "uninstall did not take Omaccy's lines back out of the linked file"
+  [[ ! -e "$OMACCY_DIR/zshrc-link" ]] || fail "uninstall left the link answer behind"
+
+  # Someone who said yes before the link question existed is asked it once.
+  echo on > "$OMACCY_DIR/zsh"
+  output="$(printf 'n\n' | decide_zsh_setup)"
+  [[ "$output" == *"Add Omaccy's lines to"* && "$output" != *"Set up zsh?"* ]] ||
+    fail "an earlier yes to zsh was not asked the link question on its own"
+  uninstall_zsh_setup >/dev/null
+  rm "$HOME/.zshrc"
+
+  # A prompt the ~/.zshrc sets up itself is found by name; comments do not count.
+  printf '# eval "$(oh-my-posh init zsh)"\n' > "$HOME/.zshrc"
+  [[ -z "$(zshrc_prompt_owner)" ]] || fail "a commented-out prompt counted as the user's own"
+  printf 'ZSH_THEME="robbyrussell"\nsource $ZSH/oh-my-zsh.sh\n' > "$HOME/.zshrc"
+  [[ "$(zshrc_prompt_owner)" == "an oh-my-zsh theme" ]] || fail "an oh-my-zsh theme was not recognized as a prompt"
+  printf 'ZSH_THEME=""\nsource $ZSH/oh-my-zsh.sh\n' > "$HOME/.zshrc"
+  [[ -z "$(zshrc_prompt_owner)" ]] || fail "oh-my-zsh without a theme counted as a prompt"
+  printf 'export PROMPT="%%~ > "\n' > "$HOME/.zshrc"
+  [[ "$(zshrc_prompt_owner)" == "a prompt of your own" ]] || fail "a hand-set PROMPT was not recognized"
+
+  # With one, setup asks whether Omaccy's prompt takes over, and remembers it.
+  printf 'eval "$(oh-my-posh init zsh)"\n' > "$HOME/.zshrc"
+  output="$(printf 'y\ny\n' | decide_zsh_setup)"
+  [[ "$output" == *"its own prompt (oh-my-posh)"* ]] || fail "the prompt question did not name the user's prompt: $output"
+  [[ "$(cat "$OMACCY_DIR/zsh-prompt")" == starship ]] || fail "choosing Omaccy's prompt was not remembered"
+  [[ -z "$(decide_zsh_setup </dev/null)" ]] || fail "a remembered prompt answer was asked again"
+  uninstall_zsh_setup >/dev/null
+  [[ ! -e "$OMACCY_DIR/zsh-prompt" ]] || fail "uninstall left the prompt answer behind"
+  echo on > "$OMACCY_DIR/zsh"
+  OMACCY_ASSUME_YES=1 decide_zsh_setup </dev/null >/dev/null
+  [[ ! -e "$OMACCY_DIR/zsh-prompt" ]] || fail "OMACCY_ASSUME_YES answered the prompt question"
+  rm -f "$OMACCY_DIR/zsh" "$HOME/.zshrc"
+
+  # With no ~/.zshrc, one holding only the block is created, and removed again.
+  printf 'y\n' | decide_zsh_setup >/dev/null
+  install_zsh_setup >/dev/null
+  grep -qxF '# >>> omaccy >>>' "$HOME/.zshrc" || fail "no ~/.zshrc was created to load the zsh setup"
+  uninstall_zsh_setup >/dev/null
+  [[ ! -e "$HOME/.zshrc" ]] || fail "uninstall left behind the ~/.zshrc Omaccy created"
+)
+
+# omaccy.zsh itself, in a real interactive zsh with stand-ins for Starship and
+# the plugins. Its prompt follows the theme file, and it steps aside for a
+# prompt or a plugin the user's own config already set up.
+if command -v zsh >/dev/null 2>&1; then
+  zsh_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  zsh_run="$test_dir/zsh-run"
+  zsh_state="$zsh_run/.omaccy"
+  mkdir -p "$zsh_state/config/zsh" "$zsh_state/config/sketchybar/themes" "$zsh_run/bin" \
+    "$zsh_run/brew/share/zsh-autosuggestions" "$zsh_run/brew/share/zsh-syntax-highlighting"
+  cp "$zsh_repo/config/zsh/omaccy.zsh" "$zsh_repo/config/zsh/starship.toml" "$zsh_state/config/zsh/"
+  cp "$zsh_repo/config/sketchybar/themes/catppuccin.sh" "$zsh_repo/config/sketchybar/themes/catppuccin-latte.sh" \
+    "$zsh_state/config/sketchybar/themes/"
+  printf 'catppuccin\n' > "$zsh_state/theme"
+  printf '#!/bin/sh\n[ "$1" = init ] && echo "PROMPT=starship-prompt"\nexit 0\n' > "$zsh_run/bin/starship"
+  chmod +x "$zsh_run/bin/starship"
+  printf 'print autosuggestions >> $ZSH_TEST_LOG\n_zsh_autosuggest_start() { :; }\n' \
+    > "$zsh_run/brew/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+  printf 'print highlighting >> $ZSH_TEST_LOG\n_zsh_highlight() { :; }\n' \
+    > "$zsh_run/brew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+  # A STARSHIP_CONFIG inherited from the shell running the tests would read as
+  # omaccy.zsh having started Starship, so zsh starts without one.
+  run_omaccy_zsh() {
+    : > "$zsh_run/log"
+    env -u STARSHIP_CONFIG HOME="$zsh_run" OMACCY_DIR="$zsh_state" HOMEBREW_PREFIX="$zsh_run/brew" \
+      ZSH_TEST_LOG="$zsh_run/log" PATH="$zsh_run/bin:/usr/bin:/bin" zsh -f -i -c "$1" </dev/null 2>&1
+  }
+
+  output="$(run_omaccy_zsh 'source $OMACCY_DIR/config/zsh/omaccy.zsh
+    print -r -- "config=$STARSHIP_CONFIG prompt=$PROMPT"
+    print catppuccin-latte > $OMACCY_DIR/theme
+    _omaccy_starship_theme
+    print -r -- "after=$STARSHIP_CONFIG"')"
+  [[ "$output" == *"config=$zsh_state/cache/starship/catppuccin.toml prompt=starship-prompt"* ]] ||
+    fail "omaccy.zsh did not start Starship on the theme's config: $output"
+  grep -qx 'accent = "#89b4fa"' "$zsh_state/cache/starship/catppuccin.toml" ||
+    fail "the Starship config did not take the theme's accent"
+  grep -qx 'palette = "omaccy"' "$zsh_state/cache/starship/catppuccin.toml" ||
+    fail "the Starship config lost the template above its palette"
+  [[ "$(grep -c '^\[palettes.omaccy\]' "$zsh_state/cache/starship/catppuccin.toml")" == 1 ]] ||
+    fail "the Starship config holds its palette table more than once"
+  [[ "$output" == *"after=$zsh_state/cache/starship/catppuccin-latte.toml"* ]] ||
+    fail "the prompt did not follow a theme switch: $output"
+  grep -qx 'accent = "#1e66f5"' "$zsh_state/cache/starship/catppuccin-latte.toml" ||
+    fail "the switched Starship config did not take the new theme's accent"
+  if python3 -c 'import tomllib' >/dev/null 2>&1; then
+    python3 -c 'import sys, tomllib; [tomllib.load(open(f, "rb")) for f in sys.argv[1:]]' \
+      "$zsh_repo/config/zsh/starship.toml" "$zsh_state/cache/starship/catppuccin-latte.toml" ||
+      fail "a Starship config is not valid TOML"
+    # The icons are private-use characters, which vanish without a trace when
+    # the file passes through a tool that drops them -- which once left the
+    # Apple logo, the prompt character and the branch icon as blank spaces.
+    python3 - "$zsh_repo/config/zsh/starship.toml" <<'PY' || fail "a Starship prompt icon is blank"
+import sys, tomllib
+d = tomllib.load(open(sys.argv[1], "rb"))
+icons = {
+    "os.symbols.Macos": d["os"]["symbols"]["Macos"],
+    "character.success_symbol": d["character"]["success_symbol"],
+    "character.error_symbol": d["character"]["error_symbol"],
+    "git_branch.symbol": d["git_branch"]["symbol"],
+    "directory.truncation_symbol": d["directory"]["truncation_symbol"],
+    "cmd_duration.format": d["cmd_duration"]["format"],
+    "jobs.symbol": d["jobs"]["symbol"],
+}
+for module in ("nodejs", "python", "rust", "golang", "swift", "ruby", "java"):
+    icons[module + ".symbol"] = d[module]["symbol"]
+blank = [key for key, value in icons.items() if not any(ord(c) >= 0xE000 for c in value)]
+if blank:
+    sys.exit("no icon in: " + ", ".join(blank))
+PY
+  fi
+  [[ "$(cat "$zsh_run/log")" == $'autosuggestions\nhighlighting' ]] ||
+    fail "omaccy.zsh did not load both plugins, highlighting last"
+
+  output="$(run_omaccy_zsh 'PROMPT="mine> "; _zsh_highlight() { :; }
+    source $OMACCY_DIR/config/zsh/omaccy.zsh
+    print -r -- "config=${STARSHIP_CONFIG:-none} prompt=$PROMPT"')"
+  [[ "$output" == *"config=none prompt=mine> "* ]] || fail "omaccy.zsh replaced a prompt of the user's own: $output"
+  ! grep -q highlighting "$zsh_run/log" || fail "omaccy.zsh loaded syntax highlighting a second time"
+
+  # oh-my-posh leaves PROMPT stock until its precmd hook runs, so the hook is
+  # what gives it away.
+  output="$(run_omaccy_zsh '_omp_precmd() { :; }; precmd_functions+=(_omp_precmd)
+    source $OMACCY_DIR/config/zsh/omaccy.zsh
+    print -r -- "config=${STARSHIP_CONFIG:-none}"')"
+  [[ "$output" == *"config=none"* ]] || fail "omaccy.zsh started Starship over oh-my-posh: $output"
+
+  # Choosing Omaccy's prompt in setup takes the other prompt's hooks out and
+  # leaves everyone else's alone.
+  printf 'starship\n' > "$zsh_state/zsh-prompt"
+  output="$(run_omaccy_zsh 'PROMPT="mine> "; _omp_precmd() { :; }; _omp_preexec() { :; }; my_hook() { :; }
+    precmd_functions+=(_omp_precmd my_hook); preexec_functions+=(_omp_preexec)
+    source $OMACCY_DIR/config/zsh/omaccy.zsh
+    print -r -- "prompt=$PROMPT precmd=$precmd_functions preexec=${preexec_functions:-none}"')"
+  rm "$zsh_state/zsh-prompt"
+  [[ "$output" == *"prompt=starship-prompt"* ]] || fail "choosing Omaccy's prompt did not replace the user's: $output"
+  [[ "$output" == *"precmd=my_hook _omaccy_starship_theme"* && "$output" == *"preexec=none"* ]] ||
+    fail "choosing Omaccy's prompt did not take out only the other prompt's hooks: $output"
+fi
+
 # The retired master/stack placement. HOME is overridden inside a subshell
 # because the function reads the real ~/.config path the installer wrote to;
 # `set -e` still aborts the run when the subshell fails.
@@ -1122,4 +1350,4 @@ LUA
     fail "Neovim did not follow the theme"
 fi
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, directory configs, the Neovim opt-in, master-stack retirement, workspace layout modes, the calendar popup, the Apple menu, the front-app menus, Neovim theme following, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, directory configs, the Neovim opt-in, master-stack retirement, workspace layout modes, the calendar popup, the Apple menu, the front-app menus, Neovim theme following, the zsh setup, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'

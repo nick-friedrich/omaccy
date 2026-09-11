@@ -19,6 +19,7 @@
 | `scripts/lib/editor-settings.sh` | The VS Code / Cursor `workbench.colorTheme` rewrite, kept apart so the Swift half can be tested against it |
 | `scripts/lib/herdr-settings.sh` | The herdr `[theme]` name rewrite, kept apart for the same reason |
 | `scripts/lib/neovim.sh` | The optional Neovim question, its dependencies, the AstroNvim config link, and removal |
+| `scripts/lib/zsh.sh` | The optional zsh question, its tools, the marked `~/.zshrc` block, and removal |
 | `scripts/lib/macos.sh` | Menu-bar and Mission Control settings with paired restoration functions |
 | `scripts/lib/hyperkey.sh` | Fetches the signed, notarized release build by default (local Swift build under `OMACCY_HYPERKEY_BUILD_LOCAL=1`), plus launch |
 | `tests/scripts-smoke.sh` | Isolated shell lifecycle checks |
@@ -112,6 +113,38 @@
   file in it is still an untouched default; otherwise it is kept whole as
   `backups/omaccy-nvim.<timestamp>`, a name `restore_target` never matches.
   Plugin data under `~/.local/share/nvim` belongs to Neovim and is left alone.
+- `~/.omaccy/zsh` holds the answer to the zsh question, which is only asked
+  when Directory Services reports zsh as the login shell; Omaccy never runs
+  `chsh`. `~/.zshrc` is never replaced: one block between `# >>> omaccy >>>`
+  and `# <<< omaccy <<<` is appended, sourcing
+  `~/.omaccy/config/zsh/omaccy.zsh` (a canonical config, so edits survive
+  updates), and uninstall removes that block and the blank line before it, so
+  a file that ended in a newline comes back byte for byte. A linked `.zshrc`
+  is written through only after the user says yes (`~/.omaccy/zshrc-link`
+  holds `write` or `print`), since that changes a file in their dotfiles
+  repository; uninstall then removes the block through the link too, and
+  otherwise the lines are printed. A dangling link is never written to. A
+  `.zshrc` Omaccy had to create is deleted again once only the block was in
+  it (`~/.omaccy/zshrc-created`). The first edit copies the original to
+  `backups/omaccy-zshrc.original`. The link and prompt questions follow the zsh
+  yes, and are also asked on later runs by someone who said yes before they
+  existed; `OMACCY_ASSUME_YES` answers none of them. `omaccy.zsh` runs last and
+  steps aside for whatever the user's config set up. Each plugin checks for a
+  function it defines before loading. Starship only replaces zsh's stock
+  prompt (`%n@%m %1~ %# ` from macOS's `/etc/zshrc`, or bare zsh's `%m%# `)
+  when no prompt framework's redraw hook is registered (`_omp_*`, `_p9k_*`,
+  `prompt_*_precmd`, `_powerline*`): oh-my-posh 29 sets PS1 from its precmd
+  hook, not when it loads, so PROMPT alone still looks stock. Setup finds a
+  prompt in `.zshrc` by name, without running the file, and asks whether
+  Omaccy's should take over (`~/.omaccy/zsh-prompt`: `starship` or `own`); with
+  `starship`, `omaccy.zsh` removes those hooks from `precmd_functions` and
+  `preexec_functions` before starting Starship, since they would otherwise
+  redraw their prompt over it before every command. The prompt follows
+  the theme without `theme.sh` or the launcher knowing about it: a precmd hook
+  points `STARSHIP_CONFIG` at `~/.omaccy/cache/starship/<theme>.toml`, the
+  template with its trailing `[palettes.omaccy]` table replaced by the theme
+  file's ACCENT, TEXT, MUTED, OK and DANGER, written when missing or older
+  than the template or theme file.
 - Dependency markers distinguish packages installed by Omaccy from packages
   already present. `*.original` files preserve macOS preference values.
 - `~/.omaccy/hyperkey-signing-mode` records whether the installed app was

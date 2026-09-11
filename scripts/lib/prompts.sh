@@ -60,6 +60,7 @@ confirm_setup() {
   echo "    enable window grouping, and restart the Dock and menu-bar services."
   echo "  - Possibly require Accessibility access again if the app binary changes."
   echo "  - Ask once, separately, whether to set up Neovim with Omaccy's AstroNvim config."
+  echo "  - If your login shell is zsh, ask once whether to add Omaccy's zsh setup to ~/.zshrc."
   echo "Config backups: $BAK_DIR (timestamped originals, restored on uninstall)."
   echo "Editable Omaccy configs: $CONF_DIR (customizations are preserved during updates)."
   printf 'To uninstall later: bash %q\n' "$REPO_ROOT/scripts/uninstall.sh"

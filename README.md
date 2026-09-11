@@ -11,6 +11,7 @@ best-of-breed tools with a thin glue layer of configs and one native app.
 | **Ghostty** | Default terminal, themed alongside the bar and the palette |
 | **herdr** | Persistent multiplexer that keeps terminal coding agents alive |
 | **Neovim** (optional) | AstroNvim-based editor config; setup asks before touching `~/.config/nvim` |
+| **zsh** (optional) | Starship prompt in the theme's colors, autosuggestions, syntax highlighting, fzf and zoxide, added to `~/.zshrc` without replacing it |
 
 Everything is installed from a checkout of this repository, with a clean
 uninstall that restores the configs and macOS settings it displaced.
@@ -48,6 +49,16 @@ the system changes before that confirmation. It then:
   Your current config — a folder or a link into your dotfiles — is moved to
   `~/.omaccy/backups/` and restored on uninstall. The answer is kept in
   `~/.omaccy/neovim`; delete it to be asked again.
+- asks once more, when your login shell is zsh, whether to set up **zsh**: a
+  Starship prompt in the theme's colors, zsh-autosuggestions,
+  zsh-syntax-highlighting, fzf and zoxide, loaded from a marked block at the
+  end of `~/.zshrc`. A plugin your `.zshrc` already loads is left to it. If
+  it sets up its own prompt (oh-my-posh, Powerlevel10k, an oh-my-zsh theme),
+  setup asks whether to use Omaccy's Starship instead; your `.zshrc` is not
+  changed either way. If `.zshrc` is a link into your dotfiles, setup asks
+  before adding the lines there, and otherwise prints them for you to add.
+  Uninstall removes the block, and the answers are kept in `~/.omaccy/zsh`,
+  `zsh-prompt` and `zshrc-link`. Omaccy never changes your login shell.
 
 macOS will ask to grant **Accessibility** access to Omaccy Hyperkey on first
 launch; the keyboard engine does not work until you approve it.

@@ -1,0 +1,155 @@
+# Omaccy's Starship prompt. Its colors follow the Omaccy theme: before each
+# prompt, omaccy.zsh points Starship at a copy of this file whose
+# [palettes.omaccy] table holds the current theme's colors, so a theme switch
+# shows on the next prompt in every open terminal. Colors named after terminal
+# colors (white, purple, bright-blue, yellow) follow the theme too, through
+# Ghostty's. Edit freely -- updates keep an edited copy -- but keep
+# [palettes.omaccy] as the last table, since everything from it on is replaced
+# with the theme's colors.
+#
+# The icons are Nerd Font symbols, which Ghostty draws on its own; a terminal
+# without them shows boxes in their place. They are written as \u escapes
+# rather than as the characters themselves: they are private-use characters,
+# which most editors show as nothing and some tools drop without a trace --
+# which once left the Apple logo, the prompt character and the branch icon as
+# blank spaces here.
+
+add_newline = false
+palette = "omaccy"
+
+# The Apple logo, user@host, the folder and its git branch and status, then
+# the prompt character: one line, laid out like oh-my-posh's Catppuccin theme.
+format = """
+$os\
+$username\
+$hostname\
+$directory\
+$git_branch\
+$git_state\
+$git_status\
+$character"""
+
+# How long the last command took, background jobs, and the language versions
+# of the project you are in, on the right where they do not push the command
+# you type around.
+right_format = """
+$cmd_duration\
+$jobs\
+$nodejs\
+$python\
+$rust\
+$golang\
+$swift\
+$ruby\
+$java"""
+
+# Light grey, like oh-my-posh's Catppuccin theme: the terminal's white, which
+# is #a6adc8 in Ghostty's Catppuccin Mocha.
+[os]
+disabled = false
+format = "[$symbol]($style)"
+style = "white"
+
+[os.symbols]
+Macos = "\uf179 "
+
+[username]
+show_always = true
+format = "[$user]($style)"
+style_user = "accent"
+style_root = "bold danger"
+
+[hostname]
+ssh_only = false
+trim_at = ""
+format = "[@$hostname]($style) "
+style = "accent"
+
+# The last folder only, with a folder icon standing in for the rest, like
+# oh-my-posh's agnoster_short. Starship counts ~ as a folder and drops it when
+# it shortens, so ~/dev/emzero reads as ..(folder icon)../emzero rather than
+# with ~/ in front; putting ~/ into the symbol would also claim
+# /opt/homebrew/bin is in your home. Set truncation_length = 2 to keep one
+# more folder.
+[directory]
+format = "[$path]($style)[$read_only]($read_only_style) "
+style = "purple"
+read_only = " \U000f033e"
+read_only_style = "danger"
+truncation_length = 1
+truncation_symbol = "..\ue5fe../"
+truncate_to_repo = false
+
+# No theme has oh-my-posh's lavender; the terminal's bright blue is the
+# nearest, and stays apart from the accent blue of user@host.
+[git_branch]
+format = "[$symbol$branch]($style) "
+symbol = "\ue725 "
+style = "bright-blue"
+
+[git_state]
+style = "bold yellow"
+
+[git_status]
+format = "([$all_status$ahead_behind]($style) )"
+style = "yellow"
+conflicted = "=${count}"
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇡${ahead_count}⇣${behind_count}"
+untracked = "?${count}"
+stashed = "*${count}"
+modified = "!${count}"
+staged = "+${count}"
+renamed = "»${count}"
+deleted = "✘${count}"
+
+[character]
+success_symbol = "[\uf105](white)"
+error_symbol = "[\uf105](danger)"
+
+[cmd_duration]
+min_time = 2000
+format = "[\uf252 $duration]($style) "
+style = "muted"
+
+[jobs]
+format = "[$symbol$number]($style) "
+symbol = "\uf013 "
+style = "accent"
+
+[nodejs]
+format = "[$symbol($version)]($style) "
+symbol = "\ue718 "
+
+[python]
+format = "[$symbol($version)]($style) "
+symbol = "\ue235 "
+
+[rust]
+format = "[$symbol($version)]($style) "
+symbol = "\U000f1617 "
+
+[golang]
+format = "[$symbol($version)]($style) "
+symbol = "\ue627 "
+
+[swift]
+format = "[$symbol($version)]($style) "
+symbol = "\ue755 "
+
+[ruby]
+format = "[$symbol($version)]($style) "
+symbol = "\ue791 "
+
+[java]
+format = "[$symbol($version)]($style) "
+symbol = "\ue738 "
+
+# Replaced with the theme's colors; these are Catppuccin Mocha, the default.
+[palettes.omaccy]
+accent = "#89b4fa"
+text = "#cdd6f4"
+muted = "#7f849c"
+ok = "#a6e3a1"
+danger = "#f38ba8"
