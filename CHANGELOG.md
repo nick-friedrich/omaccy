@@ -50,6 +50,14 @@ Dated when the `v0.4.3` tag is cut.
   copy in the backups directory. `OMACCY_ASSUME_YES=1` does not answer this
   question for you.
 
+### Changed
+
+- Arrowing through themes or fonts in the launcher's Settings now waits 1.5
+  seconds on a row before applying it, instead of a fraction of a second, so
+  stepping down the list no longer flickers Ghostty, SketchyBar, Neovim and
+  herdr through every theme on the way. Clicking a row or pressing Enter
+  still applies it at once.
+
 ## [0.4.2] - 2026-09-11
 
 ### Added

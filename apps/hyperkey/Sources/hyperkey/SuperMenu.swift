@@ -886,10 +886,14 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
 
     /// Live-previews a theme/font as arrow-key browsing passes over it —
     /// clicking a row already applies immediately via activate(row:), so
-    /// this makes keyboard navigation match. Debounced so holding the
-    /// arrow key down (or arrowing straight through the list) doesn't
-    /// rebuild the palette and reload SketchyBar on every repeat tick;
-    /// only the row the user actually settles on gets applied.
+    /// this makes keyboard navigation match. Debounced so arrowing through
+    /// the list doesn't restyle everything on every step; only the row the
+    /// user settles on gets applied. A theme reaches Ghostty, SketchyBar,
+    /// Neovim, herdr and the editors, so the wait is long enough to read a
+    /// row by, not just to swallow key repeat — at 0.18s, stepping down the
+    /// list at reading pace flickered every one of them.
+    private static let previewDelay: TimeInterval = 1.5
+
     private func previewAppearance(for entry: MenuEntry) {
         let apply: () -> Void
         if let themeName = entry.theme, themeName != OmaccyAppearance.currentThemeName {
@@ -901,7 +905,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
         previewGeneration += 1
         let generation = previewGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.previewDelay) { [weak self] in
             guard let self, self.previewGeneration == generation else { return }
             apply()
         }
