@@ -84,6 +84,20 @@ struct OmaccyTheme {
         stringAssignment(named: "HERDR_THEME", from: path)
     }
 
+    /// The accent and panel background written under herdr's
+    /// `[theme.custom]`, for palettes that sit on its `terminal` theme.
+    static func herdrAccent(named name: String) -> String? {
+        stringAssignment(named: "HERDR_ACCENT", from: themeFile(named: name))
+    }
+
+    static func herdrPanelBackground(named name: String) -> String? {
+        herdrPanelBackground(fromFile: themeFile(named: name))
+    }
+
+    static func herdrPanelBackground(fromFile path: String) -> String? {
+        stringAssignment(named: "HERDR_PANEL_BG", from: path)
+    }
+
     /// "light" or "dark": the palette's own nature, which the macOS appearance
     /// switch follows.
     static func appearance(named name: String) -> String? {

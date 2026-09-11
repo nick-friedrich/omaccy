@@ -1070,14 +1070,25 @@ done
 # herdr follows the theme through the name in its config.toml, so every shipped
 # theme has to name one herdr actually has. `herdr config check` reads the
 # config under $HOME, so a scratch home keeps the real one out of it.
+# herdr's terminal theme draws the active tab's number in ANSI dark gray on the
+# accent unless panel_bg is set -- unreadable on Everforest and GitHub Dark --
+# so a palette on it has to name its panel color.
+source "$nvim_repo/scripts/lib/herdr-settings.sh"
+herdr_config="$test_dir/herdr-home/.config/herdr/config.toml"
+mkdir -p "$(dirname "$herdr_config")"
 for theme_file in "$nvim_repo"/config/sketchybar/themes/*.sh; do
   herdr_theme="$(sed -n 's/^HERDR_THEME="\([^"]*\)".*/\1/p' "$theme_file")"
+  herdr_accent="$(sed -n 's/^HERDR_ACCENT="\([^"]*\)".*/\1/p' "$theme_file")"
+  herdr_panel_bg="$(sed -n 's/^HERDR_PANEL_BG="\([^"]*\)".*/\1/p' "$theme_file")"
   [[ -n "$herdr_theme" ]] || fail "$(basename "$theme_file") names no herdr theme"
+  [[ "$herdr_theme" != terminal || -n "$herdr_panel_bg" ]] ||
+    fail "$(basename "$theme_file") puts herdr on its terminal theme without HERDR_PANEL_BG"
   if command -v herdr >/dev/null 2>&1; then
-    mkdir -p "$test_dir/herdr-home/.config/herdr"
-    printf '[theme]\nname = "%s"\n' "$herdr_theme" > "$test_dir/herdr-home/.config/herdr/config.toml"
+    : > "$herdr_config"
+    herdr_config_with_theme "$herdr_config" "$herdr_theme" "$herdr_accent" "$herdr_panel_bg" > "$herdr_config.new"
+    mv "$herdr_config.new" "$herdr_config"
     [[ "$(HOME="$test_dir/herdr-home" herdr config check 2>&1)" == "config: ok" ]] ||
-      fail "herdr has no built-in theme named $herdr_theme ($(basename "$theme_file"))"
+      fail "herdr rejects the config written for $(basename "$theme_file")"
   fi
 done
 if command -v nvim >/dev/null 2>&1; then

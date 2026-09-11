@@ -31,3 +31,8 @@ NVIM_COLORSCHEME="github_dark_default"
 # herdr: the built-in theme its UI uses for this palette. "terminal" takes
 # the terminal's own colors, for palettes herdr has no theme of its own for.
 HERDR_THEME="terminal"
+# herdr's terminal theme leaves its tab bar transparent and draws the active
+# tab's number in dark gray on the accent, so set the accent and the panel
+# color -- Ghostty's own background -- under [theme.custom].
+HERDR_ACCENT="#2f81f7"
+HERDR_PANEL_BG="#0d1117"

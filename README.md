@@ -186,10 +186,13 @@ If you set up Neovim, it follows too: each theme names a matching colorscheme
 you switch — no restart. All twelve colorschemes download the first time nvim
 starts, so switching never waits on one.
 
-herdr follows as well. Each theme names one of herdr's built-in themes
-(Everforest and GitHub Dark, which herdr has none of, use its `terminal` theme,
-drawn in Ghostty's colors), and a switch rewrites just the theme name in
-`~/.config/herdr/config.toml` and reloads the running session, agents and all.
+herdr follows as well. Each theme names one of herdr's built-in themes, and a
+switch rewrites just the theme name in `~/.config/herdr/config.toml` and
+reloads the running session, agents and all. Everforest and GitHub Dark, which
+herdr has no theme for, use its `terminal` theme, drawn in Ghostty's colors,
+plus an `accent` and `panel_bg` under `[theme.custom]` so the tab bar stays
+readable. Those lines end in `# omaccy` and are removed again when you switch
+to another theme; an `accent` or `panel_bg` you set yourself wins over them.
 Your original config is copied to `~/.omaccy/backups/herdr-config.toml` first.
 With herdr's own `auto_switch` on, herdr picks its light or dark theme itself
 instead.

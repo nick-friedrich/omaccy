@@ -279,7 +279,16 @@ colorscheme; a theme naming a colorscheme none of them provides gets
 
 `HERDR_THEME` names one of herdr's built-in themes (`herdr config check` lists
 them); Everforest and GitHub Dark have none, so they use herdr's `terminal`
-theme, which draws with the colors Ghostty already follows. herdr's
+theme, which draws with the colors Ghostty already follows. That theme leaves
+`panel_bg` at `Reset`, and herdr's `panel_contrast_fg` then draws the active
+tab's number in `surface_dim` -- ANSI dark gray -- on the accent, which is
+unreadable on both palettes. So a theme on `terminal` also names
+`HERDR_PANEL_BG` (the terminal's own background, making the number dark on
+the accent the way every built-in theme draws it) and `HERDR_ACCENT`, written
+under `[theme.custom]`. Each of those lines ends in `# omaccy`: the rewrite
+replaces or removes marked lines only, and an unmarked `accent` or `panel_bg`
+is the user's own and suppresses Omaccy's, since TOML allows one of each. The
+smoke checks require `HERDR_PANEL_BG` of any theme on `terminal`. herdr's
 `~/.config/herdr/config.toml` is the user's file, written by herdr's own
 onboarding, so both `theme.sh` and `OmaccyAppearance` rewrite only `name` under
 `[theme]`, keep the original once in `~/.omaccy/backups/herdr-config.toml`,

@@ -167,15 +167,19 @@ update_editor_themes() {
 # socket without disturbing the agents in it, and fails fast when there is no
 # session. Mirrors updateHerdrTheme in the launcher's Appearance.swift.
 update_herdr_theme() {
-  local name="$1" theme_file herdr_theme current updated
+  local name="$1" theme_file herdr_theme herdr_accent herdr_panel_bg current updated
   [[ -f "$HERDR_CONFIG" ]] || return 0
   theme_file="$(theme_file_path "$name")"
   [[ -f "$theme_file" ]] || return 0
   herdr_theme="$(source "$theme_file" 2>/dev/null; printf '%s' "${HERDR_THEME:-}")"
   [[ -n "$herdr_theme" ]] || return 0
+  # Palettes on herdr's terminal theme also set its accent and panel color;
+  # reset first so a value already in the environment is never inherited.
+  herdr_accent="$(HERDR_ACCENT=""; source "$theme_file" 2>/dev/null; printf '%s' "$HERDR_ACCENT")"
+  herdr_panel_bg="$(HERDR_PANEL_BG=""; source "$theme_file" 2>/dev/null; printf '%s' "$HERDR_PANEL_BG")"
   # The trailing x keeps command substitution from eating final newlines.
   current="$(cat "$HERDR_CONFIG"; printf x)"
-  updated="$(herdr_config_with_theme "$HERDR_CONFIG" "$herdr_theme"; printf x)" || return 0
+  updated="$(herdr_config_with_theme "$HERDR_CONFIG" "$herdr_theme" "$herdr_accent" "$herdr_panel_bg"; printf x)" || return 0
   [[ "$updated" != "$current" ]] || return 0
   if [[ ! -f "$BACKUP_DIR/herdr-config.toml" ]]; then
     mkdir -p "$BACKUP_DIR"

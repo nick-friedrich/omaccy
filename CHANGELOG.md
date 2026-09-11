@@ -27,7 +27,11 @@ Dated when the `v0.4.3` tag is cut.
   without touching its agents; the rest of the file is left as it was, and
   the original is copied to `~/.omaccy/backups/herdr-config.toml` the first
   time. Everforest and GitHub Dark use herdr's `terminal` theme, drawn in
-  Ghostty's colors, since herdr has no theme of its own for them. If you have
+  Ghostty's colors, since herdr has no theme of its own for them; for those
+  two Omaccy also sets `accent` and `panel_bg` under `[theme.custom]` so the
+  active tab's number stays readable. Those lines end in `# omaccy` and are
+  removed when you switch to another theme, and an `accent` or `panel_bg` you
+  set yourself is left alone and wins. If you have
   herdr's `auto_switch` on, herdr keeps choosing between its light and dark
   themes itself.
 - Click the app name in the menu bar for that app's menus — File, Edit, View

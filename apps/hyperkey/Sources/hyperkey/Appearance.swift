@@ -162,7 +162,9 @@ enum OmaccyAppearance {
         guard let herdrTheme = OmaccyTheme.herdrThemeName(named: name) else { return }
         let path = ((NSHomeDirectory() + "/.config/herdr/config.toml") as NSString).resolvingSymlinksInPath
         guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { return }
-        let updated = herdrConfig(raw, settingTheme: herdrTheme)
+        let updated = herdrConfig(raw, settingTheme: herdrTheme,
+                                  accent: OmaccyTheme.herdrAccent(named: name),
+                                  panelBackground: OmaccyTheme.herdrPanelBackground(named: name))
         guard updated != raw else { return }
         let backup = stateDirectory + "/backups/herdr-config.toml"
         if !FileManager.default.fileExists(atPath: backup) {
@@ -193,52 +195,122 @@ enum OmaccyAppearance {
     /// `settings(_:settingTheme:)` — reserializing TOML would drop the user's
     /// comments — and implemented in awk too, in scripts/lib/herdr-settings.sh,
     /// which HerdrConfigTests holds to the same bytes.
-    static func herdrConfig(_ contents: String, settingTheme theme: String) -> String {
+    ///
+    /// `accent` and `panelBackground` go under `[theme.custom]`; nil or empty
+    /// means none. Each color line Omaccy writes is marked `# omaccy`, so
+    /// those lines — and only those — are replaced or removed on the next
+    /// switch. An unmarked accent or panel_bg is the user's own and wins:
+    /// Omaccy adds none of its own beside it.
+    static func herdrConfig(_ contents: String, settingTheme theme: String,
+                            accent: String? = nil, panelBackground: String? = nil) -> String {
         var lines = contents.components(separatedBy: "\n")
         if lines.last == "" { lines.removeLast() }
-        let entry = "name = \"\(theme)\""
-        var inTheme = false
+        let nameEntry = "name = \"\(theme)\""
+        let wanted: [(key: String, value: String?)] = [
+            ("accent", accent?.isEmpty == false ? accent : nil),
+            ("panel_bg", panelBackground?.isEmpty == false ? panelBackground : nil)
+        ]
+        func customEntry(_ key: String, _ value: String) -> String { "\(key) = \"\(value)\" # omaccy" }
+
+        // Which table each line is in, and which colors the user set themselves.
+        var table = ""
+        var tables: [String] = []
         var themeHeader: Int?
-        var replaced = false
+        var customHeader: Int?
+        var owned = Set<String>()
         for (index, line) in lines.enumerated() {
             let code = line.drop(while: isBlank)
             if code.hasPrefix("[") {
-                inTheme = isHerdrThemeHeader(code)
-                if inTheme && themeHeader == nil { themeHeader = index }
-            } else if inTheme && !replaced && isHerdrNameAssignment(code) {
-                lines[index] = String(line.prefix(while: isBlank)) + entry + carriageReturn(of: line)
+                table = herdrTable(code)
+                tables.append("header")
+                if table == "theme" && themeHeader == nil { themeHeader = index }
+                if table == "theme.custom" && customHeader == nil { customHeader = index }
+                continue
+            }
+            tables.append(table)
+            if table == "theme.custom", let key = herdrCustomKey(code), !isOmaccyMarked(line) { owned.insert(key) }
+        }
+
+        var replaced = false
+        var written = Set<String>()
+        var dropped = Set<Int>()
+        func needed(_ key: String) -> String? {
+            guard let value = wanted.first(where: { $0.key == key })?.value,
+                  !owned.contains(key), !written.contains(key) else { return nil }
+            return value
+        }
+        for (index, line) in lines.enumerated() {
+            let code = line.drop(while: isBlank)
+            let indent = String(line.prefix(while: isBlank))
+            if tables[index] == "theme" && !replaced && isHerdrNameAssignment(code) {
+                lines[index] = indent + nameEntry + carriageReturn(of: line)
                 replaced = true
+            } else if tables[index] == "theme.custom", let key = herdrCustomKey(code), isOmaccyMarked(line) {
+                if let value = needed(key) {
+                    lines[index] = indent + customEntry(key, value) + carriageReturn(of: line)
+                    written.insert(key)
+                } else {
+                    dropped.insert(index)
+                }
             }
         }
-        if let themeHeader {
-            if !replaced { lines.insert(entry, at: themeHeader + 1) }
-        } else {
-            if !lines.isEmpty { lines.append("") }
-            lines.append(contentsOf: ["[theme]", entry])
+
+        let missing = wanted.compactMap { item in needed(item.key).map { customEntry(item.key, $0) } }
+        var output: [String] = []
+        for (index, line) in lines.enumerated() where !dropped.contains(index) {
+            output.append(line)
+            if index == themeHeader && !replaced { output.append(nameEntry) }
+            if index == customHeader { output.append(contentsOf: missing) }
         }
-        return lines.joined(separator: "\n") + "\n"
+        if themeHeader == nil {
+            if !lines.isEmpty { output.append("") }
+            output.append(contentsOf: ["[theme]", nameEntry])
+        }
+        if customHeader == nil && !missing.isEmpty {
+            output.append(contentsOf: ["", "[theme.custom]"] + missing)
+        }
+        return output.joined(separator: "\n") + "\n"
     }
 
     private static func isBlank(_ character: Character) -> Bool {
         character == " " || character == "\t"
     }
 
-    /// `[theme]`, optionally padded and followed by a comment — not
-    /// `[theme.custom]`, whose own `name` is something else.
-    private static func isHerdrThemeHeader(_ code: Substring) -> Bool {
+    /// "theme" for `[theme]` and "theme.custom" for `[theme.custom]`, each
+    /// optionally padded and followed by a comment; "other" for any other
+    /// header, `[theme.custom.dark]` included.
+    private static func herdrTable(_ code: Substring) -> String {
         var rest = code.dropFirst().drop(while: isBlank)
-        guard rest.hasPrefix("theme") else { return false }
-        rest = rest.dropFirst("theme".count).drop(while: isBlank)
-        guard rest.hasPrefix("]") else { return false }
+        let name: String
+        if rest.hasPrefix("theme.custom") {
+            name = "theme.custom"
+        } else if rest.hasPrefix("theme") {
+            name = "theme"
+        } else {
+            return "other"
+        }
+        rest = rest.dropFirst(name.count).drop(while: isBlank)
+        guard rest.hasPrefix("]") else { return "other" }
         rest = rest.dropFirst().drop(while: isBlank)
-        if rest.hasPrefix("#") { return true }
+        if rest.hasPrefix("#") { return name }
         if rest.hasSuffix("\r") { rest = rest.dropLast() }
-        return rest.isEmpty
+        return rest.isEmpty ? name : "other"
     }
 
     private static func isHerdrNameAssignment(_ code: Substring) -> Bool {
         guard code.hasPrefix("name") else { return false }
         return code.dropFirst("name".count).drop(while: isBlank).hasPrefix("=")
+    }
+
+    private static func herdrCustomKey(_ code: Substring) -> String? {
+        for key in ["accent", "panel_bg"] where code.hasPrefix(key) {
+            if code.dropFirst(key.count).drop(while: isBlank).hasPrefix("=") { return key }
+        }
+        return nil
+    }
+
+    private static func isOmaccyMarked(_ line: String) -> Bool {
+        (line.hasSuffix("\r") ? String(line.dropLast()) : line).hasSuffix("# omaccy")
     }
 
     private struct Editor {
