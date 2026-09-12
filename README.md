@@ -251,6 +251,43 @@ found so uninstall can put that back. A theme file that does not declare
 `APPEARANCE` — a custom palette, or one installed before this existed — leaves
 macOS alone rather than guessing.
 
+### herdr spaces and tabs
+
+Omaccy installs herdr and writes its theme, but `~/.config/herdr/config.toml`
+is your file: its keybindings are herdr's own defaults, and Omaccy sets none of
+them. Out of the box the prefix is `Ctrl+B`, and `prefix+w` opens the space
+picker, `prefix+g` navigate mode, `prefix+1…9` a tab by number, and
+`prefix+p` / `prefix+n` the tab before or after. Stepping between spaces has no
+binding at all — the picker and navigate mode are the only ways there.
+
+For direct chords that skip the prefix, add to `[keys]`:
+
+```toml
+[keys]
+previous_workspace = "alt+up"
+next_workspace = "alt+down"
+switch_workspace = "prefix+shift+1..9"
+previous_tab = "ctrl+shift+left"
+next_tab = "ctrl+shift+right"
+```
+
+`herdr server reload-config` applies them to the running session, agents and
+all. Spaces sit on `⌥↑` / `⌥↓` to match the sidebar they are listed in, and
+tabs on a horizontal chord to match the tab bar; the config still says
+`workspace` where herdr's UI now says space.
+
+Two chords are deliberately not used. `⌥←` / `⌥→` is word-jump in zsh and in
+agent prompts, which is why tabs sit on `⌃⇧←` / `⌃⇧→` instead — a chord no
+shell claims. And `alt+<letter>` or `alt+<digit>` never arrives at all unless
+your keyboard layout is U.S. Standard or U.S. International: Ghostty leaves
+`macos-option-as-alt` off for every other layout, so on a German one `⌥L` stays
+`@` and `⌥E` stays `€`. Option with an arrow produces no printable character,
+so it reaches herdr as Alt whatever the layout — which is why arrows are the
+only `⌥` chords suggested here.
+
+`herdr config check` validates the file before you reload it, and
+`herdr --default-config` prints every action that can be bound.
+
 ### Clipboard history
 
 `Hyper+V` opens what you have copied, newest first. Return puts an entry back
