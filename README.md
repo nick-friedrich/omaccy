@@ -60,7 +60,9 @@ the system changes before that confirmation. It then:
   changed either way. If `.zshrc` is a link into your dotfiles, setup asks
   before adding the lines there, and otherwise prints them for you to add.
   Uninstall removes the block, and the answers are kept in `~/.omaccy/zsh`,
-  `zsh-prompt` and `zshrc-link`. Omaccy never changes your login shell.
+  `zsh-prompt` and `zshrc-link`. `bash scripts/zsh.sh off` takes the block out
+  later — handing your shell back to your own prompt — and `on` puts it back;
+  updates follow whichever you chose. Omaccy never changes your login shell.
 
 macOS will ask to grant **Accessibility** access to Omaccy Hyperkey on first
 launch; the keyboard engine does not work until you approve it.

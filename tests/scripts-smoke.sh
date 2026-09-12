@@ -606,6 +606,36 @@ fi
     zsh -n "$HOME/.zshrc" || fail "~/.zshrc with Omaccy's block does not parse"
     zsh -n "$CONF_DIR/zsh/omaccy.zsh" || fail "omaccy.zsh does not parse"
   fi
+  # Turning the setup off afterwards takes the block back out, keeps the no,
+  # and an update leaves ~/.zshrc alone rather than adding it again.
+  set_zsh_setup off >/dev/null
+  cmp -s "$HOME/.zshrc" "$test_dir/zshrc-before" || fail "turning the zsh setup off did not put ~/.zshrc back"
+  [[ "$(cat "$OMACCY_DIR/zsh")" == off ]] || fail "turning the zsh setup off was not remembered"
+  [[ -z "$(decide_zsh_setup </dev/null)" ]] || fail "a zsh setup turned off asked again"
+  install_zsh_setup >/dev/null
+  cmp -s "$HOME/.zshrc" "$test_dir/zshrc-before" || fail "an update added the block back after the setup was turned off"
+
+  # An answer edited to off by hand, with the block still there, is acted on.
+  set_zsh_setup on >/dev/null
+  grep -qxF '# >>> omaccy >>>' "$HOME/.zshrc" || fail "turning the zsh setup back on did not add the block"
+  echo off > "$OMACCY_DIR/zsh"
+  install_zsh_setup >/dev/null
+  cmp -s "$HOME/.zshrc" "$test_dir/zshrc-before" || fail "an update left the block in ~/.zshrc after the answer was set to off"
+
+  # The standalone switch reads the answer from the state directory its own
+  # HOME implies, so it gets a home of its own rather than this block's.
+  mkdir -p "$test_dir/zsh-cli/.omaccy"
+  printf 'on\n' > "$test_dir/zsh-cli/.omaccy/zsh"
+  [[ "$(HOME="$test_dir/zsh-cli" bash "$repo/scripts/zsh.sh" status)" == on ]] ||
+    fail "scripts/zsh.sh did not report a setup that is on"
+  printf 'off\n' > "$test_dir/zsh-cli/.omaccy/zsh"
+  [[ "$(HOME="$test_dir/zsh-cli" bash "$repo/scripts/zsh.sh")" == off ]] ||
+    fail "scripts/zsh.sh without an argument did not report the state"
+  if HOME="$test_dir/zsh-cli" bash "$repo/scripts/zsh.sh" --bogus >/dev/null 2>&1; then
+    fail "scripts/zsh.sh accepted an unknown argument"
+  fi
+
+  set_zsh_setup on >/dev/null
   uninstall_zsh_setup >/dev/null
   cmp -s "$HOME/.zshrc" "$test_dir/zshrc-before" || fail "uninstall did not put ~/.zshrc back as it was"
   [[ ! -e "$CONF_DIR/zsh" && ! -e "$OMACCY_DIR/zsh" ]] || fail "uninstall left the zsh setup's state behind"

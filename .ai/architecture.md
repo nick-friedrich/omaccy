@@ -11,6 +11,7 @@
 | `scripts/theme.sh` | Standalone theme switcher; stores the choice in `~/.omaccy/theme` and, once opted in, follows it into VS Code and Cursor |
 | `scripts/font.sh` | Standalone font switcher for Ghostty, SketchyBar, and the launcher |
 | `scripts/neovim.sh` | Standalone on/off switch for the optional Neovim config |
+| `scripts/zsh.sh` | Standalone on/off switch for the optional zsh setup |
 | `scripts/lib/paths.sh` | Repository and installed-state paths; no directory creation |
 | `scripts/lib/prompts.sh` | Yes/No handling and descriptions of install, update, and uninstall |
 | `scripts/lib/git.sh` | Best-effort fast-forward of the checkout setup runs from |
@@ -146,7 +147,12 @@
   Omaccy's should take over (`~/.omaccy/zsh-prompt`: `starship` or `own`); with
   `starship`, `omaccy.zsh` removes those hooks from `precmd_functions` and
   `preexec_functions` before starting Starship, since they would otherwise
-  redraw their prompt over it before every command. The prompt follows
+  redraw their prompt over it before every command. `scripts/zsh.sh
+  on|off|status` flips the answer afterwards, the way `scripts/neovim.sh`
+  does: `off` takes the block out and keeps the no, and `install_zsh_setup`
+  acts on a no rather than skipping the step, so an answer edited by hand
+  cannot leave the block loading in every terminal. The link and prompt
+  answers are kept, so turning it on again asks nothing. The prompt follows
   the theme without `theme.sh` or the launcher knowing about it: a precmd hook
   points `STARSHIP_CONFIG` at `~/.omaccy/cache/starship/<theme>.toml`, the
   template with its trailing `[palettes.omaccy]` table replaced by the theme

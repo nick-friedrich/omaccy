@@ -18,6 +18,12 @@ Dated when the `v0.4.4` tag is cut.
   no longer final. Neovim and ripgrep stay installed either way. If you put
   your own config back by hand while the answer still says yes, the next
   update no longer leaves it replaced.
+- `bash scripts/zsh.sh off` does the same for the zsh setup: it takes Omaccy's
+  block back out of your `~/.zshrc`, leaving the file as it was, so your own
+  prompt is back in new terminals; `on` puts it back and `status` says which
+  it is. Updates follow the choice. Starship, fzf, zoxide and the zsh plugins
+  stay installed, and your answers about the linked `.zshrc` and the prompt
+  are remembered, so turning it on again asks nothing.
 
 ## [0.4.3] - 2026-09-11
 

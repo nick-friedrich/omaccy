@@ -173,7 +173,16 @@ decide_zsh_prompt() {
 }
 
 install_zsh_setup() {
-  zsh_enabled || return 0
+  if ! zsh_enabled; then
+    # A no after a yes -- from scripts/zsh.sh, or from editing the answer by
+    # hand. Leaving the block would keep loading Omaccy's setup in every new
+    # terminal, so setup takes it out instead of skipping the step.
+    if [[ -f "$(zshrc_path)" ]] && grep -qxF "$ZSH_BLOCK_START" "$(zshrc_path)"; then
+      echo "The zsh setup is off; taking Omaccy's block back out."
+      remove_zshrc_block
+    fi
+    return 0
+  fi
   local formula
   for formula in $ZSH_SETUP_FORMULAS; do
     ensure_formula "$formula"
@@ -255,6 +264,24 @@ remove_zshrc_block() {
     echo "Removed Omaccy's block from $zshrc."
   fi
   rm -f "$OMACCY_DIR/zshrc-created"
+}
+
+# The switch behind scripts/zsh.sh: on adds the block back (installing what it
+# needs), off takes it out and leaves the shell as it was before. The tools are
+# left installed either way -- removing packages is uninstall's business, and
+# fzf or zoxide may well have been there first. The remembered answers to the
+# link and prompt questions are kept, so turning it on again does not ask.
+set_zsh_setup() {
+  local state="$1"
+  mkdir -p "$OMACCY_DIR"
+  printf '%s\n' "$state" > "$(zsh_pref_file)"
+  if [[ "$state" == on ]]; then
+    install_zsh_setup
+  else
+    remove_zshrc_block
+    rm -rf "$OMACCY_DIR/cache/starship"
+    echo "New terminals start without Omaccy's zsh setup; its tools stay installed."
+  fi
 }
 
 uninstall_zsh_setup() {
