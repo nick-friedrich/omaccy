@@ -478,7 +478,8 @@ binds it keeps their app. `Configuration` ignores commented-out lines, which its
 a `key = value`.
 
 The Agents collection (`AgentCatalog.swift`) lists three terminal agents (Claude
-Code, Codex CLI, opencode) and three desktop apps (Claude, ChatGPT, T3 Code).
+Code, Codex CLI, opencode) and four desktop apps (Claude, ChatGPT, T3 Code,
+OpenCode Desktop).
 Hyper+A launches the agent named by `default_agent` in `hyperkey.toml` directly,
 falling back to opening the Agents collection when unset; Hyper+Shift+A always
 opens it. Selecting an entry sets `default_agent` with ⌘Return; Return launches

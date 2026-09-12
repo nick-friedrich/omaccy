@@ -326,11 +326,14 @@ final class MenuTests: XCTestCase {
         let entries = MenuCatalog.agentEntries(matching: "", defaultToken: "codex")
         XCTAssertEqual(entries.map(\.agent), CodingAgent.allCases)
         // Desktop apps lead the list; the terminal agents follow.
-        XCTAssertEqual(entries.compactMap { $0.agent?.kind }, [.desktop, .desktop, .desktop, .terminal, .terminal, .terminal])
+        let kinds = entries.compactMap { $0.agent?.kind }
+        XCTAssertEqual(kinds.firstIndex(of: .terminal), kinds.lastIndex(of: .desktop).map { $0 + 1 })
         XCTAssertEqual(entries.first { $0.agent == .codexCLI }?.isDefaultChoice, true)
         XCTAssertEqual(entries.first { $0.agent == .claudeCode }?.isDefaultChoice, false)
         XCTAssertEqual(MenuCatalog.agentEntries(matching: "claude code", defaultToken: nil).map(\.agent), [.claudeCode])
         XCTAssertEqual(MenuCatalog.agentEntries(matching: "chatgpt", defaultToken: nil).map(\.agent), [.chatGPTDesktop])
+        // opencode ships both ways; the query matches the CLI and the desktop app.
+        XCTAssertEqual(MenuCatalog.agentEntries(matching: "opencode", defaultToken: nil).map(\.agent), [.opencodeDesktop, .opencode])
         XCTAssertTrue(MenuCatalog.agentEntries(matching: "missing-agent", defaultToken: nil).isEmpty)
     }
 

@@ -6,6 +6,7 @@ enum CodingAgent: String, CaseIterable, Sendable {
     case claudeDesktop = "claude-desktop"
     case chatGPTDesktop = "chatgpt-desktop"
     case t3Code = "t3-code"
+    case opencodeDesktop = "opencode-desktop"
     case claudeCode = "claude-code"
     case codexCLI = "codex"
     case opencode = "opencode"
@@ -15,7 +16,7 @@ enum CodingAgent: String, CaseIterable, Sendable {
     var kind: Kind {
         switch self {
         case .claudeCode, .codexCLI, .opencode: return .terminal
-        case .claudeDesktop, .chatGPTDesktop, .t3Code: return .desktop
+        case .claudeDesktop, .chatGPTDesktop, .t3Code, .opencodeDesktop: return .desktop
         }
     }
 
@@ -24,6 +25,7 @@ enum CodingAgent: String, CaseIterable, Sendable {
         case .claudeDesktop: return "Claude"
         case .chatGPTDesktop: return "ChatGPT"
         case .t3Code: return "T3 Code"
+        case .opencodeDesktop: return "OpenCode Desktop"
         case .claudeCode: return "Claude Code"
         case .codexCLI: return "Codex CLI"
         case .opencode: return "opencode"
@@ -40,7 +42,7 @@ enum CodingAgent: String, CaseIterable, Sendable {
         case .claudeCode: return "claude"
         case .codexCLI: return "codex"
         case .opencode: return "opencode"
-        case .claudeDesktop, .chatGPTDesktop, .t3Code: return nil
+        case .claudeDesktop, .chatGPTDesktop, .t3Code, .opencodeDesktop: return nil
         }
     }
 
@@ -50,6 +52,7 @@ enum CodingAgent: String, CaseIterable, Sendable {
         case .claudeDesktop: return "com.anthropic.claudefordesktop"
         case .chatGPTDesktop: return "com.openai.codex"
         case .t3Code: return "com.t3tools.t3code"
+        case .opencodeDesktop: return "ai.opencode.desktop"
         case .claudeCode, .codexCLI, .opencode: return nil
         }
     }
@@ -63,6 +66,7 @@ enum CodingAgent: String, CaseIterable, Sendable {
         case .claudeDesktop: return "claude"
         case .chatGPTDesktop: return "chatgpt"
         case .t3Code: return "t3-code"
+        case .opencodeDesktop: return "opencode-desktop"
         }
     }
 

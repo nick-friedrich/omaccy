@@ -132,7 +132,7 @@ these collections leaves the package user-managed, exactly as the Install
 collection does — Omaccy's uninstaller leaves it alone.
 
 **Agents** lists Claude Code, Codex CLI, and opencode (terminal agents) plus the
-Claude, ChatGPT, and T3 Code desktop apps. Return launches an installed agent;
+Claude, ChatGPT, T3 Code, and OpenCode Desktop apps. Return launches an installed agent;
 ⌘Return sets the selected agent as the `default_agent` that Hyper+A launches
 directly. Terminal agents run inside [herdr](https://herdr.dev), a persistent
 multiplexer for coding agents, kept alive by its own `brew services start herdr`

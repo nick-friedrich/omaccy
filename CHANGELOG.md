@@ -24,6 +24,10 @@ Dated when the `v0.4.4` tag is cut.
   it is. Updates follow the choice. Starship, fzf, zoxide and the zsh plugins
   stay installed, and your answers about the linked `.zshrc` and the prompt
   are remembered, so turning it on again asks nothing.
+- The Agents collection (Hyper+Shift+A) now lists OpenCode Desktop, opencode's
+  GUI app, alongside the Claude, ChatGPT, and T3 Code desktop apps. It installs
+  via `brew install --cask opencode-desktop` like the others, and the opencode
+  terminal agent is unchanged.
 
 ## [0.4.3] - 2026-09-11
 
