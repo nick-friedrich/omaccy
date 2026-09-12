@@ -503,7 +503,43 @@ fi
     fail "the linked Neovim config is not the shipped one"
   [[ -f "$HOME/.config/nvim/.stylua.toml" ]] || fail "the Neovim config lost its dotfiles"
 
+  # Turning the setup off afterwards restores the user's config and keeps the
+  # no, so an update neither asks again nor links Omaccy's config back in.
+  printf 'lock\n' > "$CONF_DIR/nvim/lazy-lock.json"
+  set_neovim_setup off >/dev/null
+  [[ ! -L "$HOME/.config/nvim" && "$(cat "$HOME/.config/nvim/init.lua")" == own ]] ||
+    fail "turning the Neovim setup off did not restore the user's config"
+  [[ "$(cat "$OMACCY_DIR/neovim")" == off ]] || fail "turning the Neovim setup off was not remembered"
+  [[ -z "$(decide_neovim_setup </dev/null)" ]] || fail "a Neovim setup turned off asked again"
+  : > "$calls"
+  install_neovim >/dev/null
+  [[ ! -s "$calls" && ! -L "$HOME/.config/nvim" ]] || fail "an update relinked a Neovim setup that was turned off"
+
+  # An answer edited to off by hand, with the link still in place, is honored
+  # by the next update rather than leaving ~/.config/nvim stranded.
+  set_neovim_setup on >/dev/null
+  [[ -L "$HOME/.config/nvim" ]] || fail "turning the Neovim setup back on did not link Omaccy's config"
+  echo off > "$OMACCY_DIR/neovim"
+  install_neovim >/dev/null
+  [[ ! -L "$HOME/.config/nvim" && "$(cat "$HOME/.config/nvim/init.lua")" == own ]] ||
+    fail "an update left ~/.config/nvim on Omaccy's config after the answer was set to off"
+
+  # The standalone switch reads the answer from the state directory its own
+  # HOME implies, so it gets a home of its own here rather than this block's,
+  # whose state directory sits elsewhere.
+  mkdir -p "$test_dir/nvim-cli/.omaccy"
+  printf 'on\n' > "$test_dir/nvim-cli/.omaccy/neovim"
+  [[ "$(HOME="$test_dir/nvim-cli" bash "$repo/scripts/neovim.sh" status)" == on ]] ||
+    fail "scripts/neovim.sh did not report a setup that is on"
+  printf 'off\n' > "$test_dir/nvim-cli/.omaccy/neovim"
+  [[ "$(HOME="$test_dir/nvim-cli" bash "$repo/scripts/neovim.sh")" == off ]] ||
+    fail "scripts/neovim.sh without an argument did not report the state"
+  if HOME="$test_dir/nvim-cli" bash "$repo/scripts/neovim.sh" --bogus >/dev/null 2>&1; then
+    fail "scripts/neovim.sh accepted an unknown argument"
+  fi
+
   # Uninstall brings the user's config back and clears Omaccy's state.
+  set_neovim_setup on >/dev/null
   printf 'lock\n' > "$CONF_DIR/nvim/lazy-lock.json"
   uninstall_neovim_config >/dev/null
   [[ ! -L "$HOME/.config/nvim" && "$(cat "$HOME/.config/nvim/init.lua")" == own ]] ||

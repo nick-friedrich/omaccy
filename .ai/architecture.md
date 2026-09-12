@@ -10,6 +10,7 @@
 | `scripts/aerospace-control.sh` | Standalone start/stop/toggle command with IPC readiness handling |
 | `scripts/theme.sh` | Standalone theme switcher; stores the choice in `~/.omaccy/theme` and, once opted in, follows it into VS Code and Cursor |
 | `scripts/font.sh` | Standalone font switcher for Ghostty, SketchyBar, and the launcher |
+| `scripts/neovim.sh` | Standalone on/off switch for the optional Neovim config |
 | `scripts/lib/paths.sh` | Repository and installed-state paths; no directory creation |
 | `scripts/lib/prompts.sh` | Yes/No handling and descriptions of install, update, and uninstall |
 | `scripts/lib/git.sh` | Best-effort fast-forward of the checkout setup runs from |
@@ -113,6 +114,12 @@
   file in it is still an untouched default; otherwise it is kept whole as
   `backups/omaccy-nvim.<timestamp>`, a name `restore_target` never matches.
   Plugin data under `~/.local/share/nvim` belongs to Neovim and is left alone.
+  `scripts/neovim.sh on|off|status` flips that answer afterwards, so opting in
+  once is not final: `off` restores the displaced config and keeps the no.
+  `install_neovim` acts on a no rather than skipping the step, taking its link
+  back out when one is there, so an answer edited by hand cannot strand
+  `~/.config/nvim` on Omaccy's config. Restoring is therefore separate from
+  forgetting the answer, which only uninstall does.
 - `~/.omaccy/zsh` holds the answer to the zsh question, which is only asked
   when Directory Services reports zsh as the login shell; Omaccy never runs
   `chsh`. `~/.zshrc` is never replaced: one block between `# >>> omaccy >>>`

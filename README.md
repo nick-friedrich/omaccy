@@ -48,7 +48,9 @@ the system changes before that confirmation. It then:
   an AstroNvim config (AstroNvim v6's template) linked at `~/.config/nvim`.
   Your current config — a folder or a link into your dotfiles — is moved to
   `~/.omaccy/backups/` and restored on uninstall. The answer is kept in
-  `~/.omaccy/neovim`; delete it to be asked again.
+  `~/.omaccy/neovim`; delete it to be asked again. `bash scripts/neovim.sh off`
+  hands `~/.config/nvim` back to your own config later, and `on` takes it
+  again; updates follow whichever you chose.
 - asks once more, when your login shell is zsh, whether to set up **zsh**: a
   Starship prompt in the theme's colors, zsh-autosuggestions,
   zsh-syntax-highlighting, fzf and zoxide, loaded from a marked block at the

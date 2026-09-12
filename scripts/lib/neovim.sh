@@ -47,16 +47,50 @@ decide_neovim_setup() {
 }
 
 install_neovim() {
-  neovim_enabled || return 0
+  if ! neovim_enabled; then
+    # A no after a yes -- from scripts/neovim.sh, or from editing the answer
+    # by hand. Leaving the link would strand ~/.config/nvim on Omaccy's config
+    # with no way back, so setup takes it out instead of skipping the step.
+    if [[ -L "$HOME/.config/nvim" && "$(readlink "$HOME/.config/nvim")" == "$CONF_DIR/nvim" ]]; then
+      echo "The Neovim setup is off; restoring your own ~/.config/nvim."
+      restore_neovim_config
+    fi
+    return 0
+  fi
   ensure_formula neovim
   ensure_formula ripgrep
   ensure_dir_symlink "$REPO_ROOT/config/nvim" "$HOME/.config/nvim"
 }
 
+# Turning the setup off keeps the recorded no, so the next update neither
+# relinks the config nor asks again; uninstall forgets the answer as well,
+# which is why restoring and forgetting are separate.
+#
 # lazy.nvim writes lazy-lock.json into the config directory, so it is the
 # plugin manager's file rather than an edit, and does not keep the config.
-uninstall_neovim_config() {
+restore_neovim_config() {
   restore_target "$HOME/.config/nvim" "$CONF_DIR/nvim"
   remove_canonical_dir nvim lazy-lock.json
+}
+
+uninstall_neovim_config() {
+  restore_neovim_config
   rm -f "$(neovim_pref_file)"
+}
+
+# The switch behind scripts/neovim.sh: on links Omaccy's config and installs
+# what it needs, off puts the user's own back. Neovim and ripgrep are left
+# installed either way -- removing packages is uninstall's business, and they
+# may well have been there first.
+set_neovim_setup() {
+  local state="$1"
+  mkdir -p "$OMACCY_DIR"
+  printf '%s\n' "$state" > "$(neovim_pref_file)"
+  if [[ "$state" == on ]]; then
+    install_neovim
+    echo "Neovim uses Omaccy's config at ~/.config/nvim."
+  else
+    restore_neovim_config
+    echo "Neovim keeps your own config. Neovim and ripgrep stay installed."
+  fi
 }

@@ -10,6 +10,15 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.4` tag is cut.
 
+### Added
+
+- `bash scripts/neovim.sh off` hands `~/.config/nvim` back to your own config
+  after you accepted Omaccy's, and `bash scripts/neovim.sh on` takes it again;
+  `status` says which it is. Updates follow the choice, so saying yes once is
+  no longer final. Neovim and ripgrep stay installed either way. If you put
+  your own config back by hand while the answer still says yes, the next
+  update no longer leaves it replaced.
+
 ## [0.4.3] - 2026-09-11
 
 ### Added
