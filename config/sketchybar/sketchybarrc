@@ -175,6 +175,10 @@ sketchybar --add item workspace_observer left \
     script="$PLUGIN_DIR/workspace.sh" \
   --subscribe workspace_observer aerospace_workspace_change front_app_switched system_woke
 
+# The frontmost app's name. It used to open a popup of that app's own menus,
+# which needed Accessibility access to read them out of another process; the
+# menu bar underneath SketchyBar can be clicked through to directly, so the
+# name is all that is left.
 sketchybar --add item front_app left \
   --set front_app \
     icon="◆" \
@@ -183,26 +187,7 @@ sketchybar --add item front_app left \
     label.max_chars=34 \
     background.drawing=off \
     script="$PLUGIN_DIR/front-app.sh" \
-    click_script="$PLUGIN_DIR/front-app.sh click" \
-    popup.align=left \
-    popup.background.color="$ITEM_BG" \
-    popup.background.corner_radius=7 \
-    popup.background.border_width=1 \
-    popup.background.border_color="$BORDER" \
   --subscribe front_app front_app_switched
-
-# The front app's menus. front-app.sh fills these in when the name is clicked,
-# one row per menu, and hides the rows the app has no menu for. Sixteen is more
-# than any app puts in its menu bar; keep it in step with MENU_ROWS there.
-for _menu_row in {1..16}; do
-  sketchybar --add item "front_app.menu.$_menu_row" popup.front_app \
-    --set "front_app.menu.$_menu_row" \
-      icon.drawing=off \
-      label.padding_left=8 \
-      drawing=off \
-      background.drawing=off
-done
-unset _menu_row
 
 sketchybar --add item clock right \
   --set clock \
@@ -416,13 +401,6 @@ sketchybar --add item aerospace.grid popup.aerospace \
     label="Grid" \
     background.drawing=off \
     click_script="$PLUGIN_DIR/aerospace-state.sh set grid"
-
-sketchybar --add item aerospace.recursive popup.aerospace \
-  --set aerospace.recursive \
-    icon="◧" \
-    label="Recursive" \
-    background.drawing=off \
-    click_script="$PLUGIN_DIR/aerospace-state.sh set recursive"
 
 sketchybar --add item aerospace.accordion popup.aerospace \
   --set aerospace.accordion \

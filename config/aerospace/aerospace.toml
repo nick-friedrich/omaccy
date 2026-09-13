@@ -109,7 +109,7 @@ run = 'exec-and-forget ~/.config/aerospace/window-memory.sh place $AEROSPACE_WIN
 # Re-assert the focused workspace's layout mode when a window appears. For the
 # flat modes this only sets the root orientation and never moves a window, so
 # unlike the master/stack placement it replaced, it cannot overwrite an
-# arrangement made by hand. Recursive returns immediately; only Grid rebuilds.
+# arrangement made by hand. Only Grid is actually rebuilt.
 [[on-window-detected]]
 if.during-aerospace-startup = false
 run = 'exec-and-forget ~/.config/aerospace/layout.sh apply'

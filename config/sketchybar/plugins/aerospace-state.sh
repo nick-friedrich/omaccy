@@ -12,7 +12,7 @@ source "$CONFIG_DIR/lib/aerospace.sh"
 aerospace_bin="$(find_aerospace)"
 disabled_marker="$HOME/.omaccy/aerospace-disabled"
 layout_script="$HOME/.config/aerospace/layout.sh"
-MODES="horizontal vertical grid recursive accordion"
+MODES="horizontal vertical grid accordion"
 
 # Always the item's own name, never $NAME: the popup rows run this script too,
 # and there $NAME is the row that was clicked.

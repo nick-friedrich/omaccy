@@ -893,14 +893,16 @@ FAKE
   [[ "$(bash "$layout" current 3)" == horizontal ]] ||
     fail "a damaged store was not replaced by the default"
 
-  # Recursive is the mode that means "leave the tree alone", so re-asserting it
-  # has to issue nothing at all.
-  bash "$layout" set recursive 3 >/dev/null
-  : > "$AEROSPACE_LOG"
-  bash "$layout" apply 3 >/dev/null
-  if grep -q . "$AEROSPACE_LOG"; then
-    fail "applying the recursive mode drove AeroSpace instead of leaving it alone"
+  # Recursive was retired: it enforced nothing, so a workspace in it just drifted
+  # flat. It has to be rejected now, and a workspace still holding it on disk
+  # from an older install has to read back as the default rather than as a mode
+  # nothing applies.
+  if bash "$layout" set recursive 3 >/dev/null 2>&1; then
+    fail "layout.sh still accepts the retired recursive mode"
   fi
+  printf 'recursive\n' > "$HOME/.omaccy/workspace-layout/3"
+  [[ "$(bash "$layout" current 3)" == horizontal ]] ||
+    fail "a workspace left on the retired recursive mode did not fall back"
 
   # A flat workspace stays flat by itself, so re-asserting a mode whose root
   # already matches must not touch the layout either -- that is what keeps this
@@ -1037,83 +1039,42 @@ FAKE
   fi
 )
 
-# The front app's menus, with osascript replaced by one that answers the way
-# System Events does -- or refuses, as it does before SketchyBar has
-# Accessibility -- so no test reads or opens a real app's menus.
+# The front app's name, with osascript replaced by one that answers the way
+# System Events does, so no test reads a real app.
 (
   repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   plugin="$repo/config/sketchybar/plugins/front-app.sh"
   calls="$test_dir/front-app-calls"
   bin="$test_dir/front-app-bin"
-  denied="$test_dir/front-app-denied"
   mkdir -p "$bin"
-  for tool in sketchybar open; do
-    cat > "$bin/$tool" <<FAKE
+  cat > "$bin/sketchybar" <<FAKE
 #!/usr/bin/env bash
-printf '%s %s\n' "$tool" "\$*" >> "$calls"
+printf 'sketchybar %s\n' "\$*" >> "$calls"
 FAKE
-    chmod +x "$bin/$tool"
-  done
-  # Reading the menus is a script on stdin; opening one is a script in -e.
-  cat > "$bin/osascript" <<FAKE
+  chmod +x "$bin/sketchybar"
+  cat > "$bin/osascript" <<'FAKE'
 #!/usr/bin/env bash
-if [[ \$# -gt 0 ]]; then
-  printf 'osascript %s\n' "\$*" >> "$calls"
-  exit 0
-fi
-cat > /dev/null
-[[ -f "$denied" ]] && exit 1
-printf '4242\nApple\nGhostty\nFile\n\nmissing value\nEdit\nWindow\n'
+printf 'Finder\n'
 FAKE
   chmod +x "$bin/osascript"
-  front_app() {
-    : > "$calls"
-    OMACCY_SKETCHYBAR_BIN="$bin/sketchybar" OMACCY_OPEN_BIN="$bin/open" \
-      OMACCY_OSASCRIPT_BIN="$bin/osascript" \
-      /bin/bash "$plugin" "$@"
-  }
-
-  front_app click
-  grep -Fq "front_app.menu.1 label=Ghostty drawing=on click_script='$plugin' open 4242 2 " "$calls" ||
-    fail "the app's own menu was not the first row"
-  # Untitled items are skipped, but each row still opens the menu at its own
-  # position in the bar, not at its row number.
-  grep -Fq "front_app.menu.3 label=Edit drawing=on click_script='$plugin' open 4242 6 " "$calls" ||
-    fail "a menu after an untitled one opened the wrong menu"
-  grep -Fq 'front_app.menu.5 drawing=off' "$calls" || fail "rows past the app's last menu stayed visible"
-  grep -Fq 'front_app.menu.16 drawing=off' "$calls" || fail "the last popup row was not hidden"
-  if grep -Eq 'label=(Apple|missing value)' "$calls"; then
-    fail "the Apple menu or an untitled item was listed"
-  fi
-  grep -Fxq 'sketchybar --set front_app popup.drawing=toggle' "$calls" ||
-    fail "clicking the app name did not open its menus"
-
-  front_app open 4242 6
-  grep -Fq 'click menu bar item 6 of menu bar 1 of (first application process whose unix id is 4242)' "$calls" ||
-    fail "choosing a menu did not open it in the app it was read from"
-  grep -Fxq 'sketchybar --set front_app popup.drawing=off' "$calls" ||
-    fail "choosing a menu left the popup open"
-
-  if front_app open '4242) to quit' 6 2>/dev/null || grep -q '^osascript' "$calls"; then
-    fail "a row that is not a pid and a position reached AppleScript"
-  fi
-
-  : > "$denied"
-  front_app click
-  grep -Fq "front_app.menu.1 label=Allow SketchyBar in Accessibility… drawing=on click_script='$plugin' accessibility " "$calls" ||
-    fail "without Accessibility the popup did not say what to allow"
-  grep -Fq 'front_app.menu.2 drawing=off' "$calls" || fail "without Accessibility other rows stayed visible"
-  rm -f "$denied"
-
-  front_app accessibility
-  grep -Fxq 'open x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility' "$calls" ||
-    fail "the Accessibility row did not open Privacy & Security"
 
   : > "$calls"
   INFO=Safari OMACCY_SKETCHYBAR_BIN="$bin/sketchybar" OMACCY_OSASCRIPT_BIN="$bin/osascript" \
     /bin/bash "$plugin"
-  grep -Fxq 'sketchybar --set front_app label=Safari popup.drawing=off' "$calls" ||
-    fail "switching apps did not rename the item and close the last app's menus"
+  grep -Fxq 'sketchybar --set front_app label=Safari' "$calls" ||
+    fail "switching apps did not rename the item"
+
+  # The menus this item used to emulate are gone along with the popup they
+  # needed, so nothing may reach for a popup row or ask for Accessibility.
+  if grep -q 'popup\|menu\.' "$calls"; then
+    fail "the front app item still drives a menu popup"
+  fi
+
+  : > "$calls"
+  OMACCY_SKETCHYBAR_BIN="$bin/sketchybar" OMACCY_OSASCRIPT_BIN="$bin/osascript" \
+    /bin/bash "$plugin"
+  grep -Fxq 'sketchybar --set front_app label=Finder' "$calls" ||
+    fail "without INFO the item did not fall back to asking which app is front"
 )
 
 # The battery popup, with pmset replaced by a script that answers the way pmset
@@ -1416,4 +1377,4 @@ LUA
     fail "Neovim did not follow the theme"
 fi
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, directory configs, the Neovim opt-in, master-stack retirement, workspace layout modes, the calendar popup, the Apple menu, the front-app menus, Neovim theme following, the zsh setup, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, directory configs, the Neovim opt-in, master-stack retirement, workspace layout modes, the calendar popup, the Apple menu, the front-app name, Neovim theme following, the zsh setup, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'

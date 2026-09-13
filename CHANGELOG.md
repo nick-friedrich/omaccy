@@ -10,6 +10,18 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.5` tag is cut.
 
+### Removed
+
+- Clicking the app name in the bar no longer opens that app's own menus. The
+  emulation read them out of the other application over UI scripting, which
+  needed Accessibility access granted to SketchyBar to work at all; the macOS
+  menu bar underneath can be clicked through to directly, so the name is all
+  that remains.
+- The **Recursive** layout mode is gone. It enforced nothing by design, so a
+  workspace set to it just filled up flat and nothing happened when a window
+  opened. Columns, Rows, Grid and Accordion remain, and a workspace left on
+  Recursive falls back to Columns.
+
 ### Added
 
 - `Hyper+Shift` on any `[bindings]` chord (for example `Hyper+Shift+T` for

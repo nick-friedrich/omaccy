@@ -140,14 +140,12 @@ indicator used to just read "Tiling". Click it to pick a different one:
 | **Columns** | Every window a full-height column, side by side |
 | **Rows** | Every window full width, stacked top to bottom |
 | **Grid** | Windows squared off — four windows make a 2×2 |
-| **Recursive** | New windows split beside the focused one, building a tree |
 | **Accordion** | One window at a time, the rest collapsed to the edge |
 
 Columns, Rows and Accordion hold themselves: AeroSpace adds a new window beside
 the focused one, so in a flat workspace it simply becomes the next column or
 row and nothing already on screen moves. Grid is rebuilt when a window opens,
-since squaring off is the one shape that cannot maintain itself. Recursive
-enforces nothing at all — pick it when you want the tree left alone.
+since squaring off is the one shape that cannot maintain itself.
 
 The mode also makes `Hyper+U` / `Hyper+I` readable: resizing follows the
 workspace's own direction, so in Columns it is always width and in Rows always

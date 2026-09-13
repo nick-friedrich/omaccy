@@ -16,7 +16,7 @@ set -u
 
 STATE_DIR="$HOME/.omaccy/workspace-layout"
 DEFAULT_MODE="horizontal"
-MODES="horizontal vertical grid recursive accordion"
+MODES="horizontal vertical grid accordion"
 
 BIN="${AEROSPACE_BIN:-$(command -v aerospace 2>/dev/null)}"
 if [[ -z "$BIN" ]]; then
@@ -68,7 +68,6 @@ mode_label() {
     horizontal) printf 'Columns\n' ;;
     vertical) printf 'Rows\n' ;;
     grid) printf 'Grid\n' ;;
-    recursive) printf 'Recursive\n' ;;
     accordion) printf 'Accordion\n' ;;
     *) printf 'Tiling\n' ;;
   esac
@@ -165,10 +164,6 @@ apply_grid() {
 apply_full() {
   local workspace="$1" mode="$2"
   case "$mode" in
-    recursive)
-      # Enforces nothing on purpose -- this is the mode for leaving the tree
-      # alone, so switching to it must not disturb what is already there.
-      ;;
     accordion)
       set_root "$workspace" accordion horizontal
       ;;
@@ -195,9 +190,6 @@ apply_current() {
   local workspace="$1" mode expected
   mode="$(current_mode "$workspace")"
   case "$mode" in
-    recursive)
-      return 0
-      ;;
     grid)
       apply_grid "$workspace"
       ;;
