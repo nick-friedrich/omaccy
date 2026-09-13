@@ -34,9 +34,14 @@ enum HotkeyBindings {
                 return true
             }
             guard let bundleIdentifier = targets[keyCode] else { return false }
+            let shift = flags.contains(.maskShift)
             if heldKeys.insert(keyCode).inserted {
                 DispatchQueue.main.async {
-                    focusOrLaunch(bundleIdentifier: bundleIdentifier)
+                    if shift {
+                        launchNewWindow(bundleIdentifier: bundleIdentifier)
+                    } else {
+                        focusOrLaunch(bundleIdentifier: bundleIdentifier)
+                    }
                 }
             }
             return true
@@ -98,17 +103,58 @@ enum HotkeyBindings {
         }
     }
 
+    /// Shift on a `[bindings]` chord: a fresh window of the app, where the
+    /// plain chord would focus the one already open.
+    ///
+    /// A running app is asked for a window with Command+N, the menu shortcut
+    /// macOS apps overwhelmingly agree on, posted straight to its process.
+    /// Launching a second copy with `open -n` would do it for a terminal but
+    /// leaves a row of duplicate entries in the app switcher, since each copy
+    /// is its own application rather than another window of the first.
+    @MainActor
+    static func launchNewWindow(bundleIdentifier: String) {
+        let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+            .first(where: { !$0.isTerminated })
+        guard let app else {
+            // Nothing running yet, so an ordinary launch already opens a window.
+            Task.detached(priority: .userInitiated) {
+                launch(bundleIdentifier: bundleIdentifier)
+            }
+            return
+        }
+
+        _ = app.unhide()
+        app.activate()
+        postNewWindowShortcut(pid: app.processIdentifier)
+    }
+
+    /// Command+N delivered to one process. Posting to the pid rather than the
+    /// session avoids racing the activation above for who has focus, and the
+    /// injected marker keeps our own event tap from treating it as a keypress
+    /// to decorate with Hyper's modifiers while the chord is still held.
+    private static func postNewWindowShortcut(pid: pid_t) {
+        guard let newWindowKey = KeyNames.virtualKeyCode(for: "n") else { return }
+        let source = CGEventSource(stateID: .hidSystemState)
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: newWindowKey, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: newWindowKey, keyDown: false) else {
+            return
+        }
+        for event in [keyDown, keyUp] {
+            event.flags = .maskCommand
+            event.setIntegerValueField(Constants.injectedEventField,
+                                       value: Constants.injectedEventMarker)
+            event.postToPid(pid)
+        }
+    }
+
     private static func launch(bundleIdentifier: String) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        var arguments = ["-b", bundleIdentifier]
         if bundleIdentifier == "com.apple.finder" {
-            process.arguments = [
-                "-b", bundleIdentifier,
-                FileManager.default.homeDirectoryForCurrentUser.path,
-            ]
-        } else {
-            process.arguments = ["-b", bundleIdentifier]
+            arguments.append(FileManager.default.homeDirectoryForCurrentUser.path)
         }
+        process.arguments = arguments
         do {
             try process.run()
         } catch {

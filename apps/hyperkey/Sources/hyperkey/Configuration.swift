@@ -12,6 +12,11 @@ struct Configuration {
     /// the user asks for it on disk.
     var clipboardPersist: Bool = false
     var clipboardLimit: Int = 200
+    /// Switch AeroSpace workspaces on a three-finger horizontal trackpad swipe.
+    var trackpadSwipe: Bool = true
+    /// Off sends the workspace the other way, for anyone who turned macOS
+    /// natural scrolling off.
+    var trackpadSwipeNatural: Bool = true
 
     /// The app a picker collection launches directly from its own Hyper chord.
     subscript(collection: AppCollection) -> String? {
@@ -75,6 +80,10 @@ struct Configuration {
                 configuration.clipboardPersist = value.lowercased() == "true"
             } else if key == "clipboard_limit", section.isEmpty {
                 configuration.clipboardLimit = Int(value) ?? configuration.clipboardLimit
+            } else if key == "trackpad_swipe", section.isEmpty {
+                configuration.trackpadSwipe = value.lowercased() != "false"
+            } else if key == "trackpad_swipe_natural", section.isEmpty {
+                configuration.trackpadSwipeNatural = value.lowercased() != "false"
             } else if key == "default_agent", section.isEmpty {
                 configuration.defaultAgent = value.isEmpty ? nil : value
             } else if section.isEmpty,
@@ -95,6 +104,10 @@ struct Configuration {
         contents += "clipboard_persist = \(clipboardPersist)\n"
         contents += "# How many entries to keep.\n"
         contents += "clipboard_limit = \(clipboardLimit)\n"
+        contents += "\n# Switch workspaces with a three-finger horizontal swipe.\n"
+        contents += "trackpad_swipe = \(trackpadSwipe)\n"
+        contents += "# Off sends the workspace the opposite way.\n"
+        contents += "trackpad_swipe_natural = \(trackpadSwipeNatural)\n"
         if let defaultAgent {
             contents += "\n# Coding agent launched directly by Hyper+A.\n"
             contents += "default_agent = \"\(defaultAgent)\"\n"

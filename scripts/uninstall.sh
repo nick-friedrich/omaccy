@@ -72,6 +72,7 @@ main() {
 
   restore_mission_control_arrow_shortcuts
   restore_mission_control_grouping
+  restore_three_finger_swipe
   killall Dock 2>/dev/null || true
 
   restore_target "$HOME/Library/LaunchAgents/com.omaccy.hyperkey.plist" \
@@ -84,6 +85,8 @@ main() {
     "$CONF_DIR/aerospace/dock-toggle.sh"
   restore_target "$HOME/.config/aerospace/layout.sh" \
     "$CONF_DIR/aerospace/layout.sh"
+  restore_target "$HOME/.config/aerospace/window-memory.sh" \
+    "$CONF_DIR/aerospace/window-memory.sh"
   # Retired in 0.4.2 and removed by install.sh, so this only finds anything on
   # a machine that is being uninstalled without having been updated first.
   restore_target "$HOME/.config/aerospace/master-stack.sh" \
@@ -129,6 +132,7 @@ main() {
     "$CONF_DIR/ghostty/config.ghostty" \
     "$CONF_DIR/aerospace/dock-toggle.sh" \
     "$CONF_DIR/aerospace/layout.sh" \
+    "$CONF_DIR/aerospace/window-memory.sh" \
     "$CONF_DIR/aerospace/master-stack.sh" \
     "$CONF_DIR/aerospace/aerospace.toml" \
     "$CONF_DIR/sketchybar/sketchybarrc" \
@@ -138,6 +142,7 @@ main() {
     "$CONF_DIR/sketchybar/plugins/"*.sh \
     "$CONF_DIR/sketchybar/themes/"*.sh \
     "$OMACCY_DIR/theme" \
+    "$OMACCY_DIR/window-placement" \
     "$OMACCY_DIR/font" \
     "$OMACCY_DIR/editor-theme" \
     "$OMACCY_DIR/appearance" \
@@ -146,6 +151,7 @@ main() {
     "$OMACCY_DIR/sha256/ghostty/config.ghostty" \
     "$OMACCY_DIR/sha256/aerospace/dock-toggle.sh" \
     "$OMACCY_DIR/sha256/aerospace/layout.sh" \
+    "$OMACCY_DIR/sha256/aerospace/window-memory.sh" \
     "$OMACCY_DIR/sha256/aerospace/master-stack.sh" \
     "$OMACCY_DIR/sha256/aerospace/aerospace.toml" \
     "$OMACCY_DIR/sha256/sketchybar/sketchybarrc" \

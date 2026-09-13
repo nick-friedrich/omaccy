@@ -3,7 +3,7 @@
 config-version = 2
 start-at-login = true
 after-startup-command = ['exec-and-forget sketchybar --trigger aerospace_workspace_change']
-exec-on-workspace-change = ['/bin/bash', '-c', 'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE']
+exec-on-workspace-change = ['/bin/bash', '-c', 'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE; ~/.config/aerospace/window-memory.sh record']
 
 enable-normalization-flatten-containers = true
 enable-normalization-opposite-orientation-for-nested-containers = true
@@ -13,6 +13,9 @@ default-root-container-orientation = 'horizontal'
 accordion-padding = 30
 
 on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+# Focus moves when a window closes, which is the moment an application can stop
+# living on a workspace. Nothing else tells us a window went away.
+on-focus-changed = ['exec-and-forget ~/.config/aerospace/window-memory.sh record']
 automatically-unhide-macos-hidden-apps = false
 persistent-workspaces = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 
@@ -87,6 +90,21 @@ cmd-ctrl-alt-shift-6 = 'move-node-to-workspace --focus-follows-window 6'
 cmd-ctrl-alt-shift-7 = 'move-node-to-workspace --focus-follows-window 7'
 cmd-ctrl-alt-shift-8 = 'move-node-to-workspace --focus-follows-window 8'
 cmd-ctrl-alt-shift-9 = 'move-node-to-workspace --focus-follows-window 9'
+
+# Send a new window back to the workspace that application was last seen in,
+# so reopening Chrome puts it where Chrome lives rather than on top of whatever
+# you are doing. The mapping is learned from where you actually put your
+# windows, never configured: move an app somewhere and that becomes its home.
+# An application opened for the first time is left where it lands.
+#
+# This has to sit ABOVE the layout rule below, because AeroSpace stops at the
+# first callback that matches and that rule matches nearly every window.
+# check-further-callbacks lets it carry on, so the layout still gets applied.
+# Delete this rule to have every window open wherever you are.
+[[on-window-detected]]
+if.during-aerospace-startup = false
+check-further-callbacks = true
+run = 'exec-and-forget ~/.config/aerospace/window-memory.sh place $AEROSPACE_WINDOW_ID'
 
 # Re-assert the focused workspace's layout mode when a window appears. For the
 # flat modes this only sets the root orientation and never moves a window, so

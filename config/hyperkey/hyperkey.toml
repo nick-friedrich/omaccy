@@ -10,6 +10,14 @@ clipboard_history = true
 clipboard_persist = false
 clipboard_limit = 200
 
+# Switch AeroSpace workspaces with a three-finger horizontal trackpad swipe.
+# Install turns off the macOS "swipe between full-screen apps" gesture that
+# owns the same swipe, so one swipe does not also move a macOS Space. Set
+# trackpad_swipe_natural to false if you turned macOS natural scrolling off
+# and the workspace goes the wrong way.
+trackpad_swipe = true
+trackpad_swipe_natural = true
+
 # Apps launched directly by their own Hyper chord, chosen in the launcher with
 # ⌘Return. Hyper+A, Hyper+E, and Hyper+C launch these; add Shift to browse the
 # collection instead. Unset means the chord opens the collection to pick one.

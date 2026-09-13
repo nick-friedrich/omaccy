@@ -10,6 +10,31 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.5` tag is cut.
 
+### Added
+
+- `Hyper+Shift` on any `[bindings]` chord (for example `Hyper+Shift+T` for
+  Ghostty) opens a new window of that app instead of focusing an existing one.
+- Applications reopen on the workspace they live on, so starting Chrome puts it
+  back where Chrome belongs instead of on top of whatever you were doing. The
+  mapping is learned from where you keep your windows, with nothing to
+  configure: move an application to another workspace and that becomes its
+  home, across restarts. Only an application's *first* window is placed, so
+  opening a second window while you are elsewhere leaves it with you rather
+  than moving the application. An application you have never opened before
+  stays where it lands, and one with no windows open keeps its workspace rather
+  than being forgotten. Delete the `window-memory.sh` rule from
+  `~/.config/aerospace/aerospace.toml` to have every window open wherever you
+  are, as before.
+- A three-finger horizontal trackpad swipe switches AeroSpace workspaces,
+  moving through the workspaces that have windows on the focused monitor and
+  wrapping at either end. Install turns off the macOS "swipe between
+  full-screen apps" gesture, which owns the same swipe and would otherwise
+  move a macOS Space at the same time; uninstall puts your setting back. **Log
+  out and back in after updating** for the trackpad to notice. Turn the
+  gesture off with `trackpad_swipe = false` in `~/.config/omaccy/hyperkey.toml`,
+  or set `trackpad_swipe_natural = false` if you run macOS without natural
+  scrolling and the workspace moves the wrong way.
+
 ## [0.4.4] - 2026-09-12
 
 ### Added

@@ -79,6 +79,64 @@ disable_mission_control_arrow_shortcuts() {
   echo "Disabled conflicting macOS Mission Control and Spaces arrow shortcuts."
 }
 
+# The three-finger horizontal swipe is claimed by macOS ("swipe between
+# full-screen apps") and consumed by the WindowServer, so Hyperkey reading the
+# same gesture from the trackpad would switch an AeroSpace workspace and a
+# macOS Space at once. Both trackpad domains carry the setting: the built-in
+# one and the Magic Trackpad's. The domains are written out at each loop rather
+# than held in a variable, which only word-splits into a list under bash.
+disable_three_finger_swipe() {
+  local saved_setting="$OMACCY_DIR/trackpad-three-finger-swipe.original"
+  local domain current_value
+
+  if [[ ! -f "$saved_setting" ]]; then
+    : > "$saved_setting"
+    for domain in com.apple.AppleMultitouchTrackpad \
+                  com.apple.driver.AppleBluetoothMultitouch.trackpad; do
+      if current_value="$(defaults read "$domain" TrackpadThreeFingerHorizSwipeGesture 2>/dev/null)"; then
+        printf '%s=%s\n' "$domain" "$current_value" >> "$saved_setting"
+      else
+        printf '%s=unset\n' "$domain" >> "$saved_setting"
+      fi
+    done
+  fi
+
+  for domain in com.apple.AppleMultitouchTrackpad \
+                com.apple.driver.AppleBluetoothMultitouch.trackpad; do
+    defaults write "$domain" TrackpadThreeFingerHorizSwipeGesture -int 0 || return 0
+  done
+
+  echo "Disabled the macOS three-finger swipe so it no longer switches Spaces."
+  echo "  - Log out and back in for the trackpad to pick this up."
+}
+
+restore_three_finger_swipe() {
+  local saved_setting="$OMACCY_DIR/trackpad-three-finger-swipe.original"
+  local domain saved_value
+  [[ -f "$saved_setting" ]] || return 0
+
+  while IFS='=' read -r domain saved_value; do
+    [[ -n "$domain" ]] || continue
+    case "$saved_value" in
+      unset)
+        if defaults read "$domain" TrackpadThreeFingerHorizSwipeGesture >/dev/null 2>&1; then
+          defaults delete "$domain" TrackpadThreeFingerHorizSwipeGesture || return 0
+        fi
+        ;;
+      ''|*[!0-9]*)
+        echo "WARNING: Invalid saved trackpad swipe setting; leaving it unchanged." >&2
+        return 0
+        ;;
+      *)
+        defaults write "$domain" TrackpadThreeFingerHorizSwipeGesture -int "$saved_value" || return 0
+        ;;
+    esac
+  done < "$saved_setting"
+
+  rm -f "$saved_setting"
+  echo "Restored the previous macOS three-finger swipe setting."
+}
+
 restore_mission_control_grouping() {
   local saved_setting="$OMACCY_DIR/mission-control-group-apps.original"
   local saved_value

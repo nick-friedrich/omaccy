@@ -4,6 +4,8 @@ struct MenuEntry: Sendable {
     let title: String
     let detail: String
     var bundleID: String? = nil
+    /// Selecting this entry should open a fresh window rather than focus one.
+    var opensNewWindow = false
     var destination: MenuPage? = nil
     var systemAction: SystemAction? = nil
     var package: HomebrewPackage? = nil
@@ -947,7 +949,11 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             panel.makeFirstResponder(search)
         } else if let bundleID = entry.bundleID {
             panel.orderOut(nil)
-            HotkeyBindings.focusOrLaunch(bundleIdentifier: bundleID)
+            if entry.opensNewWindow {
+                HotkeyBindings.launchNewWindow(bundleIdentifier: bundleID)
+            } else {
+                HotkeyBindings.focusOrLaunch(bundleIdentifier: bundleID)
+            }
         } else if let themeName = entry.theme {
             previewGeneration += 1
             applyTheme(named: themeName)
@@ -1626,6 +1632,9 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 .replacingOccurrences(of: ".app", with: "") } ?? id
             byID[id] = MenuEntry(title: name, detail: "Hyper + \(key.uppercased())", bundleID: id)
             help.append(MenuEntry(title: "Open \(name)", detail: "Hyper + \(key.uppercased())", bundleID: id))
+            help.append(MenuEntry(title: "Open a new \(name) window",
+                                  detail: "Hyper + Shift + \(key.uppercased())", bundleID: id,
+                                  opensNewWindow: true))
         }
         apps = byID.values.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         if config.escapeOnTap { help.append(MenuEntry(title: "Send Escape", detail: "Tap Caps Lock")) }

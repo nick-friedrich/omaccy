@@ -44,10 +44,14 @@ main() {
     "$HOME/.config/aerospace/dock-toggle.sh"
   ensure_symlink "$REPO_ROOT/config/aerospace/layout.sh" \
     "$HOME/.config/aerospace/layout.sh"
+  ensure_symlink "$REPO_ROOT/config/aerospace/window-memory.sh" \
+    "$HOME/.config/aerospace/window-memory.sh"
   chmod +x "$CONF_DIR/aerospace/dock-toggle.sh"
   chmod +x "$CONF_DIR/aerospace/layout.sh"
+  chmod +x "$CONF_DIR/aerospace/window-memory.sh"
   disable_mission_control_arrow_shortcuts
   enable_mission_control_grouping
+  disable_three_finger_swipe
   killall Dock 2>/dev/null || true
   ensure_symlink "$REPO_ROOT/config/sketchybar/sketchybarrc" \
     "$HOME/.config/sketchybar/sketchybarrc"

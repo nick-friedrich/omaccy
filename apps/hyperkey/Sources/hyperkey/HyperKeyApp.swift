@@ -72,6 +72,11 @@ struct HyperKeyApp {
         // 6. Start the event tap (runs on the main run loop)
         EventTap.start()
 
+        // 6b. Watch the trackpad for three-finger workspace swipes
+        if configuration.trackpadSwipe {
+            TrackpadGestures.start(naturalDirection: configuration.trackpadSwipeNatural)
+        }
+
         // 7. Set up NSApplication with menu bar item
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)

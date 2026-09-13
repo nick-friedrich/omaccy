@@ -117,7 +117,20 @@ Hyper is **Caps Lock** (Command+Control+Option, deliberately without Shift).
 | `Hyper+H/J/K/L` | Focus window left/down/up/right (`+Shift` moves it) |
 | `Hyper+U` / `Hyper+I` | Shrink / grow the focused window (hold to repeat) |
 | `Hyper+1…9` | Switch workspace (`+Shift` moves the window there) |
-| `Hyper+T`, `+B`, `+F`, `+R` | Ghostty, Chrome, Finder, Reminders |
+| `Hyper+T`, `+B`, `+F`, `+R` | Ghostty, Chrome, Finder, Reminders (`+Shift` opens a new window) |
+| Three-finger swipe ←/→ | Switch workspace (replaces the macOS full-screen-app swipe) |
+
+Apps reopen on the workspace they live on, so starting Chrome puts it back where
+Chrome belongs rather than on top of what you are doing. The mapping is learned,
+not configured: move an app somewhere and that becomes its home, across
+restarts. Only an app's **first** window is placed — open a second window while
+you are elsewhere and it stays with you, because you asked for a window here,
+not for the app to move. An app you have never opened stays where it lands.
+Remove the `window-memory.sh` rule from `~/.config/aerospace/aerospace.toml` to
+turn it off.
+
+Each workspace also keeps its own layout mode across restarts, in
+`~/.omaccy/workspace-layout/`.
 
 Each workspace has a **layout mode**, shown in the menu bar where the tiling
 indicator used to just read "Tiling". Click it to pick a different one:
