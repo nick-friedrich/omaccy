@@ -344,6 +344,13 @@ final class MenuTests: XCTestCase {
         XCTAssertEqual(MenuCatalog.fontEntries(matching: "jetbrains", active: "serif").map(\.font), ["jetbrains-mono"])
         XCTAssertEqual(MenuCatalog.fontEntries(matching: "active", active: "serif").map(\.font), ["serif"])
     }
+
+    /// While a font is only being previewed, Active stays on the one that
+    /// leaving the page would put back.
+    func testFontPageKeepsActiveOnTheChoiceBeforePreview() {
+        let entries = MenuCatalog.results(query: "", page: .font, apps: [], help: [], activeFont: "jetbrains-mono")
+        XCTAssertEqual(entries.filter { $0.detail == "Active" }.map(\.font), ["jetbrains-mono"])
+    }
 }
 
 /// `reloadData` drops the selection, which broke every ⌘ chord in the palette:

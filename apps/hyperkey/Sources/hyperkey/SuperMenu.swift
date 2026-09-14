@@ -143,15 +143,18 @@ enum MenuCatalog {
                         defaultApps: [AppCollection: String] = [:],
                         boundKeys: Set<String> = [],
                         clipboard: ClipboardSettingsState = ClipboardSettingsState(),
-                        clipboardItems: [ClipboardItem] = []) -> [MenuEntry] {
+                        clipboardItems: [ClipboardItem] = [],
+                        activeTheme: String? = nil, activeFont: String? = nil) -> [MenuEntry] {
         if page == .install { return [] }
         if page == .settings {
             return matching(query, in: settings) { "\($0.title) \($0.detail)" }
         }
         if page == .clipboardSettings { return clipboardEntries(matching: query, state: clipboard) }
         if page == .clipboard { return clipboardHistoryEntries(matching: query, items: clipboardItems) }
-        if page == .theme { return themeReachEntries(matching: query) + themeEntries(matching: query) }
-        if page == .font { return fontEntries(matching: query) }
+        if page == .theme {
+            return themeReachEntries(matching: query) + themeEntries(matching: query, active: activeTheme)
+        }
+        if page == .font { return fontEntries(matching: query, active: activeFont) }
         if page == .agents {
             return agentEntries(matching: query, defaultToken: defaultAgent, chord: chord("A", boundKeys))
         }
@@ -393,6 +396,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var keyMonitor: Any?
     private var builtFor: String?
     private var previewGeneration = 0
+    /// The theme and font in place before browsing started previewing others,
+    /// put back unless Return or a click keeps what is showing. Nil while
+    /// nothing is being previewed.
+    private var appearanceBeforePreview: (theme: String, font: String)?
     private var apps: [MenuEntry] = []
     private var help: [MenuEntry] = []
     private var rows: [MenuEntry] = []
@@ -452,6 +459,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if panel == nil { build() }
         if panel.isVisible && openingSection.page == section.page { dismiss(); return }
         if !panel.isVisible { previousApp = NSWorkspace.shared.frontmostApplication }
+        revertPreview()
         openingSection = section
         page = section.page
         selectionMemory.removeAll()
@@ -541,7 +549,11 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         table.backgroundColor = .clear
         table.focusRingType = .none
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
-        table.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier("entry")))
+        // The table outlives the panel, and an appearance change rebuilds the
+        // panel around it, so only the first build adds the column.
+        if table.tableColumns.isEmpty {
+            table.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier("entry")))
+        }
         table.delegate = self
         table.dataSource = self
         table.target = self
@@ -632,6 +644,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
 
     private func dismiss() {
         panel.orderOut(nil)
+        revertPreview()
         if let previousApp, previousApp.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             previousApp.activate(options: [])
         }
@@ -672,12 +685,15 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
 
     private func back() {
         if !search.stringValue.isEmpty { search.stringValue = ""; filter() }
-        else if page != .home { page = .home; filter(restoring: selectionMemory.removeValue(forKey: .home)) }
+        else if page != .home { revertPreview(); page = .home; filter(restoring: selectionMemory.removeValue(forKey: .home)) }
         else { dismiss() }
         if panel.isVisible { panel.makeFirstResponder(search) }
     }
 
-    func windowDidResignKey(_ notification: Notification) { panel.orderOut(nil) }
+    func windowDidResignKey(_ notification: Notification) {
+        panel.orderOut(nil)
+        revertPreview()
+    }
     func controlTextDidChange(_ notification: Notification) { filter() }
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { PaletteRow() }
@@ -886,31 +902,67 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         previewAppearance(for: rows[row])
     }
 
-    /// Live-previews a theme/font as arrow-key browsing passes over it —
-    /// clicking a row already applies immediately via activate(row:), so
-    /// this makes keyboard navigation match. Debounced so arrowing through
-    /// the list doesn't restyle everything on every step; only the row the
-    /// user settles on gets applied. A theme reaches Ghostty, SketchyBar,
-    /// Neovim, herdr and the editors, so the wait is long enough to read a
-    /// row by, not just to swallow key repeat — at 0.18s, stepping down the
-    /// list at reading pace flickered every one of them.
-    private static let previewDelay: TimeInterval = 1.5
+    /// Live-previews a theme/font as arrow-key browsing passes over it.
+    /// Debounced so arrowing through the list doesn't restyle everything on
+    /// every step; only the row the user settles on is shown. A theme reaches
+    /// Ghostty, SketchyBar, Neovim, herdr and the editors, so the wait is long
+    /// enough to read a row by, not just to swallow key repeat — at 0.18s,
+    /// stepping down the list at reading pace flickered every one of them.
+    /// The preview is only kept by Return or a click; leaving the page,
+    /// closing the palette, or settling on a row that isn't a theme or font
+    /// puts the original back.
+    private static let previewDelay: TimeInterval = 1.0
 
     private func previewAppearance(for entry: MenuEntry) {
-        let apply: () -> Void
-        if let themeName = entry.theme, themeName != OmaccyAppearance.currentThemeName {
-            apply = { self.applyTheme(named: themeName) }
-        } else if let fontKey = entry.font, fontKey != OmaccyAppearance.currentFontKey {
-            apply = { self.applyFont(named: fontKey) }
-        } else {
-            return
-        }
         previewGeneration += 1
+        guard page == .theme || page == .font else { return }
         let generation = previewGeneration
+        let previewPage = page
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.previewDelay) { [weak self] in
-            guard let self, self.previewGeneration == generation else { return }
-            apply()
+            // Typing a search moves the selection without an arrow step, so
+            // check the row is still the one selected before showing it.
+            guard let self, self.previewGeneration == generation,
+                  self.panel?.isVisible == true, self.page == previewPage,
+                  self.rows.indices.contains(self.table.selectedRow),
+                  self.rows[self.table.selectedRow].title == entry.title else { return }
+            if let themeName = entry.theme {
+                self.beginPreview()
+                if themeName != OmaccyAppearance.currentThemeName { self.applyTheme(named: themeName) }
+            } else if let fontKey = entry.font {
+                self.beginPreview()
+                if fontKey != OmaccyAppearance.currentFontKey { self.applyFont(named: fontKey) }
+            } else {
+                self.revertPreview()
+            }
         }
+    }
+
+    private func beginPreview() {
+        guard appearanceBeforePreview == nil else { return }
+        appearanceBeforePreview = (OmaccyAppearance.currentThemeName, OmaccyAppearance.currentFontKey)
+    }
+
+    /// Keeps whatever is showing: the previewed appearance becomes the chosen one.
+    private func commitPreview() {
+        previewGeneration += 1
+        appearanceBeforePreview = nil
+    }
+
+    /// Cancels a pending preview and puts back the appearance from before
+    /// browsing began. Safe to call when nothing is being previewed.
+    private func revertPreview() {
+        previewGeneration += 1
+        guard let original = appearanceBeforePreview else { return }
+        appearanceBeforePreview = nil
+        if original.theme != OmaccyAppearance.currentThemeName { OmaccyAppearance.applyTheme(original.theme) }
+        if original.font != OmaccyAppearance.currentFontKey { OmaccyAppearance.applyFont(original.font) }
+        // A hidden palette picks the change up when it next opens; rebuilding
+        // now would bring it back on screen.
+        guard panel?.isVisible == true else { return }
+        let selectedTitle = rows.indices.contains(table.selectedRow) ? rows[table.selectedRow].title : nil
+        refreshAppearance()
+        filter()
+        restoreSelection { $0.title == selectedTitle }
     }
 
     @objc private func activateClickedRow() {
@@ -940,6 +992,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private func activate(row: Int) {
         guard rows.indices.contains(row) else { return }
         let entry = rows[row]
+        if entry.theme == nil && entry.font == nil { revertPreview() }
         if let destination = entry.destination {
             selectionMemory[page] = entry
             page = destination
@@ -955,11 +1008,13 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 HotkeyBindings.focusOrLaunch(bundleIdentifier: bundleID)
             }
         } else if let themeName = entry.theme {
-            previewGeneration += 1
-            applyTheme(named: themeName)
+            let alreadyShowing = appearanceBeforePreview != nil && themeName == OmaccyAppearance.currentThemeName
+            commitPreview()
+            if alreadyShowing { settleActiveMarker { $0.theme == themeName } } else { applyTheme(named: themeName) }
         } else if let fontKey = entry.font {
-            previewGeneration += 1
-            applyFont(named: fontKey)
+            let alreadyShowing = appearanceBeforePreview != nil && fontKey == OmaccyAppearance.currentFontKey
+            commitPreview()
+            if alreadyShowing { settleActiveMarker { $0.font == fontKey } } else { applyFont(named: fontKey) }
         } else if entry.updatesOmaccy {
             updateOmaccy()
         } else if entry.upgradesAll {
@@ -1098,6 +1153,13 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         guard apply() else { return }
         refreshAppearance()
         onSettled()
+        tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
+    }
+
+    /// Moves the Active marker onto a choice that a preview already applied.
+    private func settleActiveMarker(matching predicate: (MenuEntry) -> Bool) {
+        filter()
+        restoreSelection(matching: predicate)
         tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
     }
 
@@ -1539,7 +1601,9 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             : MenuCatalog.results(query: search.stringValue, page: page, apps: apps, help: help,
                                   defaultAgent: defaultAgentToken, defaultApps: defaultAppTokens,
                                   boundKeys: boundKeys, clipboard: clipboardState,
-                                  clipboardItems: ClipboardMonitor.shared.items)
+                                  clipboardItems: ClipboardMonitor.shared.items,
+                                  activeTheme: appearanceBeforePreview?.theme,
+                                  activeFont: appearanceBeforePreview?.font)
         let upgradeQuery = search.stringValue.lowercased().split(whereSeparator: \.isWhitespace)
         if page == .install && inventoryReady && upgradeQuery.allSatisfy({ "upgrade all update packages".contains($0) }) {
             let available = HomebrewUpgrade.availableCount(installedPackages)

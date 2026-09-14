@@ -10,6 +10,15 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.6` tag is cut.
 
+### Changed
+
+- Browsing the launcher's Theme and Font pages now previews instead of
+  choosing. Rest on a row for a second and everything switches to it, but only
+  Return or a click keeps it: press Esc to leave the page, close the palette,
+  or move up to the switches at the top of the Theme page, and your previous
+  theme and font come back. While you browse, Active stays on the one you
+  would return to.
+
 ## [0.4.5] - 2026-09-13
 
 ### Removed
