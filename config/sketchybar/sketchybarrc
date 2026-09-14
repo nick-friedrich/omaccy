@@ -417,6 +417,21 @@ sketchybar --add item aerospace.toggle popup.aerospace \
     background.drawing=off \
     click_script="$PLUGIN_DIR/aerospace-state.sh toggle"
 
+# SketchyBar draws the bar and each item in windows of their own, the items
+# stacked above the bar. Since macOS 27 a click raises the window it lands on,
+# so clicking an empty stretch put the opaque bar over every item: they stopped
+# drawing, though clicks still reached them, since SketchyBar finds the item
+# under the pointer. This bracket spans every item with a background too faint
+# to see but solid enough to catch those clicks. Raising it hides nothing, and
+# a click landing on a bracket is passed to whatever item is under the pointer.
+sketchybar --add bracket click_guard native_menu '/workspace\.[0-9]/' front_app aerospace caffeinate battery clock \
+  --set click_guard \
+    background.drawing=on \
+    background.color=0x01000000 \
+    background.height=34 \
+    background.corner_radius=0 \
+    background.border_width=0
+
 sketchybar --trigger aerospace_workspace_change
 sketchybar --update
 

@@ -10,6 +10,13 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.7` tag is cut.
 
+### Fixed
+
+- Clicking an empty part of the bar on macOS 27 no longer makes every icon
+  and label in it disappear. They stayed clickable but invisible until
+  SketchyBar was reloaded. The bar picks up the fix the next time it reloads,
+  for example after a theme or font change or a `sketchybar --reload`.
+
 ## [0.4.6] - 2026-09-14
 
 ### Changed
