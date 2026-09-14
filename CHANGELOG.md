@@ -6,9 +6,11 @@ Notable changes to Omaccy. Versions match the `v*` tags that
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.6] - unreleased
+## [0.4.7] - unreleased
 
-Dated when the `v0.4.6` tag is cut.
+Dated when the `v0.4.7` tag is cut.
+
+## [0.4.6] - 2026-09-14
 
 ### Changed
 
@@ -316,7 +318,8 @@ Releases before 0.4.1 predate this file. The 0.4.0 entry is reconstructed from
 its release commit; for 0.3.0 and earlier, see the annotated `v*` tags and the
 commit history.
 
-[0.4.6]: https://github.com/nick-friedrich/omaccy/compare/v0.4.5...HEAD
+[0.4.7]: https://github.com/nick-friedrich/omaccy/compare/v0.4.6...HEAD
+[0.4.6]: https://github.com/nick-friedrich/omaccy/compare/v0.4.5...v0.4.6
 [0.4.5]: https://github.com/nick-friedrich/omaccy/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/nick-friedrich/omaccy/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/nick-friedrich/omaccy/compare/v0.4.2...v0.4.3
