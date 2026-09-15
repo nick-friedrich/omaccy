@@ -46,9 +46,12 @@ main() {
     "$HOME/.config/aerospace/layout.sh"
   ensure_symlink "$REPO_ROOT/config/aerospace/window-memory.sh" \
     "$HOME/.config/aerospace/window-memory.sh"
+  ensure_symlink "$REPO_ROOT/config/aerospace/clear-workspace.sh" \
+    "$HOME/.config/aerospace/clear-workspace.sh"
   chmod +x "$CONF_DIR/aerospace/dock-toggle.sh"
   chmod +x "$CONF_DIR/aerospace/layout.sh"
   chmod +x "$CONF_DIR/aerospace/window-memory.sh"
+  chmod +x "$CONF_DIR/aerospace/clear-workspace.sh"
   disable_mission_control_arrow_shortcuts
   enable_mission_control_grouping
   disable_three_finger_swipe

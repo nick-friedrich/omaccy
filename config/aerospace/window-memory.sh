@@ -19,7 +19,8 @@
 #
 # `record` snapshots every window; it runs on workspace and focus changes, the
 # second of which is what catches a window being closed. `place` runs from the
-# on-window-detected rule in aerospace.toml for one new window.
+# on-window-detected rule in aerospace.toml for one new window. `forget` drops
+# every application remembered on one workspace, for clear-workspace.sh.
 
 set -uo pipefail
 
@@ -103,6 +104,17 @@ record() {
   fi
 }
 
+# Unlike record, an empty result is fine here: clearing the only workspace
+# anything was remembered on leaves nothing to remember.
+forget() {
+  local workspace="$1" tmp
+  [[ -n "$workspace" && -f "$STATE_FILE" ]] || return 0
+  tmp="$(mktemp "${STATE_FILE}.XXXXXX")" || return 0
+  awk -F'|' -v workspace="$workspace" '$2 != workspace' "$STATE_FILE" > "$tmp" ||
+    { rm -f "$tmp"; return 0; }
+  mv "$tmp" "$STATE_FILE" 2>/dev/null || rm -f "$tmp"
+}
+
 place() {
   local window_id="$1"
   local aerospace listing app windows remembered current
@@ -136,5 +148,6 @@ place() {
 case "${1:-}" in
   record) record ;;
   place)  place "${2:-}" ;;
-  *) echo "Usage: $(basename "$0") record | place <window-id>" >&2; exit 1 ;;
+  forget) forget "${2:-}" ;;
+  *) echo "Usage: $(basename "$0") record | place <window-id> | forget <workspace>" >&2; exit 1 ;;
 esac

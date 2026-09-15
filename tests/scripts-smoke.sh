@@ -883,6 +883,21 @@ FAKE
   [[ "$(bash "$layout" current 4)" == horizontal ]] ||
     fail "a mode set on one workspace leaked into another"
 
+  # A workspace nobody has set follows default_layout from hyperkey.toml; one
+  # that was set keeps its own mode. A default in [bindings], a commented-out
+  # one, or one naming no mode is ignored rather than trusted.
+  printf 'default_layout = "Accordion"\n' > "$test_dir/layout-hyperkey.toml"
+  [[ "$(OMACCY_HYPERKEY_CONFIG="$test_dir/layout-hyperkey.toml" bash "$layout" current 4)" == accordion ]] ||
+    fail "layout.sh ignored default_layout for a workspace with no mode"
+  [[ "$(OMACCY_HYPERKEY_CONFIG="$test_dir/layout-hyperkey.toml" bash "$layout" current 3)" == vertical ]] ||
+    fail "default_layout overrode a mode set on the workspace"
+  printf '# default_layout = "grid"\n[bindings]\ndefault_layout = "grid"\n' > "$test_dir/layout-hyperkey.toml"
+  [[ "$(OMACCY_HYPERKEY_CONFIG="$test_dir/layout-hyperkey.toml" bash "$layout" current 4)" == horizontal ]] ||
+    fail "a commented or sectioned default_layout was taken as the default"
+  printf "default_layout = 'sideways'\n" > "$test_dir/layout-hyperkey.toml"
+  [[ "$(OMACCY_HYPERKEY_CONFIG="$test_dir/layout-hyperkey.toml" bash "$layout" current 4)" == horizontal ]] ||
+    fail "a default_layout naming no mode was not replaced by Columns"
+
   if bash "$layout" set sideways 3 >/dev/null 2>&1; then
     fail "layout.sh accepted a mode that does not exist"
   fi
@@ -913,6 +928,119 @@ FAKE
   if grep -q '^layout ' "$AEROSPACE_LOG"; then
     fail "re-asserting an unchanged mode reset the workspace layout"
   fi
+)
+
+# Clearing a workspace, against a fake aerospace that keeps its windows in a
+# file ("id|bundle|workspace") and drops one on close -- except window 12, which
+# stands in for a window kept open by a save prompt.
+(
+  repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  clear_script="$repo/config/aerospace/clear-workspace.sh"
+  HOME="$test_dir/clear-home"
+  mkdir -p "$HOME/.omaccy/workspace-layout"
+  CLEAR_LOG="$test_dir/clear-calls.log"
+  CLEAR_WINDOWS="$test_dir/clear-windows"
+  export CLEAR_LOG CLEAR_WINDOWS
+  printf '11|com.google.Chrome|3\n12|com.apple.TextEdit|3\n21|com.mitchellh.ghostty|4\n' > "$CLEAR_WINDOWS"
+  fake_aerospace="$test_dir/clear-bin/aerospace"
+  mkdir -p "$(dirname "$fake_aerospace")"
+  cat > "$fake_aerospace" <<'FAKE'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$CLEAR_LOG"
+arg_after() {
+  local want="$1"; shift
+  while [[ $# -gt 1 ]]; do [[ "$1" == "$want" ]] && { printf '%s\n' "$2"; return; }; shift; done
+}
+case "$1" in
+  list-workspaces) printf '3\n' ;;
+  list-windows)
+    workspace="$(arg_after --workspace "$@")"
+    case "$*" in
+      *--count*) awk -F'|' -v w="$workspace" '$3 == w' "$CLEAR_WINDOWS" | wc -l | tr -d ' ' ;;
+      *workspace-root-container-layout*) printf 'v_tiles\n' ;;
+      *) awk -F'|' -v w="$workspace" '$3 == w { print $1 }' "$CLEAR_WINDOWS" ;;
+    esac
+    ;;
+  close)
+    id="$(arg_after --window-id "$@")"
+    [[ "$id" == 12 ]] && exit 0
+    awk -F'|' -v id="$id" '$1 != id' "$CLEAR_WINDOWS" > "$CLEAR_WINDOWS.tmp"
+    mv "$CLEAR_WINDOWS.tmp" "$CLEAR_WINDOWS"
+    ;;
+esac
+FAKE
+  chmod +x "$fake_aerospace"
+  recorder="$test_dir/clear-bin/sketchybar"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "$CLEAR_LOG.bar"\n' > "$recorder"
+  chmod +x "$recorder"
+
+  printf 'com.google.Chrome|3\ncom.apple.TextEdit|3\ncom.mitchellh.ghostty|4\ncom.apple.Notes|5\n' \
+    > "$HOME/.omaccy/window-placement"
+  printf 'grid\n' > "$HOME/.omaccy/workspace-layout/3"
+  printf 'accordion\n' > "$HOME/.omaccy/workspace-layout/4"
+
+  output="$(AEROSPACE_BIN="$fake_aerospace" OMACCY_SKETCHYBAR_BIN="$recorder" \
+    OMACCY_CLEAR_WAIT_TICKS=1 bash "$clear_script")" ||
+    fail "clear-workspace.sh failed"
+
+  grep -qx 'close --quit-if-last-window --window-id 11' "$CLEAR_LOG" ||
+    fail "clear-workspace.sh did not close the focused workspace's windows"
+  if grep -q 'close .*--window-id 21' "$CLEAR_LOG"; then
+    fail "clear-workspace.sh closed a window on another workspace"
+  fi
+  [[ "$(cat "$HOME/.omaccy/window-placement")" == $'com.mitchellh.ghostty|4\ncom.apple.Notes|5' ]] ||
+    fail "clearing did not forget exactly the applications remembered on the workspace"
+  [[ ! -e "$HOME/.omaccy/workspace-layout/3" ]] ||
+    fail "clearing kept the workspace's own layout mode"
+  [[ "$(cat "$HOME/.omaccy/workspace-layout/4")" == accordion ]] ||
+    fail "clearing reset another workspace's layout mode"
+  grep -qx 'layout --workspace 3 --root tiles horizontal' "$CLEAR_LOG" ||
+    fail "a window left open was not put back into the default layout"
+  grep -qx -- '--trigger aerospace_workspace_change' "$CLEAR_LOG.bar" ||
+    fail "clearing did not refresh the bar"
+  [[ "$output" == *"1 window(s) are still open"* ]] ||
+    fail "clearing did not report the window a save prompt kept open"
+
+  # An empty workspace has nothing to rearrange, so reset only forgets.
+  printf 'grid\n' > "$HOME/.omaccy/workspace-layout/5"
+  : > "$CLEAR_LOG"
+  AEROSPACE_BIN="$fake_aerospace" bash "$repo/config/aerospace/layout.sh" reset 5
+  [[ ! -e "$HOME/.omaccy/workspace-layout/5" ]] ||
+    fail "layout.sh reset kept the stored mode"
+  if grep -q '^layout \|^flatten' "$CLEAR_LOG"; then
+    fail "layout.sh reset rearranged an empty workspace"
+  fi
+)
+
+# The bar's Clear workspace row: it must ask, do nothing on Cancel, and clear
+# the focused workspace by name on Clear.
+(
+  repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  HOME="$test_dir/clear-row-home"
+  mkdir -p "$HOME/.config/aerospace"
+  calls="$test_dir/clear-row-calls"
+  bin="$test_dir/clear-row-bin"
+  mkdir -p "$bin"
+  printf '#!/usr/bin/env bash\nprintf "sketchybar %%s\\n" "$*" >> "%s"\n' "$calls" > "$bin/sketchybar"
+  printf '#!/usr/bin/env bash\n[[ "$1" == list-workspaces ]] && printf "7\\n"\nexit 0\n' > "$bin/aerospace"
+  printf '#!/usr/bin/env bash\nprintf "clear %%s\\n" "$*" >> "%s"\n' "$calls" > "$HOME/.config/aerospace/clear-workspace.sh"
+  printf '#!/usr/bin/env bash\nprintf "osascript %%s\\n" "$*" >> "%s"\nexit "${DIALOG_EXIT:-1}"\n' "$calls" > "$bin/osascript"
+  chmod +x "$bin"/* "$HOME/.config/aerospace/clear-workspace.sh"
+  clear_row() {
+    : > "$calls"
+    PATH="$bin:$PATH" OMACCY_OSASCRIPT_BIN="$bin/osascript" \
+      /bin/bash "$repo/config/sketchybar/plugins/aerospace-state.sh" clear
+  }
+
+  DIALOG_EXIT=1 clear_row
+  grep -Fxq 'osascript - 7' "$calls" || fail "Clear workspace did not ask about the focused workspace"
+  if grep -q '^clear' "$calls"; then
+    fail "Clear workspace cleared after the dialog was cancelled"
+  fi
+  DIALOG_EXIT=0 clear_row
+  grep -Fxq 'clear 7' "$calls" || fail "Clear workspace did not clear the workspace it asked about"
+  grep -Fxq 'sketchybar --set aerospace popup.drawing=off' "$calls" ||
+    fail "Clear workspace left the tiling popup open"
 )
 
 # The calendar popup, against a sketchybar that records one argument per line.
@@ -1377,4 +1505,4 @@ LUA
     fail "Neovim did not follow the theme"
 fi
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, directory configs, the Neovim opt-in, master-stack retirement, workspace layout modes, the calendar popup, the Apple menu, the front-app name, Neovim theme following, the zsh setup, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, directory configs, the Neovim opt-in, master-stack retirement, workspace layout modes, clearing a workspace, the calendar popup, the Apple menu, the front-app name, Neovim theme following, the zsh setup, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'

@@ -87,6 +87,8 @@ main() {
     "$CONF_DIR/aerospace/layout.sh"
   restore_target "$HOME/.config/aerospace/window-memory.sh" \
     "$CONF_DIR/aerospace/window-memory.sh"
+  restore_target "$HOME/.config/aerospace/clear-workspace.sh" \
+    "$CONF_DIR/aerospace/clear-workspace.sh"
   # Retired in 0.4.2 and removed by install.sh, so this only finds anything on
   # a machine that is being uninstalled without having been updated first.
   restore_target "$HOME/.config/aerospace/master-stack.sh" \
@@ -133,6 +135,7 @@ main() {
     "$CONF_DIR/aerospace/dock-toggle.sh" \
     "$CONF_DIR/aerospace/layout.sh" \
     "$CONF_DIR/aerospace/window-memory.sh" \
+    "$CONF_DIR/aerospace/clear-workspace.sh" \
     "$CONF_DIR/aerospace/master-stack.sh" \
     "$CONF_DIR/aerospace/aerospace.toml" \
     "$CONF_DIR/sketchybar/sketchybarrc" \
@@ -152,6 +155,7 @@ main() {
     "$OMACCY_DIR/sha256/aerospace/dock-toggle.sh" \
     "$OMACCY_DIR/sha256/aerospace/layout.sh" \
     "$OMACCY_DIR/sha256/aerospace/window-memory.sh" \
+    "$OMACCY_DIR/sha256/aerospace/clear-workspace.sh" \
     "$OMACCY_DIR/sha256/aerospace/master-stack.sh" \
     "$OMACCY_DIR/sha256/aerospace/aerospace.toml" \
     "$OMACCY_DIR/sha256/sketchybar/sketchybarrc" \

@@ -444,6 +444,28 @@ Ghostty. Its count comes from the complete installed inventory, independent of
 search results and their limit. Homebrew determines final eligibility, preserving
 pins and its standard cask update rules. No bulk upgrade runs during validation.
 
+Workspace layout modes live in `config/aerospace/layout.sh`, one file per
+workspace under `~/.omaccy/workspace-layout/`. A workspace without one takes
+`default_layout` from `hyperkey.toml`, which the palette's Settings → Layout
+page writes through `Configuration`. The script reads the key itself on every
+call rather than being told it, so the bar, the AeroSpace callback and the app
+need no coordination; its awk scan follows `Configuration.load`'s rules (top
+level only, comments ignored, an unknown mode falls back to Columns), and the
+smoke checks and `ConfigurationTests` each pin those cases. `WorkspaceLayout`
+mirrors the script's mode names, which are the values the key holds. After a
+change the app sends SketchyBar `aerospace_workspace_change` so the tiling
+label reflects it without waiting for the poll.
+
+`config/aerospace/clear-workspace.sh` starts a workspace over, and is the one
+definition both the tiling popup and the palette's System page run; each asks
+first (an osascript dialog from the bar, which works from SketchyBar's launchd
+context, and an `NSAlert` in the app). It closes every window with
+`close --quit-if-last-window`, waits up to three seconds for them to go, then
+runs `window-memory.sh forget` and `layout.sh reset`. The order is
+load-bearing: each close moves focus, and the `record` that runs on focus
+change merges remembered entries back in, so forgetting before the windows are
+gone would be undone. A window a save prompt keeps open is simply relearned.
+
 `AppCollections.swift` holds the picker collections that are plain app choices:
 Mail (Hyper+E) and Editors (Hyper+C). Each is a fixed list of interchangeable
 apps with one default recorded in `hyperkey.toml` (`default_mail`,

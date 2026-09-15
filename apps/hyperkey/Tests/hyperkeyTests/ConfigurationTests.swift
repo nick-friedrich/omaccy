@@ -61,6 +61,34 @@ final class ConfigurationTests: XCTestCase {
         XCTAssertNil(Configuration.load()[.mail])
     }
 
+    func testDefaultLayoutSurvivesASaveAndReload() {
+        var config = Configuration(escapeOnTap: false, bindings: [:])
+        XCTAssertEqual(config.defaultLayout, .horizontal)
+        config.defaultLayout = .accordion
+        config.save()
+        XCTAssertEqual(Configuration.load().defaultLayout, .accordion)
+        let contents = (try? String(contentsOf: configURL, encoding: .utf8)) ?? ""
+        XCTAssertTrue(contents.contains("default_layout = \"accordion\""))
+    }
+
+    /// layout.sh reads the same key and must agree on what counts: a mode it
+    /// does not know, or one under a section, falls back to Columns.
+    func testUnknownOrSectionedDefaultLayoutFallsBack() throws {
+        try write("""
+        default_layout = "Grid"
+        """)
+        XCTAssertEqual(Configuration.load().defaultLayout, .grid)
+        try write("""
+        default_layout = "sideways"
+        """)
+        XCTAssertEqual(Configuration.load().defaultLayout, .horizontal)
+        try write("""
+        [bindings]
+        default_layout = "grid"
+        """)
+        XCTAssertEqual(Configuration.load().defaultLayout, .horizontal)
+    }
+
     /// A key the shipped config comments out must not read back as a value.
     func testCommentedDefaultsStayUnset() throws {
         try write("""

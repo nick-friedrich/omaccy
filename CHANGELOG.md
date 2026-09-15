@@ -10,6 +10,20 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.7` tag is cut.
 
+### Added
+
+- Choose the layout mode workspaces start in — Columns, Rows, Grid or
+  Accordion — under the launcher's Settings → Layout, or with
+  `default_layout` in `~/.config/omaccy/hyperkey.toml`. It applies to every
+  workspace you have not picked a mode for in the menu bar, and takes effect
+  the next time a window opens there; workspaces you already set keep their
+  mode.
+- **Clear workspace…** in the menu bar's tiling popup, and under System in the
+  launcher, starts the focused workspace over after asking: its windows close
+  (an app quits when that was its last window, and unsaved work still
+  prompts), apps that lived there stop reopening on it, and it goes back to
+  the default layout.
+
 ### Changed
 
 - The Starship prompt shows the last two folders of the path instead of one,

@@ -33,6 +33,10 @@ final class MenuTests: XCTestCase {
         let actions = MenuCatalog.results(query: "", page: .system, apps: [], help: [])
         XCTAssertEqual(actions.compactMap(\.systemAction), [.sleep, .restart, .shutDown])
         XCTAssertTrue(actions.allSatisfy { $0.bundleID == nil && $0.destination == nil })
+        XCTAssertEqual(actions.last?.title, "Clear workspace")
+        XCTAssertEqual(actions.filter(\.clearsWorkspace).count, 1)
+        XCTAssertEqual(MenuCatalog.results(query: "clear workspace", page: .home, apps: [], help: [])
+            .filter(\.clearsWorkspace).count, 1)
         for page in [MenuPage.home, .apps, .help, .system] {
             for (query, expected) in [("sleep", SystemAction.sleep), ("restart", .restart), ("shutdown", .shutDown), ("shut down", .shutDown)] {
                 let results = MenuCatalog.results(query: query, page: page, apps: [], help: [])
@@ -211,13 +215,33 @@ final class MenuTests: XCTestCase {
 
     func testSettingsPageListsThemeAndFontCollections() {
         let entries = MenuCatalog.results(query: "", page: .settings, apps: [], help: [])
-        XCTAssertEqual(entries.map(\.title), ["Theme", "Font", "Clipboard", "Update Omaccy"])
-        XCTAssertEqual(entries.compactMap(\.destination), [.theme, .font, .clipboardSettings])
+        XCTAssertEqual(entries.map(\.title), ["Theme", "Font", "Layout", "Clipboard", "Update Omaccy"])
+        XCTAssertEqual(entries.compactMap(\.destination), [.theme, .font, .layout, .clipboardSettings])
         // The updater lives here now rather than on Home, but a search from
         // Home still reaches it, since global search spans Settings too.
         XCTAssertFalse(MenuCatalog.categories().contains { $0.updatesOmaccy })
         XCTAssertEqual(MenuCatalog.results(query: "font", page: .settings, apps: [], help: []).map(\.title), ["Font"])
         XCTAssertTrue(MenuCatalog.results(query: "nord", page: .settings, apps: [], help: []).isEmpty)
+    }
+
+    /// Every mode layout.sh knows is offered, under the name the bar shows,
+    /// and only the configured default carries the check.
+    func testLayoutPageListsEveryModeAndMarksTheDefault() {
+        let rows = MenuCatalog.results(query: "", page: .layout, apps: [], help: [], defaultLayout: .grid)
+        XCTAssertEqual(rows.map(\.title), ["Columns", "Rows", "Grid", "Accordion"])
+        XCTAssertEqual(rows.compactMap(\.workspaceLayout), WorkspaceLayout.allCases)
+        XCTAssertEqual(rows.filter(\.isOn).map(\.workspaceLayout), [.grid])
+        // The script's own names find their rows, since those are what
+        // hyperkey.toml holds.
+        XCTAssertEqual(MenuCatalog.results(query: "vertical", page: .layout, apps: [], help: [])
+            .map(\.title), ["Rows"])
+    }
+
+    func testLayoutModesStayOnTheirPage() {
+        let results = MenuCatalog.results(query: "accordion", page: .home, apps: [], help: [])
+        XCTAssertTrue(results.allSatisfy { $0.workspaceLayout == nil })
+        XCTAssertTrue(MenuCatalog.results(query: "layout", page: .home, apps: [], help: [])
+            .contains { $0.destination == .layout })
     }
 
     func testClipboardSettingsRowsReadTheirCurrentState() {

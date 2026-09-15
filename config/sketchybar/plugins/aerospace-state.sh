@@ -12,6 +12,8 @@ source "$CONFIG_DIR/lib/aerospace.sh"
 aerospace_bin="$(find_aerospace)"
 disabled_marker="$HOME/.omaccy/aerospace-disabled"
 layout_script="$HOME/.config/aerospace/layout.sh"
+clear_script="$HOME/.config/aerospace/clear-workspace.sh"
+OSASCRIPT_BIN="${OMACCY_OSASCRIPT_BIN:-/usr/bin/osascript}"
 MODES="horizontal vertical grid accordion"
 
 # Always the item's own name, never $NAME: the popup rows run this script too,
@@ -37,6 +39,27 @@ toggle_tiling() {
   else
     touch "$disabled_marker"
   fi
+}
+
+# Clearing closes windows, so it asks first. The workspace name goes in as an
+# argument rather than into the script text, and Cancel is the default button
+# so a stray Return keeps the windows. osascript exits non-zero on Cancel.
+confirm_clear() {
+  "$OSASCRIPT_BIN" - "$1" >/dev/null 2>&1 <<'OSA'
+on run argv
+  set workspaceName to item 1 of argv
+  display dialog "Its windows close, and apps with no windows elsewhere quit. Apps you open later no longer return to this workspace, and it goes back to the default layout." with title ("Clear workspace " & workspaceName & "?") buttons {"Cancel", "Clear"} default button "Cancel" cancel button "Cancel" with icon caution
+end run
+OSA
+}
+
+clear_workspace() {
+  local workspace
+  [[ -n "$aerospace_bin" && -x "$clear_script" ]] || return 0
+  workspace="$("$aerospace_bin" list-workspaces --focused 2>/dev/null | head -n 1)"
+  [[ -n "$workspace" ]] || return 0
+  confirm_clear "$workspace" || return 0
+  "$clear_script" "$workspace" >/dev/null 2>&1
 }
 
 render() {
@@ -78,6 +101,12 @@ case "${1:-}" in
       "$layout_script" set "$2" >/dev/null 2>&1
     fi
     close_popup
+    render
+    exit 0
+    ;;
+  clear)
+    close_popup
+    clear_workspace
     render
     exit 0
     ;;

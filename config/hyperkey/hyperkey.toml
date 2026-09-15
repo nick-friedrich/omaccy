@@ -18,6 +18,10 @@ clipboard_limit = 200
 trackpad_swipe = true
 trackpad_swipe_natural = true
 
+# Layout mode of a workspace you have not picked one for in the menu bar:
+# "horizontal" (Columns), "vertical" (Rows), "grid", or "accordion".
+default_layout = "horizontal"
+
 # Apps launched directly by their own Hyper chord, chosen in the launcher with
 # ⌘Return. Hyper+A, Hyper+E, and Hyper+C launch these; add Shift to browse the
 # collection instead. Unset means the chord opens the collection to pick one.

@@ -409,6 +409,14 @@ sketchybar --add item aerospace.accordion popup.aerospace \
     background.drawing=off \
     click_script="$PLUGIN_DIR/aerospace-state.sh set accordion"
 
+# An empty square, for the workspace this leaves behind.
+sketchybar --add item aerospace.clear popup.aerospace \
+  --set aerospace.clear \
+    icon="□" \
+    label="Clear workspace…" \
+    background.drawing=off \
+    click_script="$PLUGIN_DIR/aerospace-state.sh clear"
+
 sketchybar --add item aerospace.toggle popup.aerospace \
   --set aerospace.toggle \
     icon="×" \

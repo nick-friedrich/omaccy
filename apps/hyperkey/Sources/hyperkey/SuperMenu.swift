@@ -23,6 +23,10 @@ struct MenuEntry: Sendable {
     var chord: String? = nil
     var clip: ClipboardItem? = nil
     var clipboardSetting: ClipboardSetting? = nil
+    /// A row of the Layout page, which sets the mode unset workspaces take.
+    var workspaceLayout: WorkspaceLayout? = nil
+    /// Closes the focused workspace's windows and resets what it remembers.
+    var clearsWorkspace = false
     /// The Theme page's switch for whether VS Code and Cursor follow along.
     var togglesEditorTheming = false
     /// The Theme page's switch for whether macOS light/dark follows along.
@@ -47,7 +51,7 @@ enum MenuPage: String, Sendable {
     case home = "Home", apps = "Apps", help = "Help", install = "Install"
     case system = "System", agents = "Agents"
     case mail = "Mail", editors = "Editors"
-    case settings = "Settings", theme = "Theme", font = "Font"
+    case settings = "Settings", theme = "Theme", font = "Font", layout = "Layout"
     case clipboardSettings = "Clipboard"
     case clipboard = "Clipboard History"
 }
@@ -67,7 +71,8 @@ enum MenuCatalog {
                   chord: chord("V", boundKeys)),
         MenuEntry(title: "Install", detail: "Search Homebrew apps and command-line tools", destination: .install),
         MenuEntry(title: "Help", detail: "Explore your keyboard shortcuts", destination: .help),
-        MenuEntry(title: "System", detail: "Sleep, restart, or shut down your Mac", destination: .system),
+        MenuEntry(title: "System", detail: "Sleep, restart, or shut down your Mac, or clear a workspace",
+                  destination: .system),
         MenuEntry(title: "Settings", detail: "Pick the theme and font for the bar and launcher", destination: .settings),
     ] }
 
@@ -78,6 +83,8 @@ enum MenuCatalog {
     static let settings = [
         MenuEntry(title: "Theme", detail: "Color palettes for SketchyBar and this launcher", destination: .theme),
         MenuEntry(title: "Font", detail: "UI font for SketchyBar and this launcher", destination: .font),
+        MenuEntry(title: "Layout", detail: "Default window layout for workspaces you have not set one on",
+                  destination: .layout),
         MenuEntry(title: "Clipboard", detail: "Turn clipboard history on or off and choose how it is kept",
                   destination: .clipboardSettings),
         updateEntry,
@@ -134,9 +141,21 @@ enum MenuCatalog {
         ], searchText: { "\($0.title) \($0.detail)" })
     }
 
+    /// One row per mode, the default marked. A workspace given its own mode in
+    /// the menu bar keeps it, so the detail says who this reaches.
+    static func layoutEntries(matching query: String, active: WorkspaceLayout) -> [MenuEntry] {
+        matching(query, in: WorkspaceLayout.allCases.map { layout in
+            MenuEntry(title: layout.title, detail: layout.summary, workspaceLayout: layout, isOn: layout == active)
+        }, searchText: { "\($0.title) \($0.workspaceLayout?.rawValue ?? "") \($0.detail)" })
+    }
+
     static let system = SystemAction.allCases.map {
         MenuEntry(title: $0.title, detail: $0.detail, systemAction: $0)
-    }
+    } + [
+        MenuEntry(title: "Clear workspace",
+                  detail: "Close this workspace’s windows, forget it as their home, and reset its layout…",
+                  clearsWorkspace: true),
+    ]
 
     static func results(query: String, page: MenuPage, apps: [MenuEntry], help: [MenuEntry],
                         defaultAgent: String? = nil,
@@ -144,6 +163,7 @@ enum MenuCatalog {
                         boundKeys: Set<String> = [],
                         clipboard: ClipboardSettingsState = ClipboardSettingsState(),
                         clipboardItems: [ClipboardItem] = [],
+                        defaultLayout: WorkspaceLayout = .fallback,
                         activeTheme: String? = nil, activeFont: String? = nil) -> [MenuEntry] {
         if page == .install { return [] }
         if page == .settings {
@@ -155,6 +175,7 @@ enum MenuCatalog {
             return themeReachEntries(matching: query) + themeEntries(matching: query, active: activeTheme)
         }
         if page == .font { return fontEntries(matching: query, active: activeFont) }
+        if page == .layout { return layoutEntries(matching: query, active: defaultLayout) }
         if page == .agents {
             return agentEntries(matching: query, defaultToken: defaultAgent, chord: chord("A", boundKeys))
         }
@@ -169,7 +190,7 @@ enum MenuCatalog {
             case .apps: return apps
             case .help: return help
             case .system: return system
-            case .install, .settings, .theme, .font, .agents, .mail, .editors,
+            case .install, .settings, .theme, .font, .layout, .agents, .mail, .editors,
                  .clipboardSettings, .clipboard: return []
             }
         }
@@ -408,6 +429,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var defaultAppTokens: [AppCollection: String] = [:]
     private var boundKeys: Set<String> = []
     private var clipboardState = ClipboardSettingsState()
+    private var defaultLayout = WorkspaceLayout.fallback
     private var indexing = false
     private var packages: [HomebrewPackage] = []
     private var installedPackages: [HomebrewPackage] = []
@@ -724,6 +746,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 : entry.isOn ? "↵  Turn off" : "↵  Turn on"
         } else if entry.togglesEditorTheming || entry.togglesMacOSAppearance {
             actionHint.stringValue = entry.isOn ? "↵  Turn off" : "↵  Turn on"
+        } else if entry.workspaceLayout != nil {
+            actionHint.stringValue = entry.isOn ? "Default" : "↵  Set as default"
+        } else if entry.clearsWorkspace {
+            actionHint.stringValue = "↵  Confirm…"
         } else if let choice = entry.choice {
             actionHint.stringValue = choice.isInstalled
                 ? (entry.isDefaultChoice ? "↵  Launch  ·  Default" : "↵  Launch  ·  ⌘↵  Set default")
@@ -746,7 +772,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         let describesItself = entry.updatesOmaccy || entry.upgradesAll || entry.package != nil
             || entry.destination != nil || entry.systemAction != nil || entry.theme != nil || entry.font != nil
             || entry.agent != nil || entry.choice != nil || entry.clipboardSetting != nil || entry.clip != nil
-            || entry.togglesEditorTheming || entry.togglesMacOSAppearance
+            || entry.togglesEditorTheming || entry.togglesMacOSAppearance || entry.workspaceLayout != nil
+            || entry.clearsWorkspace
         let detail = PaletteStyle.label(describesItself && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let icon: NSView
@@ -850,9 +877,12 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
         if entry.destination == .clipboardSettings || entry.destination == .clipboard
             || entry.clip != nil { return "doc.on.clipboard" }
+        if let layout = entry.workspaceLayout { return layout.symbol }
+        if entry.destination == .layout { return WorkspaceLayout.grid.symbol }
         if let agent = entry.agent { return agent.symbol }
         if let collection = entry.collection { return collection.symbol }
         if let action = entry.systemAction { return action.symbol }
+        if entry.clearsWorkspace { return "square.dashed" }
         if entry.togglesEditorTheming { return "chevron.left.forwardslash.chevron.right" }
         if entry.togglesMacOSAppearance { return "circle.lefthalf.filled" }
         if entry.theme != nil || entry.destination == .theme { return "paintpalette" }
@@ -873,12 +903,14 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if let status = entry.package?.status { return status }
         if entry.theme != nil || entry.font != nil { return entry.detail == "Active" ? "✓" : "" }
         if let setting = entry.clipboardSetting { return setting == .clear ? "" : entry.isOn ? "✓" : "" }
-        if entry.togglesEditorTheming || entry.togglesMacOSAppearance { return entry.isOn ? "✓" : "" }
+        if entry.togglesEditorTheming || entry.togglesMacOSAppearance || entry.workspaceLayout != nil {
+            return entry.isOn ? "✓" : ""
+        }
         if entry.clip != nil { return "" }
         if entry.agent != nil || entry.choice != nil { return entry.isDefaultChoice ? "✓" : "" }
         if entry.detail.hasPrefix("Hyper") { return MenuShortcut.symbolic(entry.detail) }
         if entry.destination != nil { return "›" }
-        let isShortcut = !isApp && entry.systemAction == nil && entry.package == nil
+        let isShortcut = !isApp && entry.systemAction == nil && entry.package == nil && !entry.clearsWorkspace
             && !entry.upgradesAll && !entry.updatesOmaccy
         return isShortcut ? MenuShortcut.symbolic(entry.detail) : ""
     }
@@ -1033,6 +1065,10 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             toggleEditorTheming()
         } else if entry.togglesMacOSAppearance {
             toggleMacOSAppearance()
+        } else if let layout = entry.workspaceLayout {
+            setDefaultLayout(layout)
+        } else if entry.clearsWorkspace {
+            clearWorkspace()
         } else if let action = entry.systemAction {
             performSystemAction(action)
         }
@@ -1127,6 +1163,19 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         OmaccyAppearance.setMacOSAppearanceFollowing(!OmaccyAppearance.macOSAppearanceEnabled)
         filter(preservingSelection: true)
         restoreSelection { $0.togglesMacOSAppearance }
+    }
+
+    /// Saves the mode unset workspaces take. layout.sh reads it on every call,
+    /// so nothing needs restarting; the bar is nudged to relabel the focused
+    /// workspace in case it is one of them.
+    private func setDefaultLayout(_ layout: WorkspaceLayout) {
+        var config = Configuration.load()
+        guard config.defaultLayout != layout else { return }
+        config.defaultLayout = layout
+        config.save()
+        WorkspaceLayout.refreshBar()
+        reloadCatalog(refreshApps: false)
+        settleActiveMarker { $0.workspaceLayout == layout }
     }
 
     private func applyTheme(named themeName: String) {
@@ -1592,6 +1641,44 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
     }
 
+    /// Asks, then hands the focused workspace to clear-workspace.sh, the same
+    /// script the bar's tiling popup runs, so there is one definition of what
+    /// clearing does. The palette is a panel and never takes AeroSpace focus,
+    /// so the focused workspace is the one the palette was opened over.
+    private func clearWorkspace() {
+        panel.orderOut(nil)
+        let script = NSHomeDirectory() + "/.config/aerospace/clear-workspace.sh"
+        let workspace = HotkeyBindings.aeroSpaceExecutableURL()
+            .flatMap { HotkeyBindings.run($0, arguments: ["list-workspaces", "--focused"]) }
+            .flatMap { $0.status == 0 ? $0.output.split(whereSeparator: \.isNewline).first.map(String.init) : nil }
+        guard FileManager.default.fileExists(atPath: script), let workspace else {
+            let alert = NSAlert()
+            alert.messageText = "Couldn’t clear the workspace"
+            alert.informativeText = workspace == nil
+                ? "AeroSpace did not report a focused workspace. Check that tiling is on."
+                : "~/.config/aerospace/clear-workspace.sh is missing. Update Omaccy from Settings to install it."
+            alert.runModal()
+            panel.makeKeyAndOrderFront(nil)
+            panel.makeFirstResponder(search)
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Clear workspace \(workspace)?"
+        alert.informativeText = "Its windows close, and apps with no windows elsewhere quit. Apps you open later "
+            + "no longer return to this workspace, and it goes back to the default layout."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Clear")
+        guard alert.runModal() == .alertSecondButtonReturn else {
+            panel.makeKeyAndOrderFront(nil)
+            panel.makeFirstResponder(search)
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = HotkeyBindings.run(URL(fileURLWithPath: "/bin/bash"), arguments: [script, workspace], timeout: 15)
+        }
+    }
+
     private func filter(preservingSelection: Bool = false, restoring: MenuEntry? = nil) {
         let selected = restoring ?? (preservingSelection && rows.indices.contains(table.selectedRow) ? rows[table.selectedRow] : nil)
         rows = page == .install
@@ -1602,6 +1689,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                                   defaultAgent: defaultAgentToken, defaultApps: defaultAppTokens,
                                   boundKeys: boundKeys, clipboard: clipboardState,
                                   clipboardItems: ClipboardMonitor.shared.items,
+                                  defaultLayout: defaultLayout,
                                   activeTheme: appearanceBeforePreview?.theme,
                                   activeFont: appearanceBeforePreview?.font)
         let upgradeQuery = search.stringValue.lowercased().split(whereSeparator: \.isWhitespace)
@@ -1661,6 +1749,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             tokens[collection] = config[collection]
         }
         boundKeys = Set(config.bindings.keys.map { $0.lowercased() })
+        defaultLayout = config.defaultLayout
         clipboardState = ClipboardSettingsState(enabled: config.clipboardHistory,
                                                 persist: config.clipboardPersist,
                                                 count: ClipboardMonitor.shared.count)

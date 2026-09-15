@@ -12,10 +12,15 @@ set -u
 # separates this from the master/stack placement it replaces, which moved
 # every new window and so overwrote whatever had been arranged by hand.
 #
-# Usage: layout.sh [current | label | status | set <mode> | apply] [workspace]
+# A workspace that has never been given a mode takes `default_layout` from
+# hyperkey.toml, which the launcher's Settings -> Layout page writes, and falls
+# back to Columns when that is unset or names no mode.
+#
+# Usage: layout.sh [current | label | status | set <mode> | reset | apply] [workspace]
 
 STATE_DIR="$HOME/.omaccy/workspace-layout"
-DEFAULT_MODE="horizontal"
+CONFIG_FILE="${OMACCY_HYPERKEY_CONFIG:-$HOME/.config/omaccy/hyperkey.toml}"
+FALLBACK_MODE="horizontal"
 MODES="horizontal vertical grid accordion"
 
 BIN="${AEROSPACE_BIN:-$(command -v aerospace 2>/dev/null)}"
@@ -53,11 +58,29 @@ is_mode() {
   esac
 }
 
+# Read the way the app's Configuration reads it: top-level keys only, so the
+# scan stops at the first [section], and a commented-out line is not a setting.
+default_mode() {
+  local mode=""
+  [[ -f "$CONFIG_FILE" ]] &&
+    mode="$(awk '
+      /^[[:space:]]*\[/ { exit }
+      { sub(/#.*/, "") }
+      /^[[:space:]]*default_layout[[:space:]]*=/ {
+        sub(/^[^=]*=/, "")
+        gsub(/["\047[:space:]]/, "")
+        print tolower($0)
+        exit
+      }' "$CONFIG_FILE" 2>/dev/null)"
+  is_mode "$mode" || mode="$FALLBACK_MODE"
+  printf '%s\n' "$mode"
+}
+
 current_mode() {
   local workspace="$1" mode=""
   [[ -f "$STATE_DIR/$workspace" ]] &&
     mode="$(head -n 1 "$STATE_DIR/$workspace" | tr -d '[:space:]')"
-  is_mode "$mode" || mode="$DEFAULT_MODE"
+  is_mode "$mode" || mode="$(default_mode)"
   printf '%s\n' "$mode"
 }
 
@@ -218,6 +241,16 @@ set_mode() {
   apply_full "$workspace" "$mode"
 }
 
+# Forget the workspace's own mode, so it follows the default again. Windows
+# still on it are rearranged into that default straight away, as picking a
+# mode would; an empty workspace has nothing to rearrange.
+reset_mode() {
+  local workspace="$1"
+  rm -f "$STATE_DIR/$workspace"
+  [[ "$(window_count "$workspace")" -gt 0 ]] || return 0
+  apply_full "$workspace" "$(default_mode)"
+}
+
 command="${1:-current}"
 case "$command" in
   current)
@@ -247,13 +280,18 @@ case "$command" in
     [[ -n "$workspace" ]] || exit 0
     set_mode "$workspace" "$2"
     ;;
+  reset)
+    workspace="$(target_workspace "${2:-}")"
+    [[ -n "$workspace" ]] || exit 0
+    reset_mode "$workspace"
+    ;;
   apply)
     workspace="$(target_workspace "${2:-}")"
     [[ -n "$workspace" ]] || exit 0
     apply_current "$workspace"
     ;;
   *)
-    echo "Usage: layout.sh [current | label | status | set <mode> | apply] [workspace]" >&2
+    echo "Usage: layout.sh [current | label | status | set <mode> | reset | apply] [workspace]" >&2
     exit 2
     ;;
 esac

@@ -152,6 +152,22 @@ workspace's own direction, so in Columns it is always width and in Rows always
 height. Modes are per workspace and survive restarts, in
 `~/.omaccy/workspace-layout/`.
 
+A workspace you have not picked a mode for uses the default, Columns unless
+you change it under the palette's Settings → Layout, or in `hyperkey.toml`:
+
+```toml
+default_layout = "horizontal"  # or "vertical", "grid", "accordion"
+```
+
+Changing the default reaches every workspace without a mode of its own the
+next time a window opens there; one you picked a mode for keeps it.
+
+To start a workspace over, choose **Clear workspace…** in the same menu-bar
+popup, or in the palette under System. After asking, it closes the workspace's
+windows (an app quits when that was its last window; unsaved work still
+prompts), forgets it as the home of the apps that lived there so they stop
+reopening on it, and drops its layout mode so it follows the default again.
+
 Click the date in the menu bar for a month calendar. Today is bracketed and its
 week drawn in the theme's accent color; the rows underneath page a month back
 or forward, clicking the month name returns to today, and **Open Calendar**
