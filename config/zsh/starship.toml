@@ -65,18 +65,18 @@ trim_at = ""
 format = "[@$hostname]($style) "
 style = "accent"
 
-# The last folder only, with a folder icon standing in for the rest, like
+# The last two folders, with a folder icon standing in for the rest, like
 # oh-my-posh's agnoster_short. Starship counts ~ as a folder and drops it when
-# it shortens, so ~/dev/emzero reads as ..(folder icon)../emzero rather than
-# with ~/ in front; putting ~/ into the symbol would also claim
-# /opt/homebrew/bin is in your home. Set truncation_length = 2 to keep one
-# more folder.
+# it shortens, so ~/dev/emzero/src reads as ..(folder icon)../emzero/src rather
+# than with ~/ in front; putting ~/ into the symbol would also claim
+# /opt/homebrew/bin is in your home. Set truncation_length = 1 to keep only the
+# folder you are in.
 [directory]
 format = "[$path]($style)[$read_only]($read_only_style) "
 style = "purple"
 read_only = " \U000f033e"
 read_only_style = "danger"
-truncation_length = 1
+truncation_length = 2
 truncation_symbol = "..\ue5fe../"
 truncate_to_repo = false
 

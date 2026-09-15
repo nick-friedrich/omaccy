@@ -10,6 +10,12 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.7` tag is cut.
 
+### Changed
+
+- The Starship prompt shows the last two folders of the path instead of one,
+  so in `~/dev/omaccy` it reads `dev/omaccy` after the folder icon. If you edited your
+  `starship.toml`, it keeps its own setting.
+
 ### Fixed
 
 - Clicking an empty part of the bar on macOS 27 no longer makes every icon
