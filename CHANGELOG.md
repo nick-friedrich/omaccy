@@ -10,6 +10,13 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.8` tag is cut.
 
+### Changed
+
+- Opening an app that lives on another workspace now takes you there with it.
+  Sending the window home and leaving you behind meant going looking for the
+  app you had just opened. Only a window you opened brings you along: one an
+  app puts up on its own still goes home quietly.
+
 ## [0.4.7] - 2026-09-15
 
 ### Added

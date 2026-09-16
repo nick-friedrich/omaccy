@@ -121,11 +121,13 @@ Hyper is **Caps Lock** (Command+Control+Option, deliberately without Shift).
 | Three-finger swipe ←/→ | Switch workspace (replaces the macOS full-screen-app swipe) |
 
 Apps reopen on the workspace they live on, so starting Chrome puts it back where
-Chrome belongs rather than on top of what you are doing. The mapping is learned,
-not configured: move an app somewhere and that becomes its home, across
-restarts. Only an app's **first** window is placed — open a second window while
-you are elsewhere and it stays with you, because you asked for a window here,
-not for the app to move. An app you have never opened stays where it lands.
+Chrome belongs rather than on top of what you are doing, and you land there with
+it — no hunting for the app you just opened. The mapping is learned, not
+configured: move an app somewhere and that becomes its home, across restarts.
+Only an app's **first** window is placed — open a second window while you are
+elsewhere and it stays with you, because you asked for a window here, not for
+the app to move. An app you have never opened stays where it lands, and a window
+an app puts up on its own goes home without taking you along.
 Remove the `window-memory.sh` rule from `~/.config/aerospace/aerospace.toml` to
 turn it off.
 

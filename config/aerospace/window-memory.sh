@@ -16,6 +16,10 @@
 #   - Applications with no windows right now keep their entry. Memory is merged
 #     rather than rewritten, so a restart with half your applications closed
 #     does not forget where the rest of them live.
+#   - You follow the window home, because an application you just opened and
+#     cannot see is worse than one that opened in the wrong place. Only a
+#     window you opened, though: one an application puts up behind your back
+#     goes home quietly and leaves you where you are.
 #
 # `record` snapshots every window; it runs on workspace and focus changes, the
 # second of which is what catches a window being closed. `place` runs from the
@@ -115,6 +119,23 @@ forget() {
   mv "$tmp" "$STATE_FILE" 2>/dev/null || rm -f "$tmp"
 }
 
+# Did this window take focus? That is what separates a window you opened from
+# one an application put up on its own: macOS focuses the window you asked for
+# as it appears. The callback can beat the focus notification by a few
+# milliseconds, so ask again briefly before concluding nobody asked for it.
+# The wait costs a background window a moment on screen before it is moved,
+# and never delays one you are about to follow.
+window_is_focused() {
+  local aerospace="$1" window_id="$2" attempt focused
+
+  for attempt in 1 2 3 4; do
+    focused="$("$aerospace" list-windows --focused --format '%{window-id}' 2>/dev/null | head -n 1)"
+    [[ "$focused" == "$window_id" ]] && return 0
+    sleep 0.05
+  done
+  return 1
+}
+
 place() {
   local window_id="$1"
   local aerospace listing app windows remembered current
@@ -142,7 +163,15 @@ place() {
     | awk -F'|' -v id="$window_id" '$1 == id { print $3; exit }')"
   [[ "$current" != "$remembered" ]] || return 0
 
-  "$aerospace" move-node-to-workspace --window-id "$window_id" "$remembered" >/dev/null 2>&1 || return 0
+  # --focus-follows-window switches to the remembered workspace along with the
+  # window, in one move: nothing is on screen in between, and AeroSpace fires
+  # its workspace-change callback so the bar keeps up.
+  if window_is_focused "$aerospace" "$window_id"; then
+    "$aerospace" move-node-to-workspace --window-id "$window_id" \
+      --focus-follows-window "$remembered" >/dev/null 2>&1 || return 0
+  else
+    "$aerospace" move-node-to-workspace --window-id "$window_id" "$remembered" >/dev/null 2>&1 || return 0
+  fi
 }
 
 case "${1:-}" in
