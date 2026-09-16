@@ -20,6 +20,9 @@ struct Configuration {
     /// Layout mode of a workspace that has never been given one; read by
     /// `layout.sh`, which is what actually arranges the windows.
     var defaultLayout: WorkspaceLayout = .fallback
+    /// ⌘Space opens Launchie rather than Spotlight. Off by default, so nobody
+    /// finds Spotlight gone without having asked for it.
+    var launchieCommandSpace: Bool = false
 
     /// The app a picker collection launches directly from its own Hyper chord.
     subscript(collection: AppCollection) -> String? {
@@ -89,6 +92,8 @@ struct Configuration {
                 configuration.trackpadSwipeNatural = value.lowercased() != "false"
             } else if key == "default_layout", section.isEmpty {
                 configuration.defaultLayout = WorkspaceLayout(rawValue: value.lowercased()) ?? .fallback
+            } else if key == "launchie_command_space", section.isEmpty {
+                configuration.launchieCommandSpace = value.lowercased() == "true"
             } else if key == "default_agent", section.isEmpty {
                 configuration.defaultAgent = value.isEmpty ? nil : value
             } else if section.isEmpty,
@@ -115,6 +120,8 @@ struct Configuration {
         contents += "trackpad_swipe_natural = \(trackpadSwipeNatural)\n"
         contents += "\n# Layout of a workspace not yet set: horizontal, vertical, grid, or accordion.\n"
         contents += "default_layout = \"\(defaultLayout.rawValue)\"\n"
+        contents += "\n# Open Launchie with Command+Space instead of Spotlight.\n"
+        contents += "launchie_command_space = \(launchieCommandSpace)\n"
         if let defaultAgent {
             contents += "\n# Coding agent launched directly by Hyper+A.\n"
             contents += "default_agent = \"\(defaultAgent)\"\n"

@@ -22,6 +22,13 @@ trackpad_swipe_natural = true
 # "horizontal" (Columns), "vertical" (Rows), "grid", or "accordion".
 default_layout = "horizontal"
 
+# Open Launchie with Command+Space instead of Spotlight. Off by default so
+# Spotlight stays where you expect it; turn it on in the launcher's Settings.
+# This sets Launchie's own shortcut to Command+Space and pauses Spotlight's
+# while Omaccy Hyperkey runs. Turning it off, or uninstalling, puts Launchie's
+# previous shortcut back and gives Command+Space to Spotlight again.
+launchie_command_space = false
+
 # Apps launched directly by their own Hyper chord, chosen in the launcher with
 # ⌘Return. Hyper+A, Hyper+E, and Hyper+C launch these; add Shift to browse the
 # collection instead. Unset means the chord opens the collection to pick one.

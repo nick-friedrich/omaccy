@@ -344,6 +344,41 @@ brew_service_result=1 herdr_running=0
 ensure_login_service herdr >/dev/null 2>&1
 unset -f brew pgrep
 
+# Launchie: an App Store copy is the user's own and is never reinstalled over,
+# a fresh install is owned, and a failed one (the cask needs macOS 26) warns
+# without stopping setup. brew is mocked, so nothing is installed.
+OMACCY_DIR="$test_dir/launchie"
+mkdir -p "$OMACCY_DIR" "$test_dir/launchie-apps"
+export OMACCY_APPLICATION_DIRS="$test_dir/launchie-apps"
+brew_install_result=0
+: > "$test_dir/launchie-brew.log"
+brew() {
+  echo "$*" >> "$test_dir/launchie-brew.log"
+  case "$*" in
+    "list --cask launchie") return 1 ;;
+    "install --cask launchie") return "$brew_install_result" ;;
+  esac
+  return 1
+}
+
+mkdir -p "$test_dir/launchie-apps/Launchie.app"
+output="$(ensure_launchie 2>&1)"
+[[ "$output" == *"outside Homebrew"* ]] || fail "an App Store Launchie was not recognised"
+grep -qx launchie "$OMACCY_DIR/preinstalled-deps" || fail "an App Store Launchie was not recorded as the user's own"
+! grep -q install "$test_dir/launchie-brew.log" || fail "Homebrew was asked to install over an App Store Launchie"
+rm -rf "$test_dir/launchie-apps/Launchie.app" "$OMACCY_DIR"/*
+
+brew_install_result=1
+output="$(ensure_launchie 2>&1)" || fail "a failed Launchie install stopped setup"
+[[ "$output" == *"Spotlight"* ]] || fail "a failed Launchie install did not say Command+Space stays with Spotlight"
+! grep -qx launchie "$OMACCY_DIR/installed-deps" 2>/dev/null || fail "a failed Launchie install claimed ownership"
+
+brew_install_result=0
+ensure_launchie >/dev/null 2>&1
+grep -qx launchie "$OMACCY_DIR/installed-deps" || fail "a Launchie Omaccy installed was not recorded as owned"
+unset -f brew
+unset OMACCY_APPLICATION_DIRS
+
 # Load controller definitions without its command dispatcher; mock the CLI so
 # the disabled-server regression cannot touch desktop apps or services.
 sed '/^case "${1:-}" in/,$d' "$REPO_ROOT/scripts/aerospace-control.sh" > "$test_dir/aerospace-functions.sh"
@@ -1505,4 +1540,4 @@ LUA
     fail "Neovim did not follow the theme"
 fi
 
-echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, directory configs, the Neovim opt-in, master-stack retirement, workspace layout modes, clearing a workspace, the calendar popup, the Apple menu, the front-app name, Neovim theme following, the zsh setup, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'
+echo 'PASS: confirmations, cancellation, checkout fast-forward, hyperkey restart, build version, release skew, SF Pro ownership, AeroSpace re-enable, config updates, backup restoration, directory configs, the Neovim opt-in, master-stack retirement, workspace layout modes, clearing a workspace, the calendar popup, the Apple menu, the front-app name, Launchie ownership, Neovim theme following, the zsh setup, the battery popup, and keep-awake survival, identity, boot scoping, deadlines, and bar reconciliation.'

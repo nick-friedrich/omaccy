@@ -31,8 +31,16 @@ struct MenuEntry: Sendable {
     var togglesEditorTheming = false
     /// The Theme page's switch for whether macOS light/dark follows along.
     var togglesMacOSAppearance = false
+    /// The Settings switch for whether ⌘Space opens Launchie.
+    var togglesLaunchieShortcut = false
     /// Current state of a two-state setting row.
     var isOn = false
+}
+
+/// What the ⌘Space switch currently reads as.
+struct LaunchieShortcutState: Sendable, Equatable {
+    var installed = true
+    var enabled = false
 }
 
 /// The clipboard-history controls on the Settings page.
@@ -80,15 +88,28 @@ enum MenuCatalog {
         boundKeys.contains(letter.lowercased()) ? nil : letter
     }
 
-    static let settings = [
+    static func settings(launchie: LaunchieShortcutState = LaunchieShortcutState()) -> [MenuEntry] { [
         MenuEntry(title: "Theme", detail: "Color palettes for SketchyBar and this launcher", destination: .theme),
         MenuEntry(title: "Font", detail: "UI font for SketchyBar and this launcher", destination: .font),
         MenuEntry(title: "Layout", detail: "Default window layout for workspaces you have not set one on",
                   destination: .layout),
         MenuEntry(title: "Clipboard", detail: "Turn clipboard history on or off and choose how it is kept",
                   destination: .clipboardSettings),
+        launchieEntry(launchie),
         updateEntry,
-    ]
+    ] }
+
+    /// Off unless asked for, and every state names Spotlight, so someone who
+    /// finds ⌘Space opening Launchie can search for where Spotlight went.
+    static func launchieEntry(_ state: LaunchieShortcutState) -> MenuEntry {
+        let detail = !state.installed
+            ? "Launchie is not installed · Update Omaccy to add it, then ⌘Space can open it instead of Spotlight"
+            : state.enabled
+                ? "On · Launchie’s shortcut is ⌘Space, and Spotlight’s is paused"
+                : "Off · ⌘Space opens Spotlight"
+        return MenuEntry(title: "⌘Space opens Launchie", detail: detail,
+                         togglesLaunchieShortcut: true, isOn: state.installed && state.enabled)
+    }
 
     /// Settings runs the updater directly: the page it used to open held this
     /// one row, so the extra hop only restated the row the user just picked.
@@ -164,10 +185,11 @@ enum MenuCatalog {
                         clipboard: ClipboardSettingsState = ClipboardSettingsState(),
                         clipboardItems: [ClipboardItem] = [],
                         defaultLayout: WorkspaceLayout = .fallback,
+                        launchie: LaunchieShortcutState = LaunchieShortcutState(),
                         activeTheme: String? = nil, activeFont: String? = nil) -> [MenuEntry] {
         if page == .install { return [] }
         if page == .settings {
-            return matching(query, in: settings) { "\($0.title) \($0.detail)" }
+            return matching(query, in: settings(launchie: launchie)) { "\($0.title) \($0.detail)" }
         }
         if page == .clipboardSettings { return clipboardEntries(matching: query, state: clipboard) }
         if page == .clipboard { return clipboardHistoryEntries(matching: query, items: clipboardItems) }
@@ -197,7 +219,7 @@ enum MenuCatalog {
         // Search always spans the whole menu, even while browsing a category.
         var seenApps = Set<String>()
         var searchable: [MenuEntry] = categories(boundKeys: boundKeys)
-        searchable += settings
+        searchable += settings(launchie: launchie)
         searchable += apps
         searchable += help
         searchable += system
@@ -430,6 +452,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
     private var boundKeys: Set<String> = []
     private var clipboardState = ClipboardSettingsState()
     private var defaultLayout = WorkspaceLayout.fallback
+    private var launchieState = LaunchieShortcutState()
     private var indexing = false
     private var packages: [HomebrewPackage] = []
     private var installedPackages: [HomebrewPackage] = []
@@ -746,6 +769,9 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                 : entry.isOn ? "↵  Turn off" : "↵  Turn on"
         } else if entry.togglesEditorTheming || entry.togglesMacOSAppearance {
             actionHint.stringValue = entry.isOn ? "↵  Turn off" : "↵  Turn on"
+        } else if entry.togglesLaunchieShortcut {
+            actionHint.stringValue = !launchieState.installed ? "Not installed"
+                : entry.isOn ? "↵  Turn off" : "↵  Turn on"
         } else if entry.workspaceLayout != nil {
             actionHint.stringValue = entry.isOn ? "Default" : "↵  Set as default"
         } else if entry.clearsWorkspace {
@@ -773,7 +799,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             || entry.destination != nil || entry.systemAction != nil || entry.theme != nil || entry.font != nil
             || entry.agent != nil || entry.choice != nil || entry.clipboardSetting != nil || entry.clip != nil
             || entry.togglesEditorTheming || entry.togglesMacOSAppearance || entry.workspaceLayout != nil
-            || entry.clearsWorkspace
+            || entry.clearsWorkspace || entry.togglesLaunchieShortcut
         let detail = PaletteStyle.label(describesItself && !entry.detail.hasPrefix("Hyper") ? entry.detail : isApp ? "Application" : "Keyboard shortcut", size: 11)
         detail.textColor = PaletteStyle.muted
         let icon: NSView
@@ -885,6 +911,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if entry.clearsWorkspace { return "square.dashed" }
         if entry.togglesEditorTheming { return "chevron.left.forwardslash.chevron.right" }
         if entry.togglesMacOSAppearance { return "circle.lefthalf.filled" }
+        if entry.togglesLaunchieShortcut { return "magnifyingglass" }
         if entry.theme != nil || entry.destination == .theme { return "paintpalette" }
         if entry.font != nil || entry.destination == .font { return "textformat" }
         if entry.destination == .settings { return "gearshape" }
@@ -903,7 +930,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if let status = entry.package?.status { return status }
         if entry.theme != nil || entry.font != nil { return entry.detail == "Active" ? "✓" : "" }
         if let setting = entry.clipboardSetting { return setting == .clear ? "" : entry.isOn ? "✓" : "" }
-        if entry.togglesEditorTheming || entry.togglesMacOSAppearance || entry.workspaceLayout != nil {
+        if entry.togglesEditorTheming || entry.togglesMacOSAppearance || entry.workspaceLayout != nil
+            || entry.togglesLaunchieShortcut {
             return entry.isOn ? "✓" : ""
         }
         if entry.clip != nil { return "" }
@@ -1065,6 +1093,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
             toggleEditorTheming()
         } else if entry.togglesMacOSAppearance {
             toggleMacOSAppearance()
+        } else if entry.togglesLaunchieShortcut {
+            toggleLaunchieShortcut()
         } else if let layout = entry.workspaceLayout {
             setDefaultLayout(layout)
         } else if entry.clearsWorkspace {
@@ -1163,6 +1193,36 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         OmaccyAppearance.setMacOSAppearanceFollowing(!OmaccyAppearance.macOSAppearanceEnabled)
         filter(preservingSelection: true)
         restoreSelection { $0.togglesMacOSAppearance }
+    }
+
+    /// Flips the switch, then sets Launchie's hotkey and Spotlight's pause off
+    /// the main thread, since that quits and reopens Launchie. The row shows
+    /// its new state at once. Without Launchie there is nothing to hand the
+    /// shortcut to, so nothing changes.
+    private func toggleLaunchieShortcut() {
+        guard LaunchieShortcut.isInstalled else { return }
+        var config = Configuration.load()
+        config.launchieCommandSpace.toggle()
+        config.save()
+        let enabled = config.launchieCommandSpace
+        reloadCatalog(refreshApps: false)
+        filter(preservingSelection: true)
+        restoreSelection { $0.togglesLaunchieShortcut }
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard LaunchieShortcut.apply(enabled: enabled) == .preferencesUnreadable else { return }
+            Task { @MainActor in SuperMenuController.shared.launchieShortcutFailed() }
+        }
+    }
+
+    /// Nothing was changed, so the switch goes back off to say so.
+    private func launchieShortcutFailed() {
+        var config = Configuration.load()
+        config.launchieCommandSpace = false
+        config.save()
+        reloadCatalog(refreshApps: false)
+        filter(preservingSelection: true)
+        showRestoringPanel(title: "Couldn’t change Launchie’s shortcut",
+                           message: "Omaccy could not read Launchie’s settings. Open Launchie once, and allow Omaccy Hyperkey to access Launchie’s data if macOS asks, then turn this on again.")
     }
 
     /// Saves the mode unset workspaces take. layout.sh reads it on every call,
@@ -1690,6 +1750,7 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
                                   boundKeys: boundKeys, clipboard: clipboardState,
                                   clipboardItems: ClipboardMonitor.shared.items,
                                   defaultLayout: defaultLayout,
+                                  launchie: launchieState,
                                   activeTheme: appearanceBeforePreview?.theme,
                                   activeFont: appearanceBeforePreview?.font)
         let upgradeQuery = search.stringValue.lowercased().split(whereSeparator: \.isWhitespace)
@@ -1750,6 +1811,8 @@ final class SuperMenuController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
         boundKeys = Set(config.bindings.keys.map { $0.lowercased() })
         defaultLayout = config.defaultLayout
+        launchieState = LaunchieShortcutState(installed: LaunchieShortcut.isInstalled,
+                                              enabled: config.launchieCommandSpace)
         clipboardState = ClipboardSettingsState(enabled: config.clipboardHistory,
                                                 persist: config.clipboardPersist,
                                                 count: ClipboardMonitor.shared.count)

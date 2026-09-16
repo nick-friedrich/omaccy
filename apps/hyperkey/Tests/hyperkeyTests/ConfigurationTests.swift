@@ -89,6 +89,30 @@ final class ConfigurationTests: XCTestCase {
         XCTAssertEqual(Configuration.load().defaultLayout, .horizontal)
     }
 
+    /// Spotlight keeps ⌘Space unless the file says otherwise, in so many words.
+    func testLaunchieCommandSpaceIsOffUnlessSetTrue() throws {
+        try write("escape_on_tap = false\n")
+        XCTAssertFalse(Configuration.load().launchieCommandSpace)
+        try write("launchie_command_space = yes\n")
+        XCTAssertFalse(Configuration.load().launchieCommandSpace)
+        try write("# launchie_command_space = true\n")
+        XCTAssertFalse(Configuration.load().launchieCommandSpace)
+        try write("[bindings]\nlaunchie_command_space = true\n")
+        XCTAssertFalse(Configuration.load().launchieCommandSpace)
+        try write("launchie_command_space = True\n")
+        XCTAssertTrue(Configuration.load().launchieCommandSpace)
+    }
+
+    func testLaunchieCommandSpaceSurvivesASaveAndReload() {
+        var config = Configuration(escapeOnTap: false, bindings: [:])
+        config.launchieCommandSpace = true
+        config.save()
+        XCTAssertTrue(Configuration.load().launchieCommandSpace)
+        config.launchieCommandSpace = false
+        config.save()
+        XCTAssertFalse(Configuration.load().launchieCommandSpace)
+    }
+
     /// A key the shipped config comments out must not read back as a value.
     func testCommentedDefaultsStayUnset() throws {
         try write("""

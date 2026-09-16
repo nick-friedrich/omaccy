@@ -29,6 +29,7 @@ main() {
   ensure_sf_pro_font
   ensure_formula sketchybar FelixKratz/formulae/sketchybar
   ensure_formula herdr
+  ensure_launchie
   if grep -qx sketchybar "$OMACCY_DIR/preinstalled-formulas" 2>/dev/null && \
       brew services list 2>/dev/null | grep -q '^sketchybar[[:space:]].*started'; then
     touch "$OMACCY_DIR/sketchybar-service-was-running"

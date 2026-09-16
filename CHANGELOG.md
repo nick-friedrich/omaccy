@@ -10,6 +10,23 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.8` tag is cut.
 
+### Added
+
+- Setup installs [Launchie](https://www.launchie.app), the app launcher, with
+  `brew install --cask launchie`. A Launchie you already have, from Homebrew or
+  the Mac App Store, is left as it is, and uninstall only offers to remove the
+  copy Omaccy installed.
+- **⌘Space opens Launchie** in the launcher's Settings, or
+  `launchie_command_space = true` in `~/.config/omaccy/hyperkey.toml`, gives
+  Command+Space to Launchie instead of Spotlight. It is off until you turn it
+  on. Turning it on sets Launchie's own shortcut to Command+Space (Launchie
+  restarts to pick it up) and pauses Spotlight's shortcut while Omaccy
+  Hyperkey runs; System Settings keeps showing your own choice. Turning it off
+  or uninstalling puts back the shortcut Launchie had and gives Command+Space
+  to Spotlight again. If you had already turned Spotlight's shortcut off
+  yourself, it stays off. The first time, macOS may ask to let Omaccy Hyperkey
+  access Launchie's data. Needs the Hyperkey app from this release.
+
 ### Changed
 
 - Opening an app that lives on another workspace now takes you there with it.

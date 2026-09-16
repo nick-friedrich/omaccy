@@ -10,6 +10,7 @@ best-of-breed tools with a thin glue layer of configs and one native app.
 | **SketchyBar** | Menu-bar replacement, skinned to match the active theme |
 | **Ghostty** | Default terminal, themed alongside the bar and the palette |
 | **herdr** | Persistent multiplexer that keeps terminal coding agents alive |
+| **Launchie** | App launcher that ⌘Space can open in place of Spotlight, if you ask it to |
 | **Neovim** (optional) | AstroNvim-based editor config; setup asks before touching `~/.config/nvim` |
 | **zsh** (optional) | Starship prompt in the theme's colors, autosuggestions, syntax highlighting, fzf and zoxide, added to `~/.zshrc` without replacing it |
 
@@ -35,9 +36,9 @@ Keep the checkout: the installed configs are symlinked into it, and
 The script prints exactly what it will do and waits for a `y`/`yes`. Nothing on
 the system changes before that confirmation. It then:
 
-- installs any missing dependencies (Ghostty, AeroSpace, SketchyBar, herdr, and
-  the Inter / JetBrains Mono / Lora fonts), recording which ones it installed
-  so uninstall leaves pre-existing ones alone;
+- installs any missing dependencies (Ghostty, AeroSpace, SketchyBar, herdr,
+  Launchie, and the Inter / JetBrains Mono / Lora fonts), recording which ones
+  it installed so uninstall leaves pre-existing ones alone;
 - downloads the signed, notarized **Omaccy Hyperkey** release, installs it to
   `~/Applications/Omaccy Hyperkey.app`, and registers its LaunchAgent;
 - backs up any configs it displaces into a timestamped directory under
@@ -279,6 +280,32 @@ then puts macOS in Light and any dark palette puts it back. It needs a one-time
 found so uninstall can put that back. A theme file that does not declare
 `APPEARANCE` — a custom palette, or one installed before this existed — leaves
 macOS alone rather than guessing.
+
+### ⌘Space opens Launchie
+
+[Launchie](https://www.launchie.app) is installed with everything else, and
+`Hyper+Space` still opens Omaccy's own palette. If you would rather ⌘Space
+opened Launchie than Spotlight, there is a switch for it under the palette's
+Settings — **⌘Space opens Launchie** — or in `hyperkey.toml`:
+
+```toml
+launchie_command_space = true
+```
+
+It is off until you turn it on, so nobody finds Spotlight gone without having
+asked. Turning it on sets Launchie's own shortcut to ⌘Space and pauses
+Spotlight's while Omaccy Hyperkey runs. Your Spotlight shortcut itself is not
+rewritten — System Settings goes on showing the key you chose — so quitting
+Hyperkey, turning the switch off, or uninstalling gives ⌘Space straight back to
+Spotlight, along with whatever shortcut Launchie had before. If you had already
+turned Spotlight's shortcut off yourself, it stays off.
+
+Launchie restarts when the switch changes, because it reads its hotkey at
+launch. The first time, macOS may ask to let Omaccy Hyperkey read Launchie's
+settings; if it cannot, nothing is changed and the switch goes back off rather
+than leaving ⌘Space answering to nothing. Launchie's cask needs macOS 26 — on
+an older macOS setup says so and carries on, and the switch reads "not
+installed".
 
 ### herdr spaces and tabs
 

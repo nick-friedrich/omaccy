@@ -47,6 +47,40 @@ ensure_cask() {
   record_dep installed-deps "$cask"
 }
 
+# Launchie, the app launcher Command+Space can open (Settings in the Omaccy
+# launcher). The Mac App Store sells the same bundle, and `brew install` refuses
+# to write over an app it did not put there, so a copy already in Applications
+# is recorded as the user's own. The cask needs macOS 26, and without Launchie
+# only that one option is missing, so a failed install warns rather than
+# stopping setup. OMACCY_APPLICATION_DIRS (colon-separated) is for the smoke
+# checks.
+ensure_launchie() {
+  ensure_brew
+
+  if brew list --cask launchie >/dev/null 2>&1; then
+    ensure_cask launchie
+    return
+  fi
+
+  local app_dirs dir
+  IFS=: read -r -a app_dirs <<< "${OMACCY_APPLICATION_DIRS:-/Applications:$HOME/Applications}"
+  for dir in "${app_dirs[@]}"; do
+    if [[ -d "$dir/Launchie.app" ]]; then
+      record_dep preinstalled-deps launchie
+      echo "Launchie already installed outside Homebrew; Omaccy will leave it installed on uninstall."
+      return
+    fi
+  done
+
+  echo "Installing launchie..."
+  if ! brew install --cask launchie; then
+    echo "Warning: could not install Launchie; Command+Space stays with Spotlight." >&2
+    echo "Install it later with: brew install --cask launchie" >&2
+    return 0
+  fi
+  record_dep installed-deps launchie
+}
+
 ensure_formula() {
   local formula="$1"
   local install_ref="${2:-$formula}"

@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import hyperkey
 
@@ -215,13 +216,84 @@ final class MenuTests: XCTestCase {
 
     func testSettingsPageListsThemeAndFontCollections() {
         let entries = MenuCatalog.results(query: "", page: .settings, apps: [], help: [])
-        XCTAssertEqual(entries.map(\.title), ["Theme", "Font", "Layout", "Clipboard", "Update Omaccy"])
+        XCTAssertEqual(entries.map(\.title), ["Theme", "Font", "Layout", "Clipboard", "⌘Space opens Launchie",
+                                              "Update Omaccy"])
         XCTAssertEqual(entries.compactMap(\.destination), [.theme, .font, .layout, .clipboardSettings])
         // The updater lives here now rather than on Home, but a search from
         // Home still reaches it, since global search spans Settings too.
         XCTAssertFalse(MenuCatalog.categories().contains { $0.updatesOmaccy })
         XCTAssertEqual(MenuCatalog.results(query: "font", page: .settings, apps: [], help: []).map(\.title), ["Font"])
         XCTAssertTrue(MenuCatalog.results(query: "nord", page: .settings, apps: [], help: []).isEmpty)
+    }
+
+    /// The ⌘Space switch reads as off until turned on, can only be on with
+    /// Launchie installed, and is found by searching for Spotlight in every state.
+    func testLaunchieSwitchReflectsItsStateAndIsFoundBySpotlight() {
+        func row(_ state: LaunchieShortcutState) -> MenuEntry? {
+            MenuCatalog.results(query: "", page: .settings, apps: [], help: [], launchie: state)
+                .first { $0.togglesLaunchieShortcut }
+        }
+        XCTAssertEqual(row(LaunchieShortcutState())?.isOn, false)
+        XCTAssertEqual(row(LaunchieShortcutState(installed: true, enabled: true))?.isOn, true)
+        XCTAssertEqual(row(LaunchieShortcutState(installed: false, enabled: true))?.isOn, false)
+        XCTAssertTrue(row(LaunchieShortcutState(installed: false, enabled: false))?.detail.contains("not installed") == true)
+        for state in [LaunchieShortcutState(), LaunchieShortcutState(installed: true, enabled: true),
+                      LaunchieShortcutState(installed: false, enabled: false)] {
+            XCTAssertTrue(MenuCatalog.results(query: "spotlight", page: .home, apps: [], help: [], launchie: state)
+                .contains { $0.togglesLaunchieShortcut }, "\(state)")
+        }
+    }
+
+    /// Launchie's hotkey counts as ⌘Space only with those exact modifiers and not
+    /// switched off; Launchie's untouched default (no keys at all) is ⌘K.
+    func testLaunchieHotkeyRecognisesCommandSpace() {
+        let command = Int(NSEvent.ModifierFlags.command.rawValue)
+        XCTAssertTrue(LaunchieHotkey.commandSpace.isCommandSpace)
+        XCTAssertTrue(LaunchieHotkey(keyCode: 0x31, modifiers: command, enabled: nil).isCommandSpace)
+        // Launchie ignores bits beyond the four modifiers, such as Caps Lock.
+        XCTAssertTrue(LaunchieHotkey(keyCode: 0x31, modifiers: command | Int(NSEvent.ModifierFlags.capsLock.rawValue),
+                                     enabled: true).isCommandSpace)
+        XCTAssertFalse(LaunchieHotkey(keyCode: 0x31, modifiers: command, enabled: false).isCommandSpace)
+        XCTAssertFalse(LaunchieHotkey(keyCode: 0x31, modifiers: command | Int(NSEvent.ModifierFlags.shift.rawValue),
+                                      enabled: true).isCommandSpace)
+        XCTAssertFalse(LaunchieHotkey(keyCode: 0x28, modifiers: command, enabled: true).isCommandSpace)
+        XCTAssertFalse(LaunchieHotkey(preferences: [:]).isCommandSpace)
+    }
+
+    /// Values come out of `defaults export` as numbers, whichever of -int or
+    /// -bool wrote them, and keys Launchie never wrote stay absent.
+    func testLaunchieHotkeyReadsExportedPreferences() {
+        let hotkey = LaunchieHotkey(preferences: ["hotkeyKeyCode": NSNumber(value: 40),
+                                                  "hotkeyModifiers": NSNumber(value: 1_179_648),
+                                                  "showHotkeyDisplay": true])
+        XCTAssertEqual(hotkey, LaunchieHotkey(keyCode: 40, modifiers: 1_179_648, enabled: nil))
+    }
+
+    /// macOS answers a denied read of Launchie's container with an empty
+    /// dictionary and exit status 0. Taking that for "no hotkey set" would
+    /// pause Spotlight and hand ⌘Space to a write that never lands.
+    func testLaunchieHotkeyTreatsAnEmptyExportAsUnreadable() {
+        func export(_ plist: [String: Any]) -> Data {
+            try! PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+        }
+        XCTAssertNil(LaunchieHotkey(exportStatus: 0, output: export([:])))
+        XCTAssertNil(LaunchieHotkey(exportStatus: 1, output: export(["hasSeenOnboarding": true])))
+        XCTAssertNil(LaunchieHotkey(exportStatus: 0, output: Data("not a plist".utf8)))
+        XCTAssertEqual(LaunchieHotkey(exportStatus: 0, output: export(["hasSeenOnboarding": true])),
+                       LaunchieHotkey(keyCode: nil, modifiers: nil, enabled: nil))
+        XCTAssertEqual(LaunchieHotkey(exportStatus: 0, output: export(["hotkeyKeyCode": 49, "hotkeyEnabled": false])),
+                       LaunchieHotkey(keyCode: 49, modifiers: nil, enabled: false))
+    }
+
+    /// The saved original has to bring back absent keys as absent, or turning
+    /// the switch off would pin Launchie's default instead of restoring it.
+    func testLaunchieHotkeyOriginalSurvivesTheFile() {
+        for hotkey in [LaunchieHotkey(keyCode: 40, modifiers: 1_048_576, enabled: false),
+                       LaunchieHotkey(keyCode: nil, modifiers: nil, enabled: nil),
+                       LaunchieHotkey(keyCode: 0x31, modifiers: 1_179_648, enabled: true)] {
+            XCTAssertEqual(LaunchieHotkey(fileContents: hotkey.fileContents), hotkey)
+        }
+        XCTAssertNil(LaunchieHotkey(fileContents: "hotkeyKeyCode=49\n"))
     }
 
     /// Every mode layout.sh knows is offered, under the name the bar shows,

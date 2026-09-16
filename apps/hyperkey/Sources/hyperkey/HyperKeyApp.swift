@@ -8,6 +8,7 @@ struct HyperKeyApp {
         // Handle --uninstall flag
         if CommandLine.arguments.contains("--uninstall") {
             HIDMapping.clearMapping()
+            LaunchieShortcut.restore()
             fputs("hyperkey: CapsLock mapping cleared.\n", stderr)
             return
         }
@@ -71,6 +72,14 @@ struct HyperKeyApp {
 
         // 6. Start the event tap (runs on the main run loop)
         EventTap.start()
+
+        // 6a. Spotlight's shortcut pause does not survive a logout, so it is
+        // taken again on every launch. A restart keeps it: SIGTERM, which is
+        // how updates restart the app, deliberately leaves it paused.
+        let launchieCommandSpace = configuration.launchieCommandSpace
+        DispatchQueue.global(qos: .utility).async {
+            LaunchieShortcut.apply(enabled: launchieCommandSpace)
+        }
 
         // 6b. Watch the trackpad for three-finger workspace swipes
         if configuration.trackpadSwipe {
@@ -229,6 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func quitApp(_ sender: NSMenuItem) {
         HIDMapping.clearMapping()
+        LaunchieShortcut.restoreSpotlight()
         NSApplication.shared.terminate(nil)
     }
 }

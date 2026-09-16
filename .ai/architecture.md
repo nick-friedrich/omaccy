@@ -466,6 +466,43 @@ load-bearing: each close moves focus, and the `record` that runs on focus
 change merges remembered entries back in, so forgetting before the windows are
 gone would be undone. A window a save prompt keeps open is simply relearned.
 
+Launchie is installed by `ensure_launchie` as an ordinary owned-or-preexisting
+cask, except that a `Launchie.app` already in Applications counts as
+preexisting even when Homebrew did not put it there: the Mac App Store sells
+the same bundle identifier, and `brew install` refuses to overwrite an app it
+does not own. Its cask requires macOS 26, so a failed install warns and setup
+continues.
+
+`launchie_command_space` in `hyperkey.toml` gives Command+Space to Launchie,
+through `LaunchieShortcut.swift`, and is off by default so nobody loses
+Spotlight without asking. Launchie already registers any hotkey it is told to
+(a Carbon `RegisterEventHotKey`), so Omaccy only sets Launchie's own
+`hotkeyKeyCode`, `hotkeyModifiers` and `hotkeyEnabled` preferences. Launchie
+is sandboxed, so they live in its container, which `defaults` resolves and a
+plain `UserDefaults(suiteName:)` would not; reading them may cost a one-time
+macOS prompt for access to another app's data, and an unreadable domain changes
+nothing and turns the switch back off. A denied read is not an error: `defaults
+export` exits 0 with an empty dictionary, so an empty export counts as
+unreadable (a Launchie opened even once has other keys), and Spotlight is
+paused only after every hotkey write has succeeded, never before. The values found first are kept in
+`~/.omaccy/launchie-hotkey.original`, an empty value meaning Launchie had never
+written that key, so turning the switch off deletes it rather than pinning the
+default. Launchie reads its hotkey only at launch, so a running copy is quit
+before the write and reopened with `open -g` after it; the wait watches the
+pid, because `NSRunningApplication.isTerminated` needs a main loop that
+`--uninstall` lacks.
+
+Spotlight's shortcut is symbolic hot key 64, which WindowServer serves ahead of
+any app's hotkey. `CGSSetSymbolicHotKeyEnabled` pauses it: a runtime switch
+that lasts until logout and writes nothing to `com.apple.symbolichotkeys`, so
+there is no preference to back up and System Settings keeps the user's choice.
+Every Hyperkey launch pauses it again, and when the pause is new -- after a
+login -- reopens Launchie, whose earlier registration never received the
+keystroke. `~/.omaccy/spotlight-shortcut-disabled` records that Omaccy paused
+it, and only then is it resumed: on the switch going off, on Quit, and under
+`--uninstall`, which `uninstall.sh` runs before deleting the app. SIGTERM
+leaves it paused on purpose, since that is how every update restarts the app.
+
 `AppCollections.swift` holds the picker collections that are plain app choices:
 Mail (Hyper+E) and Editors (Hyper+C). Each is a fixed list of interchangeable
 apps with one default recorded in `hyperkey.toml` (`default_mail`,

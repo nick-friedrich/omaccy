@@ -67,6 +67,13 @@ main() {
   /bin/launchctl bootout "gui/$(id -u)/com.omaccy.hyperkey" 2>/dev/null || true
   pkill -x omaccy-hyperkey 2>/dev/null || true
 
+  # Hand Command+Space back: Spotlight's shortcut, if the launcher's Settings
+  # paused it, and Launchie's own hotkey as it was before. Only the app knows
+  # how, so this is skipped when it is already gone; the pause ends at logout.
+  if [[ -x "$APP_DIR/Contents/MacOS/omaccy-hyperkey" ]]; then
+    "$APP_DIR/Contents/MacOS/omaccy-hyperkey" --uninstall >/dev/null 2>&1 || true
+  fi
+
   # Restore normal Caps Lock even if the application has already disappeared.
   /usr/bin/hidutil property --set '{"UserKeyMapping":[]}' >/dev/null
 
@@ -166,7 +173,8 @@ main() {
     "$OMACCY_DIR/sha256/sketchybar/themes/"*.sh
   rm -f "$OMACCY_DIR/aerospace-disabled" \
     "$OMACCY_DIR/native-menu-visible" \
-    "$OMACCY_DIR/calendar-offset"
+    "$OMACCY_DIR/calendar-offset" \
+    "$OMACCY_DIR/spotlight-shortcut-disabled"
   rm -rf "$OMACCY_DIR/clipboard" "$OMACCY_DIR/workspace-layout"
   restore_macos_appearance
   report_editor_settings
@@ -176,6 +184,7 @@ main() {
   remove_owned_cask font-inter "the Inter font"
   remove_owned_cask font-jetbrains-mono "the JetBrains Mono font"
   remove_owned_cask font-lora "the Lora font"
+  remove_owned_cask launchie Launchie
   remove_owned_sf_pro_font
   remove_owned_formula sketchybar SketchyBar
   # Only stop herdr's service if Omaccy installed herdr: it can host the
