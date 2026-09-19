@@ -94,9 +94,10 @@ cmd-ctrl-alt-shift-9 = 'move-node-to-workspace --focus-follows-window 9'
 # Send a new window back to the workspace that application was last seen in,
 # so reopening Chrome puts it where Chrome lives rather than on top of whatever
 # you are doing, and follow it there so you are not left hunting for the
-# application you just opened. The mapping is learned from where you actually
+# application you just launched. The mapping is learned from where you actually
 # put your windows, never configured: move an app somewhere and that becomes
-# its home. An application opened for the first time is left where it lands.
+# its home. An application opened for the first time is left where it lands,
+# and launchers, system prompts and menu bar apps are never moved.
 #
 # This has to sit ABOVE the layout rule below, because AeroSpace stops at the
 # first callback that matches and that rule matches nearly every window.

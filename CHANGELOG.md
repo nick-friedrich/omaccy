@@ -10,6 +10,17 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.9` tag is cut.
 
+### Fixed
+
+- The screen no longer jumps to another workspace when you press Command+Space,
+  get a Touch ID or password prompt, or click a link that opens Chrome. Window
+  memory had learned a home for launchers, system prompts and menu bar apps,
+  and took you along whenever one of them appeared. Now only regular apps, the
+  ones with a Dock icon, are remembered and placed, and entries for the others
+  are dropped from `~/.omaccy/window-placement`. You still land with an app
+  you just launched. A window from an app that was already running goes home
+  without taking you along.
+
 ## [0.4.8] - 2026-09-16
 
 ### Added

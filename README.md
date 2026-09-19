@@ -127,8 +127,11 @@ it — no hunting for the app you just opened. The mapping is learned, not
 configured: move an app somewhere and that becomes its home, across restarts.
 Only an app's **first** window is placed — open a second window while you are
 elsewhere and it stays with you, because you asked for a window here, not for
-the app to move. An app you have never opened stays where it lands, and a window
-an app puts up on its own goes home without taking you along.
+the app to move. An app you have never opened stays where it lands. You only
+land with an app you just launched: a window from one that was already running,
+such as Chrome opening for a link you clicked, goes home without taking you
+along. Only regular apps with a Dock icon are placed, so launchers, Touch ID
+prompts and menu bar apps always appear where you are.
 Remove the `window-memory.sh` rule from `~/.config/aerospace/aerospace.toml` to
 turn it off.
 
