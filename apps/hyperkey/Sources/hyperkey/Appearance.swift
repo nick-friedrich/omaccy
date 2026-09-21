@@ -52,6 +52,7 @@ enum OmaccyAppearance {
         reloadGhosttyIfRunning()
         updateMacOSAppearance(to: name)
         updateEditorThemes(to: name)
+        updateZedTheme(to: name)
         updateHerdrTheme(to: name)
         reloadSketchybarIfRunning()
         return true
@@ -108,6 +109,7 @@ enum OmaccyAppearance {
         writePreference(named: "editor-theme", value: enabled ? "on" : "off")
         guard enabled else { return }
         updateEditorThemes(to: currentThemeName)
+        updateZedTheme(to: currentThemeName)
     }
 
     @discardableResult
@@ -388,11 +390,40 @@ enum OmaccyAppearance {
     /// Keeps the untouched original once, the way the setup scripts preserve
     /// every file they displace.
     private static func backUpEditorSettings(at path: String, for editor: Editor) {
-        let backup = "\(stateDirectory)/backups/\(editor.supportDirectory)-settings.json"
+        backUpSettings(at: path, named: editor.supportDirectory)
+    }
+
+    private static func backUpSettings(at path: String, named name: String) {
+        let backup = "\(stateDirectory)/backups/\(name)-settings.json"
         guard !FileManager.default.fileExists(atPath: backup) else { return }
         try? FileManager.default.createDirectory(atPath: stateDirectory + "/backups",
                                                  withIntermediateDirectories: true)
         try? FileManager.default.copyItem(atPath: path, toPath: backup)
+    }
+
+    /// Zed rides the same editors opt-in as VS Code and Cursor, and for the
+    /// same reason: settings.json is the user's own file and following a theme
+    /// can mean pulling an extension in. What differs is how. Zed watches the
+    /// file and repaints at once, like the other two, but it has no
+    /// `--install-extension` CLI, so the extension is requested by merging an
+    /// id into `auto_install_extensions` and Zed installs it at its next
+    /// launch — no process to run, and so no reason for this to leave the
+    /// main thread the way `updateEditorThemes` must. Mirrors
+    /// `update_zed_theme` in scripts/theme.sh.
+    private static func updateZedTheme(to name: String) {
+        guard editorThemingEnabled, let theme = OmaccyTheme.zedThemeName(named: name) else { return }
+        // Resolved first: settings.json is often a link into a dotfiles
+        // repository, and an atomic write renames a new file over the path,
+        // which would replace the link with a copy and quietly cut Zed off
+        // from the user's dotfiles. The shell half writes with `>`, which
+        // follows the link on its own.
+        let path = ("\(NSHomeDirectory())/.config/zed/settings.json" as NSString).resolvingSymlinksInPath
+        guard let raw = try? String(contentsOfFile: path, encoding: .utf8),
+              let updated = OmaccyZedSettings.settings(raw, theme: theme,
+                                                       extensionID: OmaccyTheme.zedExtensionID(named: name)),
+              updated != raw else { return }
+        backUpSettings(at: path, named: "Zed")
+        try? updated.write(toFile: path, atomically: true, encoding: .utf8)
     }
 
     /// Rewrites — or inserts — the workbench.colorTheme entry and leaves every

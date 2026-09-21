@@ -1,0 +1,14 @@
+// Zed settings
+{
+  "auto_install_extensions": {
+    "html": true,
+  },
+  "theme": {
+    "mode": "dark",
+    "light": "One Light",
+    "dark": "One Dark",
+  },
+  "terminal": {
+    "font_family": "MesloLGS Nerd Font Mono",
+  },
+}

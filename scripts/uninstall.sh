@@ -37,11 +37,12 @@ restore_macos_appearance() {
   rm -f "$original"
 }
 
-# VS Code's and Cursor's settings.json are the user's own files, edited in
-# place rather than symlinked, so removing Omaccy must not rewrite them: the
+# VS Code's, Cursor's, and Zed's settings.json are the user's own files, edited
+# in place rather than symlinked, so removing Omaccy must not rewrite them: the
 # theme they are on now may well be one they want to keep, and anything they
 # changed since would be lost. The untouched original is kept instead, and
-# named here so restoring it stays their call.
+# named here so restoring it stays their call. The glob picks up each of them
+# by the name the switcher backed it up under.
 report_editor_settings() {
   local backup
   for backup in "$OMACCY_DIR/backups"/*-settings.json; do

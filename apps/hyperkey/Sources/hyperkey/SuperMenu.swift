@@ -27,7 +27,7 @@ struct MenuEntry: Sendable {
     var workspaceLayout: WorkspaceLayout? = nil
     /// Closes the focused workspace's windows and resets what it remembers.
     var clearsWorkspace = false
-    /// The Theme page's switch for whether VS Code and Cursor follow along.
+    /// The Theme page's switch for whether VS Code, Cursor and Zed follow along.
     var togglesEditorTheming = false
     /// The Theme page's switch for whether macOS light/dark follows along.
     var togglesMacOSAppearance = false
@@ -149,10 +149,10 @@ enum MenuCatalog {
         let editorsOn = editors ?? OmaccyAppearance.editorThemingEnabled
         let appearanceOn = appearance ?? OmaccyAppearance.macOSAppearanceEnabled
         return matching(query, in: [
-            MenuEntry(title: "Follow in VS Code and Cursor",
+            MenuEntry(title: "Follow in VS Code, Cursor and Zed",
                       detail: editorsOn
-                          ? "On · Both switch with the theme, installing its extension when needed"
-                          : "Off · Both keep whatever theme they are on",
+                          ? "On · All three switch with the theme, installing its extension when needed"
+                          : "Off · All three keep whatever theme they are on",
                       togglesEditorTheming: true, isOn: editorsOn),
             MenuEntry(title: "Follow in macOS light and dark",
                       detail: appearanceOn

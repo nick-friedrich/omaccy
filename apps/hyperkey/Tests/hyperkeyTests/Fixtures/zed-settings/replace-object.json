@@ -1,0 +1,10 @@
+// Zed settings
+{
+  "vim_mode": true,
+  "theme": {
+    "mode": "system",
+    "light": "One Light",
+    "dark": "One Dark"
+  },
+  "buffer_font_size": 14
+}

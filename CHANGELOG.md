@@ -10,6 +10,34 @@ and Omaccy follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Dated when the `v0.4.10` tag is cut.
 
+### Added
+
+- Zed follows the theme, on the same switch VS Code and Cursor are on — the
+  one at the top of Settings → Theme, or `bash scripts/theme.sh editors on`.
+  If you already had that switch on, Zed joins at your next theme change; it
+  is not turned on for you. Every palette maps to a Zed theme, and Zed
+  repaints as soon as the theme is written, without a restart.
+
+  Two things are worth knowing. If your `theme` setting holds a light/dark
+  pair, it is replaced by the single name being applied, so the palette you
+  picked is the one you see — your untouched `settings.json` is copied to
+  `~/.omaccy/backups/Zed-settings.json` before the first edit, and `editors
+  off` stops any further writes. And because Zed has no command-line extension
+  installer, the theme's extension is added to `auto_install_extensions` and
+  Zed installs it the next time it starts, so the first switch to a palette
+  shows its colors once Zed has restarted. An extension you already listed
+  there is left exactly as you set it, including one set to `false`. Gruvbox
+  Dark and One Dark need no extension at all. A `settings.json` linked in from
+  a dotfiles repository stays a link; the edit lands in the file it points to.
+
+### Fixed
+
+- `scripts/theme.sh set` no longer stops partway through when VS Code and
+  Cursor follow the theme. After the first switch had turned off their
+  `window.autoDetectColorScheme`, every later switch ended right after
+  updating them, without an error. herdr kept its old theme and SketchyBar
+  did not reload. Switching from the launcher palette was not affected.
+
 ## [0.4.9] - 2026-09-19
 
 ### Fixed

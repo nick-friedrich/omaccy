@@ -109,6 +109,53 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(OmaccyTheme.vscodeExtensionID(fromFile: path), "metaphore.kanagawa-vscode-color-theme")
     }
 
+    func testZedMappingParsesFromThemeFile() throws {
+        let path = try writeThemeFile("""
+        BAR_BG=0xff1f1f28
+        VSCODE_THEME="Kanagawa Wave"
+        ZED_EXTENSION="kanagawa-themes"
+        ZED_THEME="Kanagawa Wave"
+        """)
+        XCTAssertEqual(OmaccyTheme.zedThemeName(fromFile: path), "Kanagawa Wave")
+        XCTAssertEqual(OmaccyTheme.zedExtensionID(fromFile: path), "kanagawa-themes")
+    }
+
+    /// An empty ZED_EXTENSION means Zed ships the theme itself, so nothing
+    /// should be queued for install.
+    func testEmptyZedExtensionReadsAsAbsent() throws {
+        let path = try writeThemeFile("""
+        ZED_EXTENSION=""
+        ZED_THEME="One Dark"
+        """)
+        XCTAssertEqual(OmaccyTheme.zedThemeName(fromFile: path), "One Dark")
+        XCTAssertNil(OmaccyTheme.zedExtensionID(fromFile: path))
+    }
+
+    /// A theme file that predates a key leaves the integration it drives
+    /// switched off rather than guessed at, so every shipped palette has to
+    /// carry the Zed pair — and an extension id has to be a registry slug,
+    /// since the rewrite drops anything else on the floor.
+    func testEveryShippedThemeNamesAZedTheme() throws {
+        let directory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // hyperkeyTests
+            .deletingLastPathComponent()  // Tests
+            .deletingLastPathComponent()  // hyperkey
+            .deletingLastPathComponent()  // apps
+            .deletingLastPathComponent()  // repository root
+            .appendingPathComponent("config/sketchybar/themes")
+        let files = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasSuffix(".sh") }.sorted()
+        XCTAssertFalse(files.isEmpty, "no shipped themes found at \(directory.path)")
+        let slug = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789._-")
+        for file in files {
+            let path = directory.appendingPathComponent(file).path
+            XCTAssertNotNil(OmaccyTheme.zedThemeName(fromFile: path), "\(file) names no ZED_THEME")
+            guard let identifier = OmaccyTheme.zedExtensionID(fromFile: path) else { continue }
+            XCTAssertTrue(identifier.unicodeScalars.allSatisfy(slug.contains),
+                          "\(file) has a ZED_EXTENSION that is not a registry slug: \(identifier)")
+        }
+    }
+
     /// An empty VSCODE_EXTENSION means the label is built into VS Code, so
     /// nothing should be installed for it.
     func testEmptyEditorExtensionReadsAsAbsent() throws {

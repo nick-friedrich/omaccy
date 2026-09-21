@@ -74,6 +74,27 @@ struct OmaccyTheme {
         stringAssignment(named: "VSCODE_EXTENSION", from: path)
     }
 
+    /// The Zed theme name matching an installed Omaccy theme (its file's
+    /// ZED_THEME assignment), if any.
+    static func zedThemeName(named name: String) -> String? {
+        zedThemeName(fromFile: themeFile(named: name))
+    }
+
+    static func zedThemeName(fromFile path: String) -> String? {
+        stringAssignment(named: "ZED_THEME", from: path)
+    }
+
+    /// The Zed registry extension shipping that theme. Nil when the theme file
+    /// omits it or leaves it empty, which means Zed has the theme built in and
+    /// nothing needs installing.
+    static func zedExtensionID(named name: String) -> String? {
+        zedExtensionID(fromFile: themeFile(named: name))
+    }
+
+    static func zedExtensionID(fromFile path: String) -> String? {
+        stringAssignment(named: "ZED_EXTENSION", from: path)
+    }
+
     /// herdr's built-in theme name matching an installed Omaccy theme (its
     /// file's HERDR_THEME assignment), if any.
     static func herdrThemeName(named name: String) -> String? {

@@ -8,7 +8,7 @@
 | `scripts/update.sh` | One confirmation, then the checkout fast-forward, then the installation sequence |
 | `scripts/uninstall.sh` | Confirmation followed by service shutdown, restoration, and cleanup |
 | `scripts/aerospace-control.sh` | Standalone start/stop/toggle command with IPC readiness handling |
-| `scripts/theme.sh` | Standalone theme switcher; stores the choice in `~/.omaccy/theme` and, once opted in, follows it into VS Code and Cursor |
+| `scripts/theme.sh` | Standalone theme switcher; stores the choice in `~/.omaccy/theme` and, once opted in, follows it into VS Code, Cursor, and Zed |
 | `scripts/font.sh` | Standalone font switcher for Ghostty, SketchyBar, and the launcher |
 | `scripts/neovim.sh` | Standalone on/off switch for the optional Neovim config |
 | `scripts/zsh.sh` | Standalone on/off switch for the optional zsh setup |
@@ -20,6 +20,7 @@
 | `scripts/lib/config.sh` | Config copying, hash stamps, symlinks, backup/restore, and legacy migration |
 | `scripts/lib/editor-settings.sh` | The VS Code / Cursor `workbench.colorTheme` rewrite, kept apart so the Swift half can be tested against it |
 | `scripts/lib/herdr-settings.sh` | The herdr `[theme]` name rewrite, kept apart for the same reason |
+| `scripts/lib/zed-settings.sh` | The Zed `theme` and `auto_install_extensions` rewrite, kept apart for the same reason |
 | `scripts/lib/neovim.sh` | The optional Neovim question, its dependencies, the AstroNvim config link, and removal |
 | `scripts/lib/zsh.sh` | The optional zsh question, its tools, the marked `~/.zshrc` block, and removal |
 | `scripts/lib/macos.sh` | Menu-bar and Mission Control settings with paired restoration functions |
@@ -37,13 +38,13 @@
   `config/sketchybar/lib/palette.sh`; the launcher palette rereads them every
   time it opens. Fonts ship as the font-inter, font-jetbrains-mono, and
   font-lora Homebrew casks.
-- `~/.omaccy/editor-theme` holds `on` when VS Code and Cursor follow the theme;
+- `~/.omaccy/editor-theme` holds `on` when VS Code, Cursor, and Zed follow the theme;
   absent or `off` means they are left alone, which is the default. The switch
   heads the palette's Theme page, since a theme is a choice but where it lands
   is a switch, and `scripts/theme.sh editors on|off` writes the same file. Their
   `settings.json` is a user-owned file that Omaccy edits in place rather than
   symlinks, so the opt-in is what authorizes the first write; the untouched
-  original lands in `~/.omaccy/backups/{Code,Cursor}-settings.json`. Only the
+  original lands in `~/.omaccy/backups/{Code,Cursor,Zed}-settings.json`. Only the
   `workbench.colorTheme` line is rewritten, line-based, because these files are
   JSONC and a parse-and-reserialize round-trip would drop the user's comments.
   Each theme file names its editor mapping in `VSCODE_THEME` and
@@ -56,6 +57,22 @@
   cannot rely on the checkout being present, so shelling out to `theme.sh`
   would trade a test-time problem for a runtime dependency on a checkout that
   may be missing, moved, or at a different revision than the app.
+- Zed rides the same `editor-theme` opt-in but needs its own rewrite, in
+  `scripts/lib/zed-settings.sh` and `ZedSettings.swift`. Two things differ from
+  VS Code. Its settings live at `~/.config/zed/settings.json`, and its `theme`
+  takes either a name or a `{"mode", "light", "dark"}` object — Zed's analog of
+  `window.autoDetectColorScheme`. Omaccy drives the theme once the switch is
+  on, so the object is replaced outright by the plain name, which means the
+  value being rewritten can span lines and the line-based approach above does
+  not reach. The rewrite therefore walks the file character by character,
+  tracking strings, both comment forms, and brace depth, so it edits only the
+  top-level `theme` and leaves a nested one (Zed has one under `terminal`)
+  alone. Second, Zed has no `--install-extension` CLI, so the theme's extension
+  is requested by merging its id into `auto_install_extensions`, which Zed acts
+  on at its next launch; an id already listed is left as it is, including one
+  set to `false`. Each theme file names the pair in `ZED_THEME` and
+  `ZED_EXTENSION`, and an empty extension (One Dark and Gruvbox Dark) means Zed
+  ships that theme itself.
 - `window.autoDetectColorScheme` makes both editors ignore
   `workbench.colorTheme` and follow the OS appearance instead, so writing the
   theme alone looks exactly like nothing happening — which is how it looked in

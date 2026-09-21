@@ -23,6 +23,10 @@ source "$REPO_ROOT/scripts/lib/editor-settings.sh"
 # The same arrangement for herdr's [theme] name rewrite.
 source "$REPO_ROOT/scripts/lib/herdr-settings.sh"
 HERDR_CONFIG="$HOME/.config/herdr/config.toml"
+# And for Zed's settings.json, whose theme value can be an object rather than
+# a name and so needs a rewrite of its own rather than the line-based one.
+source "$REPO_ROOT/scripts/lib/zed-settings.sh"
+ZED_CONFIG="$HOME/.config/zed/settings.json"
 DEFAULT_THEME="catppuccin"
 
 current_theme() {
@@ -155,8 +159,54 @@ update_editor_themes() {
     editor_follows_os_appearance "$settings" && detected=1
     write_editor_theme "$settings" "$label" || continue
     echo "$app will use $label."
-    (( detected )) && echo "Turned off $app's window.autoDetectColorScheme, which was overriding the theme."
+    # An `if`, not `(( detected )) && echo`: as the loop's last command the
+    # latter leaves status 1 whenever detection was already off -- every
+    # switch after the first -- and set -e then ended theme.sh here, silently
+    # skipping Zed, herdr, and the SketchyBar reload that come after.
+    if (( detected )); then
+      echo "Turned off $app's window.autoDetectColorScheme, which was overriding the theme."
+    fi
   done
+}
+
+# Zed rides the same editors opt-in as VS Code and Cursor, and for the same
+# reason: settings.json is the user's own file and following a theme can mean
+# pulling an extension in. What differs is how. Zed watches the file and
+# repaints at once, like the other two, but it has no `--install-extension`
+# CLI, so the extension is requested by merging an id into
+# `auto_install_extensions` and Zed installs it at its next launch. Mirrors
+# updateZedTheme in the launcher's Appearance.swift.
+update_zed_theme() {
+  local name="$1" theme_file zed_theme zed_extension
+  editor_theming_enabled || return 0
+  [[ -f "$ZED_CONFIG" ]] || return 0
+  theme_file="$(theme_file_path "$name")"
+  [[ -f "$theme_file" ]] || return 0
+  zed_theme="$(ZED_THEME=""; source "$theme_file" 2>/dev/null; printf '%s' "$ZED_THEME")"
+  [[ -n "$zed_theme" ]] || return 0
+  # Reset first so an id already in the environment is never inherited; an
+  # empty one is a palette Zed has built in, which needs no install.
+  zed_extension="$(ZED_EXTENSION=""; source "$theme_file" 2>/dev/null; printf '%s' "$ZED_EXTENSION")"
+  # The trailing x keeps command substitution from eating final newlines.
+  local current updated
+  current="$(cat "$ZED_CONFIG"; printf x)"
+  updated="$(zed_settings_with_theme "$ZED_CONFIG" "$zed_theme" "$zed_extension"; printf x)" || {
+    echo "Could not place the theme in $ZED_CONFIG; set Zed's theme to $zed_theme yourself." >&2
+    return 0
+  }
+  [[ "$updated" != "$current" ]] || return 0
+  # Keeps the untouched original once, the way the setup scripts preserve
+  # every file they displace. Named to match the VS Code and Cursor backups,
+  # which uninstall restores by the same glob.
+  if [[ ! -f "$BACKUP_DIR/Zed-settings.json" ]]; then
+    mkdir -p "$BACKUP_DIR"
+    printf '%s' "${current%x}" > "$BACKUP_DIR/Zed-settings.json"
+  fi
+  write_zed_settings "$ZED_CONFIG" "$zed_theme" "$zed_extension" || return 0
+  echo "Zed will use $zed_theme."
+  if [[ -n "$zed_extension" ]]; then
+    echo "Zed installs the $zed_extension extension the next time it starts, if it does not have it."
+  fi
 }
 
 # herdr's config.toml is the user's own file -- herdr writes it during its
@@ -269,10 +319,11 @@ set_editor_theming() {
   mkdir -p "$(dirname "$EDITOR_PREF")"
   printf '%s\n' "$state" > "$EDITOR_PREF"
   if [[ "$state" == "on" ]]; then
-    echo "VS Code and Cursor will follow the Omaccy theme, installing the theme extension when one is missing."
+    echo "VS Code, Cursor, and Zed will follow the Omaccy theme, installing the theme extension when one is missing."
     update_editor_themes "$(current_theme)"
+    update_zed_theme "$(current_theme)"
   else
-    echo "VS Code and Cursor will keep their own themes."
+    echo "VS Code, Cursor, and Zed will keep their own themes."
   fi
 }
 
@@ -293,6 +344,7 @@ set_theme() {
   reload_ghostty_if_running
   update_macos_appearance "$name"
   update_editor_themes "$name"
+  update_zed_theme "$name"
   update_herdr_theme "$name"
   restart_sketchybar_if_running
   echo "The launcher palette picks up the theme the next time it opens."

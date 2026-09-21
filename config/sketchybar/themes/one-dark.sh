@@ -31,3 +31,9 @@ NVIM_COLORSCHEME="onedark"
 # herdr: the built-in theme its UI uses for this palette. "terminal" takes
 # the terminal's own colors, for palettes herdr has no theme of its own for.
 HERDR_THEME="one-dark"
+
+# Zed: the extension shipping this palette in Zed's registry, and the theme
+# name it contributes. An empty ZED_EXTENSION means Zed has the theme built
+# in, so nothing needs installing.
+ZED_EXTENSION=""
+ZED_THEME="One Dark"

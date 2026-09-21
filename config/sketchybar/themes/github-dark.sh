@@ -36,3 +36,9 @@ HERDR_THEME="terminal"
 # color -- Ghostty's own background -- under [theme.custom].
 HERDR_ACCENT="#2f81f7"
 HERDR_PANEL_BG="#0d1117"
+
+# Zed: the extension shipping this palette in Zed's registry, and the theme
+# name it contributes. An empty ZED_EXTENSION means Zed has the theme built
+# in, so nothing needs installing.
+ZED_EXTENSION="github-theme"
+ZED_THEME="GitHub Dark"

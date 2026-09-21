@@ -248,21 +248,29 @@ instead.
 Both are also available under the palette's Settings, which previews changes
 live.
 
-VS Code and Cursor can follow the theme too, but only if you ask them to —
-either from the switch at the top of Settings → Theme, or with:
+VS Code, Cursor, and Zed can follow the theme too, but only if you ask them to
+— either from the switch at the top of Settings → Theme, or with:
 
 ```bash
 bash scripts/theme.sh editors on
 ```
 
 Their `settings.json` is your file, not Omaccy's, so nothing is written until
-that opt-in — after which every theme switch rewrites `workbench.colorTheme`
-in place (your comments and other settings survive) and both editors repaint
-without a restart. Only Solarized Dark ships inside VS Code; the other eleven
-palettes come from a marketplace extension, so the first switch to one installs
-it with `code`/`cursor --install-extension`. The original `settings.json` is
-copied to `~/.omaccy/backups/` before the first edit, and `editors off` stops
-the whole thing.
+that opt-in — after which every theme switch rewrites the theme in place (your
+comments and other settings survive) and all three repaint without a restart.
+Only Solarized Dark ships inside VS Code; the other eleven palettes come from a
+marketplace extension, so the first switch to one installs it with
+`code`/`cursor --install-extension`. The original `settings.json` is copied to
+`~/.omaccy/backups/` before the first edit, and `editors off` stops the whole
+thing.
+
+Zed is the same switch with two differences you will see. Its `theme` setting
+can hold a light/dark pair rather than one name; Omaccy replaces that with the
+single name it is applying, so the theme you picked is the one you get. And
+Zed has no command-line extension installer, so instead of installing a theme
+then and there, Omaccy adds it to `auto_install_extensions` and Zed picks it up
+the next time it starts. Gruvbox Dark and One Dark need none of that — Zed
+ships both.
 
 If an editor has `"window.autoDetectColorScheme": true` — Cursor ships that on
 — it ignores `workbench.colorTheme` outright and follows the OS appearance
